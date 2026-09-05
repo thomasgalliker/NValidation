@@ -1,0 +1,121 @@
+@host = http://localhost:5240
+
+###############################################################################
+# Minimal API — each handler calls its validator itself.
+###############################################################################
+
+### The throwing path: a failure becomes a 400 problem details response via the exception handler.
+POST {{host}}/cars
+Content-Type: application/json
+
+{
+  "vin": "TOO-SHORT",
+  "model": {
+    "name": "Golf",
+    "manufacturer": { "name": "Volkswagen", "countryCode": "DEU", "contactEmail": "info@volkswagen.example" },
+    "seatCount": 5,
+    "basePrice": 32000
+  },
+  "mileage": 42000,
+  "firstRegistration": "2019-03-01T00:00:00"
+}
+
+### The returning path, for a handler that would rather decide for itself what a failure means.
+POST {{host}}/cars/checked
+Content-Type: application/json
+
+{
+  "vin": "TOO-SHORT",
+  "model": {
+    "name": "Golf",
+    "manufacturer": { "name": "Volkswagen", "countryCode": "DEU", "contactEmail": "info@volkswagen.example" },
+    "seatCount": 5,
+    "basePrice": 32000
+  },
+  "mileage": 42000,
+  "firstRegistration": "2019-03-01T00:00:00"
+}
+
+###############################################################################
+# Controllers — ValidationActionFilter validates before the action runs.
+###############################################################################
+
+### A valid car. The action holds no validation code; the filter already ran the validator.
+POST {{host}}/api/cars
+Content-Type: application/json
+
+{
+  "vin": "WVWZZZ1JZXW000001",
+  "model": {
+    "name": "Golf",
+    "manufacturer": { "name": "Volkswagen", "countryCode": "DEU", "contactEmail": "info@volkswagen.example" },
+    "seatCount": 5,
+    "basePrice": 32000
+  },
+  "mileage": 42000,
+  "firstRegistration": "2019-03-01T00:00:00"
+}
+
+### An invalid car. Every failure is reported at once, and the nested ones carry the path to the
+### property they belong to: Model.Manufacturer.Name, Model.Manufacturer.CountryCode, …
+POST {{host}}/api/cars
+Content-Type: application/json
+
+{
+  "vin": "TOO-SHORT",
+  "model": {
+    "name": "",
+    "manufacturer": { "name": "", "countryCode": "DE", "contactEmail": "not-an-email" },
+    "seatCount": 99
+  },
+  "mileage": -5,
+  "firstRegistration": "2019-03-01T00:00:00"
+}
+
+### The car id is bound from the route, so only the body is validated.
+PUT {{host}}/api/cars/7
+Content-Type: application/json
+
+{
+  "vin": "WVWZZZ1JZXW000001",
+  "model": {
+    "name": "Golf",
+    "manufacturer": { "name": "Volkswagen", "countryCode": "DEU", "contactEmail": "info@volkswagen.example" },
+    "seatCount": 5,
+    "basePrice": 32000
+  },
+  "mileage": -3,
+  "firstRegistration": "2019-03-01T00:00:00"
+}
+
+### The legacy valuation endpoint carries [SkipValidation] and runs the very same validator itself, so
+### it answers in its own error shape instead of problem details.
+POST {{host}}/api/cars/valuations
+Content-Type: application/json
+
+{
+  "vin": "TOO-SHORT",
+  "mileage": -1
+}
+
+### The same endpoint with a valid payload.
+POST {{host}}/api/cars/valuations
+Content-Type: application/json
+
+{
+  "vin": "WVWZZZ1JZXW000001",
+  "mileage": 10
+}
+
+### No validator is registered for this payload. What happens is decided by
+### Validation:MissingValidatorBehavior in appsettings.json:
+###   Ignore -> 202, silently.
+###   Log    -> 202, plus one warning naming the action and the parameter type.
+###   Throw  -> the request fails, so the gap cannot be missed.
+POST {{host}}/api/cars/imports
+Content-Type: application/json
+
+{
+  "sourceSystem": "legacy",
+  "payload": "{}"
+}
