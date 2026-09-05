@@ -1,0 +1,29 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/Samples/">
+    <Project Path="Samples/NValidation.SampleApi/NValidation.SampleApi.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path="AGENTS.md" />
+    <File Path="azure-pipelines.yml" />
+    <File Path="Directory.Build.props" />
+    <File Path="global.json" />
+    <File Path="LICENSE" />
+    <File Path="README.md" />
+    <File Path="ReleaseNotes.txt" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/NValidation.AspNetCore.Tests/NValidation.AspNetCore.Tests.csproj" />
+    <Project Path="Tests/NValidation.Benchmark/NValidation.Benchmark.csproj" />
+    <Project Path="Tests/NValidation.TestData/NValidation.TestData.csproj" />
+    <Project Path="Tests/NValidation.Tests/NValidation.Tests.csproj" />
+  </Folder>
+  <Project Path="NValidation.AspNetCore/NValidation.AspNetCore.csproj" />
+  <Project Path="NValidation/NValidation.csproj" />
+</Solution>
