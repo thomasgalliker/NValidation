@@ -126,18 +126,15 @@ message to the input it belongs to.
 
 Alternatively, `result.ThrowIfInvalid()` raises a `ValidationException` carrying the same errors grouped by code.
 
-Where there is no `await` to offer — a constructor, a guard clause, an `IValidateOptions<T>` — validate synchronously
-instead:
+`ValidateAndThrowAsync` is the same thing for a caller that would rather treat a failure as an exception than as a
+result to inspect.
 
-```csharp
-var result = this.carValidator.Validate(car);
-
-this.carValidator.ValidateAndThrow(car);
-```
-
-Both run exactly the rules the asynchronous form runs, including nested validators and collection entries. Async rules
-are not second-class here — a rule may `await` whatever it needs — but a rule that genuinely suspends cannot be run this
-way, and `Validate` says so rather than blocking on it, because blocking is how a request pipeline deadlocks.
+**Validation is asynchronous, and only asynchronous.** Most rules are synchronous, but a rule may `await` whatever it
+needs — a uniqueness check against a database, a lookup against another service — and one such rule makes the whole
+chain asynchronous. A synchronous entry point would therefore be a promise the library cannot keep: it could only work
+by deciding at run time whether your rules happened to finish in time, which is exactly the kind of answer that differs
+between a cache hit and a cache miss. A caller in a synchronous method awaits the call itself, and can see the cost it
+is paying.
 
 ## Rules
 
