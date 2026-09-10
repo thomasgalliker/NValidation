@@ -31,15 +31,22 @@ namespace NValidation
         /// });
         /// </code>
         /// </example>
-        /// <remarks>
-        /// The name is deliberately not <c>AddValidation</c>: ASP.NET Core ships one of its own with the
-        /// same shape, and two would make every call ambiguous for a web host.
-        /// <para>
-        /// The defaults are registered with <c>TryAdd</c>, so a host which registered its own
-        /// implementation first keeps it.
-        /// </para>
-        /// </remarks>
-        public static IServiceCollection AddNValidation(this IServiceCollection services, Action<NValidationOptions>? configure = null)
+        public static IServiceCollection AddNValidation(this IServiceCollection services, Action<NValidationOptions> configure)
+        {
+            ArgumentNullException.ThrowIfNull(configure);
+
+            return AddNValidationCore(services, configure);
+        }
+
+        /// <summary>
+        /// Adds validation.
+        /// </summary>
+        public static IServiceCollection AddNValidation(this IServiceCollection services)
+        {
+            return AddNValidationCore(services, configure: null);
+        }
+
+        private static IServiceCollection AddNValidationCore(IServiceCollection services, Action<NValidationOptions>? configure)
         {
             ArgumentNullException.ThrowIfNull(services);
 
