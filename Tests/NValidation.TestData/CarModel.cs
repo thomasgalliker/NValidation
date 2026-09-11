@@ -35,6 +35,13 @@ namespace NValidation.TestData
         public long UnitsProduced { get; set; }
 
         /// <summary>
+        /// The mileage at which this model's warranty lapses. The far side of a comparison reached
+        /// through <see cref="Car.Model"/>, which a payload may omit — so the compared property has an
+        /// owner that can be missing, unlike every other pair in this domain.
+        /// </summary>
+        public int WarrantyMileageCap { get; set; }
+
+        /// <summary>
         /// Only meaningful for <see cref="EngineType.Electric"/>, which is what <c>When</c>/<c>Unless</c>
         /// are demonstrated on.
         /// </summary>

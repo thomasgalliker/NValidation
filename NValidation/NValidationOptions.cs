@@ -254,12 +254,15 @@ namespace NValidation
         /// <remarks>
         /// Two validators for the same payload are rejected rather than resolved by whichever
         /// <see cref="Assembly.GetTypes"/> happened to return first: that order is not documented,
-        /// which would make the choice arbitrary and the behaviour reproducible only by luck.
+        /// which would make the choice arbitrary and the behaviour reproducible only by luck. A payload
+        /// the caller has already named a validator for is settled, so the scan passes over it rather
+        /// than complaining about a choice that was made.
         /// </remarks>
         private NValidationOptions AddValidatorsFromAssembly(ServiceLifetime? lifetime, params Assembly[] assemblies)
         {
             ArgumentNullException.ThrowIfNull(assemblies);
 
+            var settled = new HashSet<Type>(this.registrations.Select(registration => registration.ValidatedType));
             var found = new Dictionary<Type, Type>();
             var discovered = new List<(Type ValidatedType, Type ValidatorType)>();
 
@@ -269,6 +272,13 @@ namespace NValidation
                 {
                     foreach (var validatedType in ValidatorTypeInfo.GetValidatedTypes(validatorType))
                     {
+                        // An explicit registration wins — TryAdd would keep it anyway — so a payload it
+                        // already covers is not something the scan has to choose about.
+                        if (settled.Contains(validatedType))
+                        {
+                            continue;
+                        }
+
                         if (found.TryGetValue(validatedType, out var already))
                         {
                             if (already == validatorType)
@@ -277,8 +287,8 @@ namespace NValidation
                             }
 
                             throw new InvalidOperationException(
-                                $"'{already}' and '{validatorType}' both validate '{validatedType}', so a scan " +
-                                "cannot choose between them. Register the one you want with AddValidator " +
+                                $"'{already}' and '{validatorType}' both validate '{Validated(validatedType)}', so a " +
+                                "scan cannot choose between them. Register the one you want with AddValidator " +
                                 "before scanning — an explicit registration wins — or keep only one of them " +
                                 "in the assemblies being scanned.");
                         }
@@ -296,6 +306,15 @@ namespace NValidation
             }
 
             return this;
+        }
+
+        /// <summary>
+        /// The payload behind a service type, so a message about <c>IValidator&lt;Car&gt;</c> talks about
+        /// the <c>Car</c> the reader wrote a validator for.
+        /// </summary>
+        private static Type Validated(Type validatorServiceType)
+        {
+            return validatorServiceType.GetGenericArguments()[0];
         }
 
         private NValidationOptions Add(Type validatedType, Type validatorType, ServiceLifetime? lifetime)

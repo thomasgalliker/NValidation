@@ -32,6 +32,7 @@ namespace NValidation.TestData
                 FuelConsumption = 6.4d,
                 TopSpeed = 213.5f,
                 UnitsProduced = 4_120_000L,
+                WarrantyMileageCap = 100_000,
             };
         }
 
@@ -65,8 +66,13 @@ namespace NValidation.TestData
                 ServiceInterval = TimeSpan.FromDays(365),
                 WarrantyEndsOn = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
                 WarrantyMileageLimit = 100_000,
+                ServiceIntervalKm = 15_000,
+                IntakeCondition = CarCondition.Used,
+                RegistrationPlate = "ZH 100 200",
+                PreviousRegistrationPlate = "BE 300 400",
                 FeatureIds = [1, 2, 3],
                 PreviousOwnerIds = [Guid.Parse("11111111-1111-1111-1111-111111111111")],
+                ServiceInvoiceNumbers = ["INV-9912", "INV-9913"],
             };
         }
     }

@@ -71,13 +71,13 @@ namespace NValidation
         /// Starts a rule chain for the instance itself rather than for one of its properties. Used for
         /// the elements of a collection of scalars, which have no property to name.
         /// </summary>
-        internal PropertyRuleBuilder<T, T> RuleForSelf()
+        internal PropertyRuleBuilder<T, T?> RuleForSelf()
         {
-            var rule = new PropertyRule<T, T>(string.Empty, instance => instance);
+            var rule = new PropertyRule<T, T?>(PropertyPath.Self, instance => instance);
 
             this.rules.Add(rule);
 
-            return new PropertyRuleBuilder<T, T>(rule);
+            return new PropertyRuleBuilder<T, T?>(rule);
         }
 
         /// <inheritdoc/>

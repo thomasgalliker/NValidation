@@ -8,8 +8,16 @@ namespace NValidation.Tests.TestData
     {
         public int Enumerated { get; private set; }
 
+        /// <summary>
+        /// How many times the sequence was walked from the start, which is what a chain of collection
+        /// rules costs a property backed by a query.
+        /// </summary>
+        public int Passes { get; private set; }
+
         public IEnumerator<int> GetEnumerator()
         {
+            this.Passes++;
+
             foreach (var entry in entries)
             {
                 this.Enumerated++;

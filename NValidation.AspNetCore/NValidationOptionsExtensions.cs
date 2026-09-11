@@ -31,20 +31,35 @@ namespace NValidation.AspNetCore
         /// </remarks>
         public static NValidationOptions AddValidationFilter(
             this NValidationOptions options,
-            Action<ValidationFilterOptions>? configure = null)
+            Action<ValidationFilterOptions> configure)
+        {
+            ArgumentNullException.ThrowIfNull(configure);
+
+            return AddValidationFilterCore(options, configure);
+        }
+
+        /// <summary>
+        /// The same, leaving <see cref="ValidationFilterOptions"/> at its defaults.
+        /// </summary>
+        public static NValidationOptions AddValidationFilter(this NValidationOptions options)
+        {
+            return AddValidationFilterCore(options, configure: null);
+        }
+
+        private static NValidationOptions AddValidationFilterCore(
+            NValidationOptions options,
+            Action<ValidationFilterOptions>? configure)
         {
             ArgumentNullException.ThrowIfNull(options);
 
-            // Configure runs every registered delegate, so calling this twice — directly, or once through
-            // the IConfiguration overload — would put the filter in the pipeline twice and validate every
-            // payload twice. The check also covers a host that added the filter to MvcOptions by hand.
-            options.Services.Configure<MvcOptions>(mvcOptions =>
-            {
-                if (!mvcOptions.Filters.Any(IsValidationFilter))
-                {
-                    mvcOptions.Filters.Add<ValidationActionFilter>();
-                }
-            });
+            options.Services.Configure<MvcOptions>(mvcOptions => mvcOptions.Filters.Add<ValidationActionFilter>());
+
+            // Calling this twice — directly, or once through the IConfiguration overload — would put the
+            // filter in the pipeline twice, and validating every payload twice reports every failure
+            // twice. Deduplicated after every Configure delegate has run rather than inside one of them:
+            // the delegates run in the order they were registered, so a host which adds the filter to
+            // MvcOptions itself is only visible from here if it happened to do so first.
+            options.Services.PostConfigure<MvcOptions>(RemoveDuplicateValidationFilters);
 
             if (configure != null)
             {
@@ -70,10 +85,51 @@ namespace NValidation.AspNetCore
             return options.AddValidationFilter();
         }
 
+        /// <summary>
+        /// Keeps the first <see cref="ValidationActionFilter"/> in the pipeline and drops the rest.
+        /// </summary>
+        private static void RemoveDuplicateValidationFilters(MvcOptions mvcOptions)
+        {
+            var first = -1;
+
+            for (var i = 0; i < mvcOptions.Filters.Count; i++)
+            {
+                if (IsValidationFilter(mvcOptions.Filters[i]))
+                {
+                    first = i;
+                    break;
+                }
+            }
+
+            if (first < 0)
+            {
+                return;
+            }
+
+            // Backwards, so removing an entry cannot move one that has not been looked at yet.
+            for (var i = mvcOptions.Filters.Count - 1; i > first; i--)
+            {
+                if (IsValidationFilter(mvcOptions.Filters[i]))
+                {
+                    mvcOptions.Filters.RemoveAt(i);
+                }
+            }
+        }
+
+        /// <remarks>
+        /// Covers the three shapes a host can register the filter in: by type
+        /// (<c>Filters.Add&lt;ValidationActionFilter&gt;()</c>), through the container
+        /// (<c>Filters.Add(new ServiceFilterAttribute(...))</c>), or as an instance.
+        /// </remarks>
         private static bool IsValidationFilter(IFilterMetadata filter)
         {
-            return filter is TypeFilterAttribute typeFilter &&
-                   typeFilter.ImplementationType == typeof(ValidationActionFilter);
+            return filter switch
+            {
+                ValidationActionFilter => true,
+                TypeFilterAttribute typeFilter => typeFilter.ImplementationType == typeof(ValidationActionFilter),
+                ServiceFilterAttribute serviceFilter => serviceFilter.ServiceType == typeof(ValidationActionFilter),
+                _ => false,
+            };
         }
     }
 }

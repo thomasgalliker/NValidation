@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -50,22 +51,15 @@ namespace NValidation.AspNetCore
         private static readonly ConcurrentDictionary<Type, Type> ValidatorServiceTypes = new();
 
         /// <summary>
-        /// The action parameters already reported as having no validator. Whether a payload has one is a
-        /// property of the action, not of the request, so warning about it on every request would bury
-        /// the warning in its own repetitions.
-        /// </summary>
-        private static readonly ConcurrentDictionary<(string ActionId, string ParameterName), byte> ReportedMissingValidators = new();
-
-        /// <summary>
-        /// Whether a parameter is excluded from validation, by the action descriptor it belongs to.
+        /// What has already been worked out about an action, by the action it was worked out for.
         /// </summary>
         /// <remarks>
-        /// The answer comes from attributes on the parameter, the action and the controller, none of
-        /// which change once the application model is built — but finding it is reflection, and the
-        /// endpoint metadata is walked once per parameter even though the answer does not depend on the
-        /// parameter. Asked once per action instead of on every request.
+        /// Held weakly, so an entry lives exactly as long as the action descriptor it describes: a host
+        /// which rebuilds its application model — an application part added at run time, say — leaves
+        /// the answers about the old actions to be collected rather than keeping them for the life of
+        /// the process.
         /// </remarks>
-        private static readonly ConcurrentDictionary<(string ActionId, string ParameterName), bool> SkipDecisions = new();
+        private static readonly ConditionalWeakTable<ActionDescriptor, ActionCache> Actions = new();
 
         private readonly ValidationFilterOptions options;
         private readonly IModelMetadataProvider modelMetadataProvider;
@@ -176,8 +170,8 @@ namespace NValidation.AspNetCore
 
         private static bool IsSkipped(ActionExecutingContext context, ParameterDescriptor parameter)
         {
-            return SkipDecisions.GetOrAdd(
-                (context.ActionDescriptor.Id, parameter.Name),
+            return Actions.GetOrCreateValue(context.ActionDescriptor).SkipDecisions.GetOrAdd(
+                parameter.Name,
                 static (_, state) => IsSkippedCore(state.Context, state.Parameter),
                 (Context: context, Parameter: parameter));
         }
@@ -209,7 +203,7 @@ namespace NValidation.AspNetCore
             switch (this.options.MissingValidatorBehavior)
             {
                 case MissingValidatorBehavior.Log:
-                    if (ReportedMissingValidators.TryAdd((context.ActionDescriptor.Id, parameter.Name), 0))
+                    if (Actions.GetOrCreateValue(context.ActionDescriptor).ReportedMissingValidators.TryAdd(parameter.Name, 0))
                     {
                         this.LogMissingValidator(parameter.Name, parameter.ParameterType, context.ActionDescriptor.DisplayName);
                     }
@@ -231,5 +225,29 @@ namespace NValidation.AspNetCore
 
         [LoggerMessage(EventId = 1, Level = LogLevel.Warning, Message = "No validator is registered for parameter '{ParameterName}' of type '{ParameterType}' on action '{ActionDisplayName}'.")]
         private partial void LogMissingValidator(string parameterName, Type parameterType, string? actionDisplayName);
+
+        /// <summary>
+        /// The answers about one action, keyed by parameter name.
+        /// </summary>
+        private sealed class ActionCache
+        {
+            /// <summary>
+            /// Whether a parameter is excluded from validation.
+            /// </summary>
+            /// <remarks>
+            /// The answer comes from attributes on the parameter, the action and the controller, none of
+            /// which change once the application model is built — but finding it is reflection, and the
+            /// endpoint metadata is walked once per parameter even though the answer does not depend on
+            /// the parameter. Asked once per action instead of on every request.
+            /// </remarks>
+            public ConcurrentDictionary<string, bool> SkipDecisions { get; } = new(StringComparer.Ordinal);
+
+            /// <summary>
+            /// The parameters already reported as having no validator. Whether a payload has one is a
+            /// property of the action, not of the request, so warning about it on every request would
+            /// bury the warning in its own repetitions.
+            /// </summary>
+            public ConcurrentDictionary<string, byte> ReportedMissingValidators { get; } = new(StringComparer.Ordinal);
+        }
     }
 }

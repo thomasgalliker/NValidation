@@ -26,6 +26,23 @@ namespace NValidation
         }
 
         /// <summary>
+        /// The form for a property which may be absent. A missing value passes; use <c>NotNull()</c> to
+        /// require one.
+        /// </summary>
+        /// <inheritdoc cref="IsInEnum{T, TEnum}(PropertyRuleBuilder{T, TEnum})" path="/remarks"/>
+        public static PropertyRuleBuilder<T, TEnum?> IsInEnum<T, TEnum>(this PropertyRuleBuilder<T, TEnum?> builder)
+            where TEnum : struct, Enum
+        {
+            return builder.Add(context =>
+            {
+                if (context.Value is { } value && !EnumInfo<TEnum>.IsValid(value))
+                {
+                    context.AddError(ValidationMessageKeys.IsInEnum);
+                }
+            });
+        }
+
+        /// <summary>
         /// What counts as a valid value of <typeparamref name="TEnum"/>, worked out once per enum rather
         /// than on every validation.
         /// </summary>

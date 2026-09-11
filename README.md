@@ -76,7 +76,8 @@ services.AddNValidation(o => o.AddValidatorsFromAssembly(typeof(CarValidator).As
 what you think it does.
 
 Registration uses `TryAdd`, so a validator registered explicitly beforehand wins over whatever a scan finds for the same
-type.
+type. That is also how a payload with two validators in one assembly is settled: name the one you want before scanning,
+and the scan passes over it instead of refusing to choose.
 
 #### Lifetimes
 
@@ -141,7 +142,8 @@ is paying.
 | Group       | Rules                                                                                                      |
 |-------------|------------------------------------------------------------------------------------------------------------|
 | Presence    | `NotNull`, `NotEmpty` (text and collections), `NotDefault` (any value type)                                |
-| Text        | `MinimumLength`, `MaximumLength`, `Length(exact)`, `Length(min, max)`, `Matches`, `EmailAddress`           |
+| Text        | `MinimumLength`, `MaximumLength`, `Length(exact)`, `Length(min, max)`, `Matches`, `NotContaining`         |
+| Email       | `EmailAddress`, `EmailTopLevelDomainIn`, `EmailTopLevelDomainNotIn`                                        |
 | Comparison  | `GreaterThan`, `GreaterThanOrEqualTo`, `LessThan`, `LessThanOrEqualTo`, `Between`, `EqualTo`, `NotEqualTo` |
 | Numbers     | `MultipleOf`, `NotNaN`                                                                                     |
 | Dates       | `InThePast`, `InTheFuture`                                                                                 |
@@ -175,11 +177,13 @@ this.Property(c => c.UnitsProduced).GreaterThan(1_000L);
 this.Property(c => c.ServiceInterval).LessThanOrEqualTo(TimeSpan.FromDays(365));
 ```
 
-Each of them also compares against another property of the same object, on either side of which the value may be
-optional — a missing value has nothing to compare and passes:
+Each of them — and `EqualTo`/`NotEqualTo` with it — also compares against another property of the same object, on either
+side of which the value may be optional. A missing value has nothing to compare and passes, and so does a property
+reached through an object the payload omitted:
 
 ```csharp
 this.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+this.Property(c => c.Mileage).LessThanOrEqualTo(c => c.Model.MileageCap);   // skipped when Model is absent
 ```
 
 Requiring a value is a separate decision, and `NotNull()` or `NotEmpty()` is what makes it.
@@ -199,12 +203,47 @@ this.Property(c => c.Model.Manufacturer.Name).NotEmpty();   // judged only if it
 
 A payload that omitted `Model` reports `Model`, not a server error. This is the same answer the rest of
 the library gives to something absent — a null nested object is skipped by `SetValidator`, a missing
-collection by its own rules, an absent value by a comparison — so requiring presence is always a rule of
-its own, next to the rules about the value.
+collection by its own rules, an absent value by a comparison, and the *compared* property of a
+two-property rule by the same guard — so requiring presence is always a rule of its own, next to the
+rules about the value.
+
+The expression has to reach the property through the validator's own parameter. `x => x.Address.Street` is a path;
+`x => x.Lines[0].Street` and `x => somethingElse.Street` are not, and are refused where they are declared rather than
+silently reported under `Street`.
+
+### Email addresses
+
+`EmailAddress` parses the value with `System.Net.Mail.MailAddress` rather than matching it against a pattern. The
+address forms that are legal are far broader than a hand-written pattern allows — a quoted local part, an IP literal, an
+internationalized domain — which is why FluentValidation deprecated its own RFC 5322 regex; a parser also cannot be made
+to backtrack by a hostile value.
+
+The value has to be the address **alone**. `MailAddress` parses the header forms too, so `Foo <a@b.com>`,
+`a@b.com, c@d.com` and a value with surrounding whitespace all parse — and each is something other than the single
+address the field asked for. They are rejected.
+
+Which domains you accept is a separate decision, and a separate rule:
+
+```csharp
+this.Property(u => u.Email)
+    .NotEmpty()
+    .EmailAddress()
+    .EmailTopLevelDomainNotIn("test", "invalid", "example");
+```
+
+`NotContaining` is the general form for text a field will not carry, wherever it comes from:
+
+```csharp
+this.Property(u => u.DisplayName).NotContaining("admin", "support");
+```
+
+It compares without regard to case, and the message names none of the terms — a blocklist that reports its own entries
+is one the next value works around.
 
 ### Dates
 
-`InThePast` and `InTheFuture` compare in UTC and take an optional `TimeProvider`, so a test can decide what "now" is:
+`InThePast` and `InTheFuture` compare in UTC, and each has an overload taking a `TimeProvider`, so a test can decide
+what "now" is:
 
 ```csharp
 this.Property(m => m.FoundedDate).InThePast(this.timeProvider);
@@ -277,8 +316,11 @@ For a collection of scalars there is no property to name, so the element itself 
 
 ```csharp
 this.Property(c => c.ServiceMileages).ForEach(mileage => mileage.Element().GreaterThanOrEqualTo(0));
-// reports: ServiceMileages[1]
+// reports: ServiceMileages[1] -> "ServiceMileages[1] must be greater than or equal to 0."
 ```
+
+A rule declared on the element itself names no property, so the message names the element by the very code the failure
+is reported under. `WithDisplayName(...)` overrides that as it does anywhere else.
 
 Where the element already has a validator, use it:
 
@@ -300,8 +342,14 @@ this.Property(c => c.ServiceHistory)
 ```
 
 A missing collection and a `null` element are skipped — whether entries have to be there at all is a question for the
-collection's own rules. The collection is enumerated exactly once, so a property typed `IEnumerable<T>` backed by a
-query is safe.
+collection's own rules.
+
+Each collection rule walks the sequence once, and no further than its own question needs — `MaximumCount(50)` stops at
+the fifty-first entry. A *chain* of them asks one question each, so `NotEmpty().MaximumCount(50).ForEach(...)` walks it
+three times. That is free for a `List<T>` or an array, which answer `Count` without being walked at all, but a property
+typed `IEnumerable<T>` backed by a live query runs that query once per rule, and one that cannot be enumerated twice
+will throw. Materialize such a property before validating it; the library cannot do it for you without handing your own
+rules a different object than the one your model holds.
 
 Messages about an element can name its position with `{CollectionIndex}`, whichever way the rules were declared — an
 entry's own validator answers through the provider of the run it was composed into, not its own.

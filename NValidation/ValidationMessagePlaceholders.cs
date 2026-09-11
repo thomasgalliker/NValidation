@@ -30,6 +30,16 @@ namespace NValidation
         public const string MaxCount = "MaxCount";
 
         /// <summary>
+        /// The top-level domains a mail address is allowed to sit under, as a readable list.
+        /// </summary>
+        public const string TopLevelDomains = "TopLevelDomains";
+
+        /// <summary>
+        /// The top-level domain a refused mail address was found under.
+        /// </summary>
+        public const string TopLevelDomain = "TopLevelDomain";
+
+        /// <summary>
         /// The value a property was compared against, e.g. the lower bound of a <c>GreaterThan</c>.
         /// </summary>
         public const string OtherValue = "OtherValue";

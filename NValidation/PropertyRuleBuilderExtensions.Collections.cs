@@ -9,12 +9,15 @@ namespace NValidation
         /// Requires at least <paramref name="minimumCount"/> entries. A missing collection passes; use
         /// <c>NotEmpty()</c> or <c>NotNull()</c> to require one.
         /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="minimumCount"/> is negative.</exception>
         public static PropertyRuleBuilder<T, TCollection> MinimumCount<T, TCollection>(this PropertyRuleBuilder<T, TCollection> builder, int minimumCount)
             where TCollection : IEnumerable?
         {
+            ArgumentOutOfRangeException.ThrowIfNegative(minimumCount);
+
             return builder.Add(context =>
             {
-                if (context.Value != null && CollectionCount.Of(context.Value) < minimumCount)
+                if (context.Value != null && !CollectionCount.HasAtLeast(context.Value, minimumCount))
                 {
                     context.AddError(ValidationMessageKeys.MinimumCount, (ValidationMessagePlaceholders.MinCount, minimumCount));
                 }
@@ -24,12 +27,15 @@ namespace NValidation
         /// <summary>
         /// Caps the number of entries. A missing collection passes.
         /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumCount"/> is negative.</exception>
         public static PropertyRuleBuilder<T, TCollection> MaximumCount<T, TCollection>(this PropertyRuleBuilder<T, TCollection> builder, int maximumCount)
             where TCollection : IEnumerable?
         {
+            ArgumentOutOfRangeException.ThrowIfNegative(maximumCount);
+
             return builder.Add(context =>
             {
-                if (context.Value != null && CollectionCount.Of(context.Value) > maximumCount)
+                if (context.Value != null && !CollectionCount.HasAtMost(context.Value, maximumCount))
                 {
                     context.AddError(ValidationMessageKeys.MaximumCount, (ValidationMessagePlaceholders.MaxCount, maximumCount));
                 }
@@ -42,7 +48,16 @@ namespace NValidation
         /// </summary>
         /// <remarks>
         /// Entries are compared by their own <see cref="object.Equals(object)"/>. Where a collection
-        /// needs a comparison of its own, write it as a <c>Must(...)</c>.
+        /// needs a comparison of its own — case-insensitive codes, or entries matched on one field —
+        /// write it as a <c>Must(...)</c>, which sees the property at its declared type.
+        /// <para>
+        /// Declared for any <see cref="IEnumerable"/>, so it works whatever the property is typed as.
+        /// The element type is therefore not known here, and a collection of value types has each entry
+        /// boxed on the way into the set. Reaching the entries at their own type would mean inferring it
+        /// from the property, which C# cannot do from a constraint — so the rule that works everywhere
+        /// is the one that ships, and a hot path over a large collection of value types is a
+        /// <c>Must(...)</c> with a <see cref="HashSet{T}"/> of that type.
+        /// </para>
         /// </remarks>
         public static PropertyRuleBuilder<T, TCollection> NoDuplicates<T, TCollection>(this PropertyRuleBuilder<T, TCollection> builder)
             where TCollection : IEnumerable?
@@ -58,7 +73,9 @@ namespace NValidation
 
         private static bool HasDuplicates(IEnumerable value)
         {
-            var seen = new HashSet<object?>();
+            // Sized up front where the collection knows its own size, so a large one does not pay for
+            // the set growing underneath it.
+            var seen = value is ICollection collection ? new HashSet<object?>(collection.Count) : [];
 
             foreach (var entry in value)
             {

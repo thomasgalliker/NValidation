@@ -24,6 +24,5 @@ namespace NValidation
 
             result.ThrowIfInvalid();
         }
-
     }
 }

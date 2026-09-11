@@ -1,3 +1,6 @@
+using System.Reflection;
+using NValidation.TestData.Ambiguous;
+
 namespace NValidation.Tests.Extensions
 {
     /// <summary>
@@ -8,6 +11,13 @@ namespace NValidation.Tests.Extensions
     [Trait(Traits.Category, Traits.UnitTests)]
     public class ServiceCollectionExtensionsTests
     {
+        /// <summary>
+        /// The one assembly carrying two validators for a single payload. It exists as an assembly of
+        /// its own because every other scan target is also scanned by tests which assert that a scan
+        /// succeeds, and by the sample application.
+        /// </summary>
+        private static Assembly AmbiguousAssembly { get; } = typeof(AmbiguousPayload).Assembly;
+
         [Fact]
         public void AddNValidation_RegistersTheBuiltInMessageProvider()
         {
@@ -220,6 +230,31 @@ namespace NValidation.Tests.Extensions
             validator.Should().BeOfType<HandWrittenManufacturerValidator>();
         }
 
+        /// <summary>
+        /// Which is what the exception's own remedy says to do about it. The scan passes over a payload
+        /// an explicit registration already covers, rather than complaining about a choice that was made
+        /// — TryAdd would have kept that registration anyway, so refusing the scan only made the advice
+        /// untrue.
+        /// </summary>
+        [Fact]
+        public async Task AddValidatorsFromAssembly_WithAnExplicitRegistration_PassesOverThatPayload()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o => o
+                .AddValidator<FirstAmbiguousValidator>()
+                .AddValidatorsFromAssembly(AmbiguousAssembly));
+
+            var validator = Resolve<IValidator<AmbiguousPayload>>(services);
+
+            // Act
+            var result = await validator.ValidateAsync(new AmbiguousPayload());
+
+            // Assert
+            validator.Should().BeOfType<FirstAmbiguousValidator>();
+            result.Errors.Should().ContainSingle().Which.Code.Should().Be(FirstAmbiguousValidator.Code);
+        }
+
         [Fact]
         public void AddValidator_WithATypeThatIsNotAValidator_Throws()
         {
@@ -367,7 +402,8 @@ namespace NValidation.Tests.Extensions
         /// <summary>
         /// Assembly.GetTypes has no documented order, so picking one of two validators for the same
         /// payload would be arbitrary and reproducible only by luck. The scan says so instead, naming
-        /// both, and registers none of them.
+        /// both, and registers none of them. The message names the payload rather than the
+        /// <c>IValidator&lt;T&gt;</c> behind it, which is not what the reader wrote a validator for.
         /// </summary>
         [Fact]
         public void AddValidatorsFromAssembly_WithTwoValidatorsForOnePayload_Throws()
@@ -376,12 +412,11 @@ namespace NValidation.Tests.Extensions
             var services = new ServiceCollection();
 
             // Act
-            var act = () => services.AddNValidation(
-                o => o.AddValidatorsFromAssembly(typeof(ServiceCollectionExtensionsTests).Assembly));
+            var act = () => services.AddNValidation(o => o.AddValidatorsFromAssembly(AmbiguousAssembly));
 
             // Assert
             act.Should().Throw<InvalidOperationException>()
-                .WithMessage("*both validate*")
+                .WithMessage($"*both validate '{typeof(AmbiguousPayload)}'*")
                 .WithMessage("*AddValidator*");
         }
 

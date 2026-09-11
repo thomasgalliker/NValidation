@@ -58,7 +58,34 @@ namespace NValidation.TestData
 
         public TimeSpan ServiceInterval { get; set; }
 
+        /// <summary>
+        /// Absent until the car is prepared for sale, and only ever set in whole thousands — the
+        /// nullable whole-number subject.
+        /// </summary>
+        public int? ServiceIntervalKm { get; set; }
+
+        /// <summary>
+        /// The condition the car arrived in, absent for one that was never taken in trade. The nullable
+        /// enum subject.
+        /// </summary>
+        public CarCondition? IntakeCondition { get; set; }
+
+        /// <summary>
+        /// The plate the car is offered under. Compared for inequality against
+        /// <see cref="PreviousRegistrationPlate"/>, which is what a re-registered car must not keep.
+        /// </summary>
+        public string? RegistrationPlate { get; set; }
+
+        /// <inheritdoc cref="RegistrationPlate"/>
+        public string? PreviousRegistrationPlate { get; set; }
+
         public ICollection<int>? FeatureIds { get; set; }
+
+        /// <summary>
+        /// A collection of a reference type, which is what proves an element chain declared on one binds
+        /// without a nullability warning at the call site.
+        /// </summary>
+        public List<string>? ServiceInvoiceNumbers { get; set; }
 
         /// <summary>
         /// Declared as a concrete list rather than an interface, so the collection rules are proven to

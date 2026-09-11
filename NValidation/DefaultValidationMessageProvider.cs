@@ -27,6 +27,9 @@ namespace NValidation
             [ValidationMessageKeys.LengthBetween] = "{PropertyName} must be between {MinLength} and {MaxLength} characters long.",
             [ValidationMessageKeys.Matches] = "{PropertyName} has an invalid format.",
             [ValidationMessageKeys.EmailAddress] = "{PropertyName} is not a valid email address.",
+            [ValidationMessageKeys.EmailTopLevelDomain] = "{PropertyName} must use one of the following top-level domains: {TopLevelDomains}.",
+            [ValidationMessageKeys.EmailTopLevelDomainNotAllowed] = "{PropertyName} must not use the top-level domain {TopLevelDomain}.",
+            [ValidationMessageKeys.NotContaining] = "{PropertyName} contains text that is not allowed.",
 
             [ValidationMessageKeys.GreaterThan] = "{PropertyName} must be greater than {OtherValue}.",
             [ValidationMessageKeys.GreaterThanOrEqualTo] = "{PropertyName} must be greater than or equal to {OtherValue}.",

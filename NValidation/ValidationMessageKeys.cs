@@ -29,6 +29,22 @@ namespace NValidation
         public const string Matches = "Matches";
         public const string EmailAddress = "EmailAddress";
 
+        /// <summary>
+        /// A mail address is not under one of the top-level domains the rule allows.
+        /// </summary>
+        public const string EmailTopLevelDomain = "EmailTopLevelDomain";
+
+        /// <summary>
+        /// A mail address is under a top-level domain the rule refuses.
+        /// </summary>
+        public const string EmailTopLevelDomainNotAllowed = "EmailTopLevelDomainNotAllowed";
+
+        /// <summary>
+        /// Text carries one of the terms a rule refuses. The message names none of them: a blocklist
+        /// which reports its own entries is one the next value works around.
+        /// </summary>
+        public const string NotContaining = "NotContaining";
+
         public const string GreaterThan = "GreaterThan";
         public const string GreaterThanOrEqualTo = "GreaterThanOrEqualTo";
         public const string LessThan = "LessThan";

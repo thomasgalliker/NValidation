@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Linq.Expressions;
 using NValidation.Internals;
 
@@ -36,7 +35,7 @@ namespace NValidation
         /// property to name: <c>this.Property(x => x.Mileages).ForEach(mileage => mileage.Element().GreaterThan(0));</c>
         /// A failure is reported under the element's position alone — <c>Mileages[1]</c>.
         /// </summary>
-        public PropertyRuleBuilder<TElement, TElement> Element()
+        public PropertyRuleBuilder<TElement, TElement?> Element()
         {
             return this.RuleForSelf();
         }
@@ -81,6 +80,12 @@ namespace NValidation
         /// The position is still passed, for an identity which reads better one-based, or which falls
         /// back to it. Only the code changes; <see cref="ValidationMessagePlaceholders.CollectionIndex"/>
         /// keeps reporting the position.
+        /// <para>
+        /// Whatever this returns becomes part of the error code, which a host renders straight into its
+        /// response — as a JSON member name, for a problem details body. Identify an element by
+        /// something short and of the application's own choosing; a value the caller sent is echoed back
+        /// at whatever length the caller chose.
+        /// </para>
         /// </remarks>
         public ElementRuleBuilder<TElement> WithIndexer(Func<TElement, int, string> indexer)
         {
@@ -119,21 +124,19 @@ namespace NValidation
                     continue;
                 }
 
-                var elementMessages = new IndexedMessageProvider(messages, position);
+                var elementMessages = new IndexedMessageProvider<TElement>(messages, code, element, position, this.indexer);
 
                 elementErrors ??= [];
                 elementErrors.Clear();
 
-                await this.AddErrorsAsync(element, code, position, report, elementMessages, elementErrors, cancellationToken);
+                await this.AddErrorsAsync(element, report, elementMessages, elementErrors, cancellationToken);
             }
         }
 
         private async ValueTask AddErrorsAsync(
             TElement element,
-            string code,
-            int position,
             Action<ValidationError> report,
-            IValidationMessageProvider messages,
+            IndexedMessageProvider<TElement> messages,
             List<ValidationError> elementErrors,
             CancellationToken cancellationToken)
         {
@@ -147,24 +150,14 @@ namespace NValidation
 
             if (elementErrors.Count == 0)
             {
-                // Naming the entry costs two strings — the identity and the code around it — and an
-                // entry with nothing to report never needs to be named.
+                // The entry is only named on demand, and an entry with nothing to report never asks.
                 return;
             }
 
-            var elementCode = $"{code}[{this.Identify(element, position)}]";
-
             foreach (var error in elementErrors)
             {
-                report(new ValidationError(Compose(elementCode, error.Code), error.Message));
+                report(new ValidationError(Compose(messages.ElementCode, error.Code), error.Message));
             }
-        }
-
-        private string Identify(TElement element, int position)
-        {
-            return this.indexer == null
-                ? position.ToString(CultureInfo.InvariantCulture)
-                : this.indexer(element, position);
         }
 
         /// <summary>

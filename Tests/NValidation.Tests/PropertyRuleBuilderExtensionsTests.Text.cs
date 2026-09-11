@@ -117,8 +117,12 @@ namespace NValidation.Tests
         [InlineData("   ", true)]
         [InlineData("info@aurora-motors.example", true)]
         [InlineData("sales+fleet@aurora-motors.co.uk", true)]
+        [InlineData("\"quoted local\"@aurora-motors.example", true)] // legal, and no hand-written pattern allows it
+        [InlineData("parts@[192.168.0.1]", true)] // an address literal is an address
+        [InlineData("verkauf@aurora-motörs.example", true)] // an internationalized domain is an address
         [InlineData("not an email", false)]
         [InlineData("missing-at.example.com", false)]
+        [InlineData("two@@ats.example", false)]
         public async Task EmailAddress_AcceptsWhatCanBeParsedAsAMailAddress(string? email, bool expectedToSucceed)
         {
             // Arrange
@@ -261,6 +265,177 @@ namespace NValidation.Tests
 
             // Assert
             result.ShouldReport(nameof(Manufacturer.Name), ValidationMessageKeys.LengthBetween);
+        }
+
+        /// <summary>
+        /// <see cref="System.Net.Mail.MailAddress"/> parses the header forms too, and each of them is
+        /// something other than the single address the field asked for. A value carrying a display name,
+        /// a second address, or surrounding whitespace is not one address, and what a host would later
+        /// do with it — put it in a header, hand it to a recipient list — is not this rule's to assume.
+        /// </summary>
+        [Theory]
+        [InlineData("Aurora Motors <info@aurora-motors.example>")]
+        [InlineData("\"Aurora Motors\" <info@aurora-motors.example>")]
+        [InlineData("info@aurora-motors.example, sales@aurora-motors.example")]
+        [InlineData("info@aurora-motors.example ")]
+        [InlineData(" info@aurora-motors.example")]
+        [InlineData("Aurora info@aurora-motors.example")]
+        public async Task EmailAddress_RefusesAValueWhichIsMoreThanTheAddress(string email)
+        {
+            // Arrange
+            var validator = new ContactEmailValidator();
+            var manufacturer = Cars.Manufacturer();
+            manufacturer.ContactEmail = email;
+
+            // Act
+            var result = await validator.ValidateAsync(manufacturer);
+
+            // Assert
+            result.Succeeded.Should().BeFalse();
+        }
+
+        [Theory]
+        [InlineData("info@aurora-motors.example", "example", true)]
+        [InlineData("info@aurora-motors.example", ".example", true)] // written with or without its dot
+        [InlineData("info@aurora-motors.EXAMPLE", "example", true)] // a domain does not care about case
+        [InlineData("info@aurora-motors.com", "example", false)]
+        [InlineData("info@localhost", "example", false)] // no top-level domain is not one of them
+        [InlineData("parts@[192.168.0.1]", "example", false)] // nor is an address literal
+        [InlineData("not an email", "example", true)] // left to EmailAddress
+        [InlineData(null, "example", true)] // left to NotEmpty
+        public async Task EmailTopLevelDomainIn_AcceptsOnlyTheDomainsItNames(string? email, string topLevelDomain, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new ContactEmailTopLevelDomainInValidator(topLevelDomain);
+            var manufacturer = Cars.Manufacturer();
+            manufacturer.ContactEmail = email;
+
+            // Act
+            var result = await validator.ValidateAsync(manufacturer);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData("info@aurora-motors.test", false)]
+        [InlineData("info@aurora-motors.TEST", false)]
+        [InlineData("info@aurora-motors.example", true)]
+        [InlineData("info@localhost", true)] // nothing to refuse
+        public async Task EmailTopLevelDomainNotIn_RefusesTheDomainsItNames(string email, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new ContactEmailTopLevelDomainNotInValidator("test", "invalid");
+            var manufacturer = Cars.Manufacturer();
+            manufacturer.ContactEmail = email;
+
+            // Act
+            var result = await validator.ValidateAsync(manufacturer);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Fact]
+        public async Task EmailTopLevelDomainIn_ReportsEmailTopLevelDomain()
+        {
+            // Arrange
+            var validator = new ContactEmailTopLevelDomainInValidator("example");
+            var manufacturer = Cars.Manufacturer();
+            manufacturer.ContactEmail = "info@aurora-motors.com";
+
+            // Act
+            var result = await validator.ValidateForKeysAsync(manufacturer);
+
+            // Assert
+            result.ShouldReport(nameof(Manufacturer.ContactEmail), ValidationMessageKeys.EmailTopLevelDomain);
+        }
+
+        [Fact]
+        public async Task EmailTopLevelDomainNotIn_ReportsEmailTopLevelDomainNotAllowed()
+        {
+            // Arrange
+            var validator = new ContactEmailTopLevelDomainNotInValidator("test");
+            var manufacturer = Cars.Manufacturer();
+            manufacturer.ContactEmail = "info@aurora-motors.test";
+
+            // Act
+            var result = await validator.ValidateForKeysAsync(manufacturer);
+
+            // Assert
+            result.ShouldReport(nameof(Manufacturer.ContactEmail), ValidationMessageKeys.EmailTopLevelDomainNotAllowed);
+        }
+
+        [Theory]
+        [InlineData("Aurora Motors", true)]
+        [InlineData("Aurora admin Motors", false)]
+        [InlineData("Aurora ADMIN Motors", false)] // a blocklist which only matches one casing is no blocklist
+        [InlineData(null, true)] // left to NotEmpty
+        public async Task NotContaining_RefusesTheTermsItNames(string? name, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new NameNotContainingValidator("admin", "support");
+            var manufacturer = Cars.Manufacturer();
+            manufacturer.Name = name;
+
+            // Act
+            var result = await validator.ValidateAsync(manufacturer);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData("Aurora ADMIN Motors", true)]
+        [InlineData("Aurora admin Motors", false)]
+        public async Task NotContaining_WithAComparison_ComparesTheWayItWasTold(string name, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new NameNotContainingOrdinalValidator("admin");
+            var manufacturer = Cars.Manufacturer();
+            manufacturer.Name = name;
+
+            // Act
+            var result = await validator.ValidateAsync(manufacturer);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        /// <summary>
+        /// The message names none of the terms: a blocklist which reports its own entries is one the
+        /// next value works around.
+        /// </summary>
+        [Fact]
+        public async Task NotContaining_ReportsNotContaining_WithoutNamingTheTerm()
+        {
+            // Arrange
+            var validator = new NameNotContainingValidator("admin");
+            var manufacturer = Cars.Manufacturer();
+            manufacturer.Name = "Aurora admin Motors";
+
+            // Act
+            var keyed = await validator.ValidateForKeysAsync(manufacturer);
+            var english = await new NameNotContainingValidator("admin").ValidateAsync(manufacturer);
+
+            // Assert
+            keyed.ShouldReport(nameof(Manufacturer.Name), ValidationMessageKeys.NotContaining);
+            english.Errors.Should().ContainSingle().Which.Message.Should().NotContain("admin");
+        }
+
+        [Fact]
+        public void NotContaining_WithNothingToLookFor_Throws()
+        {
+            // Act
+            var acts = new Action[]
+            {
+                () => new NameNotContainingValidator(),
+                () => new NameNotContainingValidator("  "),
+                () => new ContactEmailTopLevelDomainInValidator(),
+            };
+
+            // Assert
+            acts.Should().AllSatisfy(act => act.Should().Throw<ArgumentException>());
         }
 
         [Fact]

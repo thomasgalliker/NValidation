@@ -15,6 +15,5 @@ namespace NValidation.Internals
             IValidationMessageProvider messages,
             PropertyDisplayNames displayNames,
             CancellationToken cancellationToken);
-
     }
 }

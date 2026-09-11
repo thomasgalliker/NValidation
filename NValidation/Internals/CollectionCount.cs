@@ -8,32 +8,18 @@ namespace NValidation.Internals
     /// <remarks>
     /// A property may be declared as a bare <see cref="IEnumerable"/> backed by a query or a
     /// <c>yield return</c> iterator, which is enumerated afresh — or only once — every time it is read.
-    /// So each method here walks the sequence no further than its own question needs, and a rule asks
-    /// exactly one question.
+    /// So each method here walks the sequence no further than its own question needs: a collection that
+    /// knows its own size is asked for it, and one that does not is walked only until the answer is
+    /// settled.
+    /// <para>
+    /// One rule therefore walks the sequence at most once, but a <em>chain</em> of collection rules asks
+    /// one question each and so walks it once per rule. A property backed by a live query, or by a
+    /// sequence that cannot be enumerated twice, has to be materialized by the caller — this library
+    /// cannot do it without changing the value the caller's own rules see.
+    /// </para>
     /// </remarks>
     internal static class CollectionCount
     {
-        /// <summary>
-        /// The number of entries. A collection that knows its own size is asked for it; anything else is
-        /// enumerated once.
-        /// </summary>
-        public static int Of(IEnumerable value)
-        {
-            if (TryGetCount(value, out var knownCount))
-            {
-                return knownCount;
-            }
-
-            var count = 0;
-
-            foreach (var _ in value)
-            {
-                count++;
-            }
-
-            return count;
-        }
-
         /// <summary>
         /// Whether there is at least one entry, without counting the rest.
         /// </summary>
@@ -57,11 +43,68 @@ namespace NValidation.Internals
         }
 
         /// <summary>
-        /// Whether the count is known without enumerating. Arrays, <see cref="List{T}"/> and the other
-        /// built-in collections implement the non-generic <see cref="ICollection"/> and report it; a
-        /// sequence which does not is enumerated, which is safe because each caller enumerates it at
-        /// most once.
+        /// Whether there are at least <paramref name="count"/> entries, without walking past the one that
+        /// settles it.
         /// </summary>
+        public static bool HasAtLeast(IEnumerable value, int count)
+        {
+            if (count <= 0)
+            {
+                return true;
+            }
+
+            if (TryGetCount(value, out var knownCount))
+            {
+                return knownCount >= count;
+            }
+
+            var seen = 0;
+
+            foreach (var _ in value)
+            {
+                if (++seen >= count)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Whether there are no more than <paramref name="count"/> entries. One entry past the cap is
+        /// enough to answer, so a sequence which busts it is not walked to its end.
+        /// </summary>
+        public static bool HasAtMost(IEnumerable value, int count)
+        {
+            if (TryGetCount(value, out var knownCount))
+            {
+                return knownCount <= count;
+            }
+
+            var seen = 0;
+
+            foreach (var _ in value)
+            {
+                if (++seen > count)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Whether the count is known without enumerating.
+        /// </summary>
+        /// <remarks>
+        /// Arrays, <see cref="List{T}"/> and the other built-in collections implement the non-generic
+        /// <see cref="ICollection"/> and report it. A few — <see cref="HashSet{T}"/> among them — only
+        /// implement the generic one, whose <c>Count</c> cannot be reached without knowing the element
+        /// type, so they are walked instead. That is bounded by the question being asked, and reaching
+        /// the generic interface from here would take the reflection this library avoids.
+        /// </remarks>
         private static bool TryGetCount(IEnumerable value, out int count)
         {
             if (value is ICollection collection)

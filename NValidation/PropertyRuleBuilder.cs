@@ -91,9 +91,13 @@ namespace NValidation
         /// against this property — declaring it once is what keeps the two in step. The error code is
         /// unaffected, so callers keep binding messages to inputs by the C# property name.
         /// </remarks>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="displayName"/> is empty or whitespace. A message names the property by this,
+        /// so a blank one leaves the sentence without a subject.
+        /// </exception>
         public PropertyRuleBuilder<T, TProperty> WithDisplayName(string displayName)
         {
-            ArgumentNullException.ThrowIfNull(displayName);
+            ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
 
             return this.WithDisplayName(() => displayName);
         }
@@ -125,9 +129,14 @@ namespace NValidation
         /// that code; this replaces what the property's own rules report under.
         /// </para>
         /// </remarks>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="errorCode"/> is empty or whitespace. The code is the token a caller binds a
+        /// message to, and a blank one binds to nothing. The one empty code this library reports under
+        /// is its own: a rule declared for an element itself, which is named by its position alone.
+        /// </exception>
         public PropertyRuleBuilder<T, TProperty> WithErrorCode(string errorCode)
         {
-            ArgumentNullException.ThrowIfNull(errorCode);
+            ArgumentException.ThrowIfNullOrWhiteSpace(errorCode);
 
             this.RequireRule().ErrorCode = errorCode;
 
@@ -163,10 +172,6 @@ namespace NValidation
         }
 
         /// <summary>
-        /// A builder is only meaningful when it came from <see cref="Validator{T}.Property{TProperty}"/>.
-        /// It is a struct, so a caller can also write <c>default</c>, which carries no rule to append to.
-        /// </summary>
-        /// <summary>
         /// Appends the element rules as an ordinary check on this property. The cast is safe by
         /// construction: the variance conversion that chose this overload is what proves the property
         /// really is a sequence of <typeparamref name="TElement"/>.
@@ -192,6 +197,10 @@ namespace NValidation
             });
         }
 
+        /// <summary>
+        /// A builder is only meaningful when it came from <see cref="Validator{T}.Property{TProperty}"/>.
+        /// It is a struct, so a caller can also write <c>default</c>, which carries no rule to append to.
+        /// </summary>
         private PropertyRule<T, TProperty> RequireRule()
         {
             return this.rule ?? throw new InvalidOperationException(

@@ -88,6 +88,44 @@ namespace NValidation.AspNetCore.Tests
         }
 
         /// <summary>
+        /// The order the other way round, which is the one a host actually writes: AddNValidation
+        /// configures MVC first, and AddControllers — registered after it — runs its own delegate
+        /// afterwards. Checking inside a Configure delegate cannot see that one, so the check happens
+        /// after every delegate has run.
+        /// </summary>
+        [Fact]
+        public void AddValidationFilter_WhenTheHostAddsTheFilterAfterwards_AddsItOnce()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o => o.AddValidationFilter());
+
+            // Act
+            services.Configure<MvcOptions>(o => o.Filters.Add<ValidationActionFilter>());
+
+            // Assert
+            ValidationFiltersOf(services).Should().Be(1);
+        }
+
+        /// <summary>
+        /// The filter can also reach MvcOptions as an instance or through the container, and two of it
+        /// validate every payload twice however it got there.
+        /// </summary>
+        [Fact]
+        public void AddValidationFilter_WhenTheHostAddsTheFilterAsAService_AddsItOnce()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o => o.AddValidationFilter());
+
+            // Act
+            services.Configure<MvcOptions>(o => o.Filters.Add(new ServiceFilterAttribute(typeof(ValidationActionFilter))));
+
+            // Assert
+            AllValidationFiltersOf(services).Should().Be(1);
+        }
+
+        /// <summary>
         /// The configuration overload still binds what it was given.
         /// </summary>
         [Fact]
@@ -108,11 +146,28 @@ namespace NValidation.AspNetCore.Tests
 
         private static int ValidationFiltersOf(IServiceCollection services)
         {
-            var mvcOptions = services.BuildServiceProvider().GetRequiredService<IOptions<MvcOptions>>().Value;
-
-            return mvcOptions.Filters.Count(filter =>
+            return FiltersOf(services).Count(filter =>
                 filter is TypeFilterAttribute typeFilter &&
                 typeFilter.ImplementationType == typeof(ValidationActionFilter));
+        }
+
+        /// <summary>
+        /// Every shape the filter can be registered in, so a duplicate cannot hide behind a different one.
+        /// </summary>
+        private static int AllValidationFiltersOf(IServiceCollection services)
+        {
+            return FiltersOf(services).Count(filter => filter switch
+            {
+                ValidationActionFilter => true,
+                TypeFilterAttribute typeFilter => typeFilter.ImplementationType == typeof(ValidationActionFilter),
+                ServiceFilterAttribute serviceFilter => serviceFilter.ServiceType == typeof(ValidationActionFilter),
+                _ => false,
+            });
+        }
+
+        private static IEnumerable<IFilterMetadata> FiltersOf(IServiceCollection services)
+        {
+            return services.BuildServiceProvider().GetRequiredService<IOptions<MvcOptions>>().Value.Filters;
         }
     }
 }

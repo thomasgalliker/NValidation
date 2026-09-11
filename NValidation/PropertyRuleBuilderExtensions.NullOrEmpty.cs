@@ -27,7 +27,7 @@ namespace NValidation
         /// <remarks>
         /// The counterpart of <c>NotEmpty</c>: <c>NotEmpty</c> asks whether there is any content, which
         /// only a string or a collection can answer, while this asks whether a value was set at all.
-        /// Pair it with <see cref="IsInEnum{T, TEnum}"/> on an enum to also reject a number which is no
+        /// Pair it with <see cref="IsInEnum{T, TEnum}(PropertyRuleBuilder{T, TEnum})"/> on an enum to also reject a number which is no
         /// member at all.
         /// </remarks>
         public static PropertyRuleBuilder<T, TValue> NotDefault<T, TValue>(this PropertyRuleBuilder<T, TValue> builder)

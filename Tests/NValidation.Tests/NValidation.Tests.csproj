@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\NValidation\NValidation.csproj" />
     <ProjectReference Include="..\NValidation.TestData\NValidation.TestData.csproj" />
+    <ProjectReference Include="..\NValidation.TestData.Ambiguous\NValidation.TestData.Ambiguous.csproj" />
   </ItemGroup>
 
 </Project>

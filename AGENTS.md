@@ -80,19 +80,31 @@
 - Test both success and failure scenarios.
 - Include edge cases: null inputs, empty collections, boundary values, and error conditions.
 - Prioritize testing complex logic, error handling, and edge cases over trivial code.
-- Every test carries `[Trait(Traits.Category, Traits.UnitTests)]`. A test without a category trait is
-  filtered out by the build and silently never runs.
+- Every test carries `[Trait(Traits.Category, Traits.UnitTests)]`, declared once on the test class (a
+  partial class carries it on whichever part declares it). The trait is what lets a run be filtered by
+  category; CI currently runs everything, so a missing trait costs nothing today and everything on the
+  day someone adds `--filter`.
 - Tests which change the ambient culture carry `[Collection(Collections.CultureSpecific)]`, because the
   culture is process-wide.
 
 ## Library-specific rules
 - Every shipped rule needs at least one test, including its boundary values and its null/absent case.
-- Every shipped rule also needs a test in `RuleMessageKeyTests` asserting the error's `Code` and its
-  message key, resolved through `MessageKeyProvider`. Asserting only `result.Succeeded` lets a rule
-  wired to a neighbouring key pass the whole suite — a value that is too large reported as "must be
-  greater than". The bar is a mutation: changing any rule's key must turn the suite red.
+- Every shipped rule also needs a test asserting the error's `Code` and its message key, resolved
+  through `MessageKeyProvider` (see `ValidationAssertions`). These live beside the rule's own tests, in
+  the matching `PropertyRuleBuilderExtensionsTests.*` part. Asserting only `result.Succeeded` lets a
+  rule wired to a neighbouring key pass the whole suite — a value that is too large reported as "must
+  be greater than". The bar is a mutation: changing any rule's key must turn the suite red.
+- A new key also needs its built-in English message: `DefaultValidationMessageProviderTests` walks every
+  constant on `ValidationMessageKeys` and fails for one the provider has no text for.
 - `NValidation` must not reference ASP.NET Core. Anything needing `ProblemDetails`, `ControllerBase` or
   `IExceptionHandler` belongs in `NValidation.AspNetCore`.
 - Rules never reference a resource or a literal message: they report a key from `ValidationMessageKeys`,
   which the host resolves through `IValidationMessageProvider`. A new rule needs a new key plus its
   built-in English message in `DefaultValidationMessageProvider`.
+- A rule's property expression must reach the property through the lambda's own parameter. `PropertyPath`
+  refuses anything else, because the path it produces is both the error code and the key the compiled
+  accessor and the reachability guard are cached under: two expressions sharing a path would share a
+  delegate and validate the wrong value.
+- Anything absent passes rather than throws — a null nested object, a missing collection, an absent
+  value, a compared property behind an object the payload omitted. Requiring presence is always a rule
+  of its own. A rule that dereferences without a guard turns a bad request into a 500.
