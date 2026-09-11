@@ -69,10 +69,10 @@ namespace NValidation.Tests
         }
 
         [Fact]
-        public async Task ValidateAsync_ReportsEveryFailingRule_WhenTheChainContinuesOnFailure()
+        public async Task ValidateAsync_ReportsEveryFailingRule_WhenTheChainAsksForAll()
         {
             // Arrange
-            var validator = new VinContinueOnFailureValidator();
+            var validator = new VinReportsEveryFailingRuleValidator();
             var car = new Car { Vin = "wrong" };
 
             // Act
@@ -80,8 +80,231 @@ namespace NValidation.Tests
 
             // Assert
             result.Errors.Select(error => error.Message).Should().BeEquivalentTo(
-                VinContinueOnFailureValidator.FirstMessage,
-                VinContinueOnFailureValidator.SecondMessage);
+                VinReportsEveryFailingRuleValidator.FirstMessage,
+                VinReportsEveryFailingRuleValidator.SecondMessage);
+        }
+
+        /// <summary>
+        /// The whole feature in one table: what each combination of the two axes reports, over two
+        /// properties which each break two rules. The rows are the behaviours a caller can ask for, so
+        /// a change to either axis that is not intended turns this red.
+        /// </summary>
+        [Theory]
+        [InlineData(null, null, nameof(Car.Vin), nameof(Car.RegistrationPlate))] // the defaults: every property, one message each
+        [InlineData(ValidationBehavior.All, ValidationBehavior.StopAtFirstError, nameof(Car.Vin), nameof(Car.RegistrationPlate))]
+        [InlineData(ValidationBehavior.All, ValidationBehavior.All, nameof(Car.Vin), nameof(Car.Vin), nameof(Car.RegistrationPlate), nameof(Car.RegistrationPlate))]
+        [InlineData(ValidationBehavior.StopAtFirstError, ValidationBehavior.StopAtFirstError, nameof(Car.Vin))]
+        public async Task ValidateAsync_ReportsWhatTheValidationBehaviorsAskFor(
+            ValidationBehavior? classBehavior,
+            ValidationBehavior? propertyBehavior,
+            params string[] expectedCodes)
+        {
+            // Arrange
+            var validator = new TwoFailingPropertiesValidator(classBehavior, propertyBehavior);
+
+            // Act
+            var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
+
+            // Assert
+            result.Errors.Select(error => error.Code).Should().BeEquivalentTo(expectedCodes);
+        }
+
+        /// <summary>
+        /// A run told to stop at the first error reports exactly one, whatever the other axis says.
+        /// Anything else would make a setting by that name a trap.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_StoppingAtTheFirstError_OverridesTheChainAxis()
+        {
+            // Arrange
+            var validator = new TwoFailingPropertiesValidator(
+                ValidationBehavior.StopAtFirstError, ValidationBehavior.All);
+
+            // Act
+            var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
+
+            // Assert
+            result.Errors.Should().ContainSingle().Which.Code.Should().Be(nameof(Car.Vin));
+        }
+
+        /// <summary>
+        /// The properties after a stop are not merely left out of the result — they are never looked
+        /// at, which is the point of asking a run to stop.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_StoppingAtTheFirstError_NeverReachesTheNextProperty()
+        {
+            // Arrange
+            var reached = false;
+            var validator = new SecondPropertyProbeValidator(
+                ValidationBehavior.StopAtFirstError, () => reached = true);
+
+            // Act
+            await validator.ValidateAsync(new Car());
+
+            // Assert
+            reached.Should().BeFalse("a run that stopped does not go on to judge the rest");
+        }
+
+        /// <inheritdoc cref="ValidateAsync_StoppingAtTheFirstError_NeverReachesTheNextProperty" path="/summary"/>
+        [Fact]
+        public async Task ValidateAsync_ReportingEverything_ReachesTheNextProperty()
+        {
+            // Arrange
+            var reached = false;
+            var validator = new SecondPropertyProbeValidator(ValidationBehavior.All, () => reached = true);
+
+            // Act
+            await validator.ValidateAsync(new Car());
+
+            // Assert
+            reached.Should().BeTrue();
+        }
+
+        /// <summary>
+        /// The one exception to a stopping run: a chain which asked for all of its own rules is let
+        /// finish, so a caller can be told everything about the first field that is wrong. The run
+        /// still stops afterwards.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_StoppingAtTheFirstError_LetsAChainThatAskedForAllFinish()
+        {
+            // Arrange
+            var reached = false;
+            var validator = new ChainOverridingAStoppingRunValidator(() => reached = true);
+
+            // Act
+            var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
+
+            // Assert
+            result.Errors.Should().HaveCount(2);
+            result.Errors.Should().OnlyContain(error => error.Code == nameof(Car.Vin));
+            reached.Should().BeFalse("the run still stops once that chain has had its say");
+        }
+
+        /// <summary>
+        /// The override works in both directions. Its stopping direction is the half the old boolean
+        /// could not express, and it is the only way to hold one chain back in a validator that reports
+        /// everything else.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_AChainAskingToStop_ReportsOnceInAValidatorThatReportsAll()
+        {
+            // Arrange
+            var validator = new ChainStoppingWithinAReportingValidator();
+
+            // Act
+            var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
+
+            // Assert
+            result.Errors.Select(error => error.Code).Should().BeEquivalentTo(
+                nameof(Car.Vin),                                      // held back to one by the override
+                nameof(Car.RegistrationPlate), nameof(Car.RegistrationPlate)); // still reports both
+        }
+
+        /// <summary>
+        /// An axis left unset takes what the level above settled, so naming one never silently changes
+        /// the other.
+        /// </summary>
+        [Theory]
+        [InlineData(ValidationBehavior.All, null, 2)] // the chain axis keeps its default of one message per property
+        [InlineData(null, ValidationBehavior.All, 4)] // the run axis keeps its default of every property
+        public async Task ValidateAsync_NamingOneValidationBehavior_LeavesTheOtherInheriting(
+            ValidationBehavior? classBehavior,
+            ValidationBehavior? propertyBehavior,
+            int expectedCount)
+        {
+            // Arrange
+            var validator = new TwoFailingPropertiesValidator(classBehavior, propertyBehavior);
+
+            // Act
+            var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
+
+            // Assert
+            result.Errors.Should().HaveCount(expectedCount);
+        }
+
+        /// <summary>
+        /// It is resolved while validating, not while the rules are declared, so where in the
+        /// constructor it is written makes no difference.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_AppliesTheValidationBehaviors_DeclaredAfterTheRules()
+        {
+            // Arrange
+            var validator = new BehaviorAfterTheRulesValidator();
+
+            // Act
+            var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
+
+            // Assert
+            result.Errors.Should().ContainSingle().Which.Code.Should().Be(nameof(Car.Vin));
+        }
+
+        /// <summary>
+        /// A property whose condition does not hold reported nothing, so there is nothing for a
+        /// stopping run to stop on and the property after it is still judged.
+        /// </summary>
+        [Theory]
+        [InlineData(false, nameof(Car.RegistrationPlate))]
+        [InlineData(true, nameof(Car.Vin))]
+        public async Task ValidateAsync_StoppingAtTheFirstError_IsNotStoppedByASkippedProperty(
+            bool sold,
+            string expectedCode)
+        {
+            // Arrange
+            var validator = new StoppingRunWithAConditionalPropertyValidator();
+            var car = new Car { SoldDate = sold ? new DateTime(2024, 1, 1) : null };
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Errors.Should().ContainSingle().Which.Code.Should().Be(expectedCode);
+        }
+
+        /// <summary>
+        /// Stopping caps how far a run goes, not how many messages it may carry back. A run is stopped
+        /// between rules, and one rule can report several at once — so a composed validator's findings
+        /// are passed on whole rather than truncated to make the count come out at one.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_StoppingAtTheFirstError_DoesNotTruncateWhatOneRuleReported()
+        {
+            // Arrange
+            var validator = new StoppingRunComposingAReportingValidator();
+            var car = new Car { Model = new CarModel() };
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Errors.Select(error => error.Code).Should().BeEquivalentTo(
+                "Model.Name",
+                "Model.SeatCount");
+
+            result.Errors.Should().NotContain(
+                error => error.Code == nameof(Car.Vin),
+                "the run still stops once that rule has reported");
+        }
+
+        /// <summary>
+        /// A composed validator decides for itself: it stops at its own first error without cutting the
+        /// parent short, and the parent's willingness to report everything does not overrule it.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_AComposedValidator_DecidesForItself()
+        {
+            // Arrange
+            var validator = new CarWithAStoppingModelValidator();
+            var car = new Car { Model = new CarModel() };
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Errors.Select(error => error.Code).Should().BeEquivalentTo(
+                "Model.Name", nameof(Car.Vin));
         }
 
         [Fact]

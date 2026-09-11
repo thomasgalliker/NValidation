@@ -204,7 +204,7 @@ namespace NValidation.TestData.Validators
         public ServiceMileagesCollectionChainValidator()
         {
             this.Property(c => c.ServiceMileages)
-                .ContinueOnFailure()
+                .WithValidationBehavior(ValidationBehavior.All)
                 .NotEmpty()
                 .MinimumCount(1)
                 .MaximumCount(2);

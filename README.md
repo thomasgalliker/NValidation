@@ -151,7 +151,9 @@ is paying.
 | Enums       | `IsInEnum`                                                                                                 |
 | Custom      | `Must`, `SetValidator`                                                                                     |
 
-Chain modifiers: `When`, `Unless`, `WithMessage`, `WithDisplayName`, `WithErrorCode`, `ContinueOnFailure`.
+Chain modifiers: `When`, `Unless`, `WithMessage`, `WithDisplayName`, `WithErrorCode`, `WithValidationBehavior`.
+The last of those is the local exception to a setting the validator and the registration also carry — see
+[Validation behavior](#validation-behavior).
 
 `error.Code` defaults to the member path, which is what a client usually binds to. Where the client's field is not
 shaped like the model's, override it — the message is unaffected:
@@ -164,6 +166,75 @@ this.Property(c => c.Model.Manufacturer.Name)
 
 // reports: { "manufacturerName": ["Manufacturer is required."] }
 ```
+
+### Validation behavior
+
+How much a validator reports is one decision asked at two scales: whether a run keeps going once a property has
+reported, and whether a property's chain keeps going once one of its rules has failed. Both live under one setting, and
+the level it applies to is where you write it rather than a word in its name:
+
+```csharp
+// the registration — the default for every validator resolved from the container
+services.AddNValidation(o =>
+{
+    o.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+});
+
+// the validator
+public sealed class CarValidator : Validator<Car>
+{
+    public CarValidator()
+    {
+        this.ValidationBehaviors.Property = ValidationBehavior.All;
+
+        this.Property(c => c.Vin).NotEmpty().Length(17);
+    }
+}
+
+// one property, whose rules judge genuinely separate things
+this.Property(c => c.Vin)
+    .Length(17)
+    .Matches("^[A-HJ-NPR-Z0-9]+$")
+    .WithValidationBehavior(ValidationBehavior.All);
+```
+
+| Setting                        | Default            | Governs                                      |
+|--------------------------------|--------------------|----------------------------------------------|
+| `ValidationBehaviors.Class`    | `All`              | whether the run goes on to the next property |
+| `ValidationBehaviors.Property` | `StopAtFirstError` | whether a chain goes on to its next rule     |
+
+Both axes are nullable, and `null` — which is what they start as — means *inherit from the level above*. Naming one
+therefore never silently changes the other: a validator that sets `Class` leaves `Property` taking whatever the
+registration configured, and a registration that sets neither leaves both at the defaults above. That is also why the
+setting is mutated rather than assigned; replacing the whole object would replace the axis you did not mean to touch.
+
+The defaults are chosen for the common case. Reporting every property at once is what lets a caller fix a form in one
+pass. Stopping within a chain is right because a chain's rules usually run coarse to fine: an empty string fails
+`NotEmpty` and `Length(17)` alike, and only the first of those tells the caller anything. Set `Property` to `All` for
+the chain whose rules judge separate things — a VIN is the wrong length *and* carries a letter no VIN may contain, and
+a caller wants to hear both.
+
+**`Class = StopAtFirstError` stops the run as soon as anything has been reported** — the properties after it are never
+looked at. It therefore also stops the chain that produced it, overriding `Property`, since a setting by that name which
+went on judging the same property would be a trap. The single exception is a chain that says otherwise through
+`WithValidationBehavior`, because it says so at the point it applies; that is how you get *everything about the first
+field that is wrong, then stop*. A property whose `When` did not hold reported nothing, so there is nothing for the run
+to stop on and the next property is still judged.
+
+That usually means a single message, but do not rely on it as a cap. A run is stopped *between* rules, and one rule that
+reported several at once is not cut short: a validator merged in with `SetValidator` has already had its own say, and a
+`ForEach` reports on every entry it walked. What a composed validator found is its decision, not its composer's, so it
+is passed on whole rather than truncated.
+
+The setting is resolved while validating, not while the rules are declared, so where in a constructor you write it makes
+no difference. A validator composed into another — through `SetValidator`, or per entry through `ForEach` — decides for
+itself, and is never cut short by what its composer has already reported.
+
+One caution for an HTTP payload: a stopping validator produces a problem details body naming a single field. That is
+often right for a machine caller, and usually wrong for a form a person is filling in.
+
+Coming from FluentValidation, `ClassLevelCascadeMode` maps onto `Class` and `RuleLevelCascadeMode` onto `Property`, with
+`Continue` reading as `All` and `Stop` as `StopAtFirstError`.
 
 ### Comparisons
 
@@ -299,6 +370,14 @@ this.Property(c => c.ServiceHistory)
 
 `ForEach` is a rule like any other, so a chain that has already failed does not reach it — too many entries is reported
 on its own, rather than alongside a complaint about each of them. It returns nothing, so declare it last.
+
+The element builder is a validator, so it carries its own [validation behavior](#validation-behavior):
+`record.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError` governs what *one entry* reports, and every
+entry is still walked.
+
+It is built where it is declared rather than by the container, so — like a validator you construct with `new` — it takes
+the built-in defaults and not what `AddNValidation` configured. Set it on the element builder itself where an element's
+rules should follow a different policy from the defaults.
 
 Each failure is reported under the element's position, so a caller can bind it to the row it came from:
 

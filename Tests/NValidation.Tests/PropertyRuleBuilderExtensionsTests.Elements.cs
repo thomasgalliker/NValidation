@@ -476,6 +476,75 @@ namespace NValidation.Tests
         }
 
         /// <summary>
+        /// Every entry is a run of its own, so an entry told to stop at its first error reports one
+        /// message — and the entry after it is still judged. The setting governs what one entry says,
+        /// never how many entries are looked at.
+        /// </summary>
+        [Fact]
+        public async Task ForEach_StoppingAtTheFirstError_StopsWithinAnEntryAndStillJudgesTheNext()
+        {
+            // Arrange
+            var car = Cars.Car();
+            car.ServiceHistory =
+            [
+                new ServiceRecord { Workshop = null, Mileage = 1, Cost = 0m },
+                new ServiceRecord { Workshop = null, Mileage = 2, Cost = 0m },
+            ];
+
+            // Act
+            var result = await new ServiceHistoryStoppingElementValidator().ValidateAsync(car);
+
+            // Assert
+            result.Errors.Select(error => error.Code).Should()
+                .BeEquivalentTo(["ServiceHistory[0].Workshop", "ServiceHistory[1].Workshop"]);
+        }
+
+        /// <summary>
+        /// An entry's own validator counts only what it reported, not what was already in the list it
+        /// was handed. The list is shared with the inline rules, which have already had their say by
+        /// the time the entry's validator runs — a stopping validator that counted the whole list would
+        /// give up before judging anything.
+        /// </summary>
+        [Fact]
+        public async Task ForEach_AStoppingElementValidator_JudgesTheEntryAnInlineRuleAlreadyReportedOn()
+        {
+            // Arrange
+            var car = Cars.Car();
+            car.ServiceHistory = [new ServiceRecord { Workshop = null, Mileage = 1, Cost = 0m }];
+
+            // Act
+            var result = await new ServiceHistoryInlineAndStoppingNestedValidator().ValidateAsync(car);
+
+            // Assert
+            result.Errors.Select(error => error.Code).Should()
+                .BeEquivalentTo(["ServiceHistory[0].Workshop", "ServiceHistory[0].Cost"]);
+        }
+
+        /// <inheritdoc cref="ValidatorTests.ValidateAsync_StoppingAtTheFirstError_DoesNotTruncateWhatOneRuleReported" path="/summary"/>
+        /// <remarks>
+        /// The collection case of the same thing: ForEach is one rule, so every entry it walked is
+        /// reported even by a run which stops at the first error.
+        /// </remarks>
+        [Fact]
+        public async Task ForEach_UnderAStoppingRun_StillReportsOnEveryEntry()
+        {
+            // Arrange
+            var car = Cars.Car();
+            car.ServiceHistory =
+            [
+                new ServiceRecord { Workshop = null, Mileage = 1, Cost = 10m },
+                new ServiceRecord { Workshop = null, Mileage = 2, Cost = 20m },
+            ];
+
+            // Act
+            var result = await new StoppingRunOverAServiceHistoryValidator().ValidateAsync(car);
+
+            // Assert
+            result.Errors.Select(error => error.Code).Should()
+                .BeEquivalentTo(["ServiceHistory[0].Workshop", "ServiceHistory[1].Workshop"]);
+        }
+
+        /// <summary>
         /// A string satisfies the sequence conversion that selects ForEach, so the mistake has to be
         /// caught when the rule is declared rather than becoming one failure per character.
         /// </summary>

@@ -250,4 +250,84 @@ namespace NValidation.TestData.Validators
                 .ForEach(new ServiceRecordValidator());
         }
     }
+
+    /// <summary>
+    /// A stopping run per entry: an entry reports the first thing wrong with it and no more, while the
+    /// entry after it is still judged — every entry is a run of its own.
+    /// </summary>
+    internal sealed class ServiceHistoryStoppingElementValidator : Validator<Car>
+    {
+        public ServiceHistoryStoppingElementValidator()
+        {
+            this.Property(c => c.ServiceHistory)
+                .ForEach(record =>
+                {
+                    record.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+                    record.Property(r => r.Workshop).NotEmpty();
+                    record.Property(r => r.Cost).GreaterThan(0m);
+                });
+        }
+    }
+
+    /// <summary>
+    /// Stops at its own first error, and is merged into an entry an inline rule has already reported
+    /// on — so it is handed a list which is not empty before it has judged anything.
+    /// </summary>
+    internal sealed class StoppingServiceRecordValidator : Validator<ServiceRecord>
+    {
+        public StoppingServiceRecordValidator()
+        {
+            this.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+            this.Property(r => r.Cost).GreaterThan(0m);
+        }
+    }
+
+    /// <summary>
+    /// An inline element rule and the entry's own stopping validator over the same entries. Both report
+    /// into the one list an entry is given, and the inline rule reports first — which is what makes a
+    /// run that counted the whole list rather than its own share of it visible.
+    /// </summary>
+    internal sealed class ServiceHistoryInlineAndStoppingNestedValidator : Validator<Car>
+    {
+        public ServiceHistoryInlineAndStoppingNestedValidator()
+        {
+            this.Property(c => c.ServiceHistory)
+                .ForEach(record =>
+                {
+                    record.SetValidator(new StoppingServiceRecordValidator());
+
+                    record.Property(r => r.Workshop).NotEmpty();
+                });
+        }
+    }
+
+    /// <summary>
+    /// A stopping run whose only rule walks a collection. Every entry is judged by the one rule, so the
+    /// run has nothing to stop between and reports on all of them.
+    /// </summary>
+    internal sealed class StoppingRunOverAServiceHistoryValidator : Validator<Car>
+    {
+        public StoppingRunOverAServiceHistoryValidator()
+        {
+            this.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+            this.Property(c => c.ServiceHistory)
+                .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
+        }
+    }
+
+    /// <summary>
+    /// Element rules with nothing declared about their behaviour, so a test can prove what an element
+    /// builder falls back to when the registration configured something the parent did receive.
+    /// </summary>
+    internal sealed class ServiceHistoryPlainElementChainValidator : Validator<Car>
+    {
+        public ServiceHistoryPlainElementChainValidator()
+        {
+            this.Property(c => c.ServiceHistory)
+                .ForEach(record => record.Property(r => r.Workshop).NotEmpty().MaximumLength(3));
+        }
+    }
 }

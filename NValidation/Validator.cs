@@ -9,11 +9,19 @@ namespace NValidation
     /// Implements <see cref="IValidator{T}"/>, so it is registered and called exactly like a validator
     /// written by hand — deriving from this class is a convenience, never a requirement.
     /// </summary>
-    public abstract class Validator<T> : IValidator<T>, IMessageProviderTarget, IMessageProviderAware<T>
+    public abstract class Validator<T> : IValidator<T>, IMessageProviderTarget, IValidationBehaviorTarget, IMessageProviderAware<T>
     {
         private readonly List<IPropertyRule<T>> rules = [];
 
         private IValidationMessageProvider messages = DefaultValidationMessageProvider.Instance;
+
+        private readonly ValidationBehaviors validationBehaviors = new();
+
+        /// <summary>
+        /// What the registration configured, kept apart from what this validator declared for itself so
+        /// the validator's word wins whichever was written first.
+        /// </summary>
+        private ValidationBehaviors ambientValidationBehaviors = new();
 
         private PropertyDisplayNames? displayNames;
 
@@ -31,6 +39,26 @@ namespace NValidation
         {
             get => this.messages;
             set => this.messages = value ?? throw new ArgumentNullException(nameof(value));
+        }
+
+        /// <summary>
+        /// How much this validator reports: across its properties, and within one property's chain.
+        /// Mutated rather than assigned — <c>this.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;</c>
+        /// — so naming one axis leaves the other inheriting.
+        /// </summary>
+        /// <remarks>
+        /// An axis left unset takes what the DI registration configured through
+        /// <see cref="NValidationOptions.ValidationBehaviors"/>, and failing that the built-in defaults:
+        /// every property, one message each. Like <see cref="Messages"/>, it is read while validating
+        /// rather than while the rules are declared, so where in the constructor it is written makes no
+        /// difference.
+        /// </remarks>
+        public ValidationBehaviors ValidationBehaviors => this.validationBehaviors;
+
+        /// <inheritdoc/>
+        ValidationBehaviors IValidationBehaviorTarget.AmbientValidationBehaviors
+        {
+            set => this.ambientValidationBehaviors = value ?? throw new ArgumentNullException(nameof(value));
         }
 
         /// <summary>
@@ -119,6 +147,24 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(instance);
 
+            // What this run found, told apart from what the caller's list already held: the list is the
+            // caller's, and an element's inline rules have already reported into it by the time the
+            // element's own validator is handed the same list.
+            var errorCountAtStart = errors.Count;
+
+            var classBehavior = this.validationBehaviors.Class
+                ?? this.ambientValidationBehaviors.Class
+                ?? ValidationBehavior.All;
+
+            // A run that stops at the first error stops inside a chain too, or the setting would not do
+            // what its name says. A chain which declared something of its own still gets it, because it
+            // said so at the point it applies.
+            var propertyBehavior = classBehavior == ValidationBehavior.StopAtFirstError
+                ? ValidationBehavior.StopAtFirstError
+                : this.validationBehaviors.Property
+                    ?? this.ambientValidationBehaviors.Property
+                    ?? ValidationBehavior.StopAtFirstError;
+
             // Built once and kept: a display name is stored as a Func<string> and resolved while the
             // message is produced, so the culture of the current run is already accounted for. The
             // race between two first calls is benign — both compute the same map.
@@ -128,7 +174,12 @@ namespace NValidation
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                await rule.ValidateAsync(instance, errors, messages, displayNames, cancellationToken);
+                if (classBehavior == ValidationBehavior.StopAtFirstError && errors.Count > errorCountAtStart)
+                {
+                    return;
+                }
+
+                await rule.ValidateAsync(instance, errors, messages, displayNames, propertyBehavior, cancellationToken);
             }
         }
 

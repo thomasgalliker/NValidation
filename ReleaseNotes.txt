@@ -1,2 +1,7 @@
 1.0
 - Initial release.
+- Added ValidationBehavior: how much a validator reports, along two axes — across its properties
+  (ValidationBehaviors.Class) and within one property's rule chain (ValidationBehaviors.Property).
+  Configurable on the registration, on a validator, and per chain with WithValidationBehavior.
+  Replaces ContinueOnFailure(), which is equivalent to WithValidationBehavior(ValidationBehavior.All).
+  The defaults are unchanged behaviour: every property, one message each.

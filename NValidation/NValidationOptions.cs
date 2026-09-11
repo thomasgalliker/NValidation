@@ -61,6 +61,19 @@ namespace NValidation
         public ServiceLifetime ValidatorLifetime { get; set; } = ServiceLifetime.Scoped;
 
         /// <summary>
+        /// How much every registered validator reports, unless it says otherwise for itself: across its
+        /// properties, and within one property's chain. Mutated rather than assigned —
+        /// <c>o.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;</c> — so naming one
+        /// axis leaves the other at its built-in default.
+        /// </summary>
+        /// <remarks>
+        /// Reaches the validators this registration constructs, which is every validator resolved from
+        /// the container. One built with <c>new</c> takes the built-in defaults instead, exactly as it
+        /// takes the built-in English messages.
+        /// </remarks>
+        public ValidationBehaviors ValidationBehaviors { get; } = new();
+
+        /// <summary>
         /// The <see cref="IValidationMessageProvider"/> rules take their message texts from — typically
         /// the application's resources, served in the language of the current request. Left unset, the
         /// built-in English is used.
@@ -195,6 +208,16 @@ namespace NValidation
         /// </summary>
         internal void Apply()
         {
+            // Copied rather than shared, so a delegate which kept hold of these options cannot change
+            // what already-registered validators will be handed. Captured by the factories below as a
+            // value of its own, so a factory roots this small object rather than these options — and
+            // through them the whole service collection.
+            var validationBehaviors = new ValidationBehaviors
+            {
+                Class = this.ValidationBehaviors.Class,
+                Property = this.ValidationBehaviors.Property,
+            };
+
             if (this.messageProvider != null)
             {
                 this.Services.Replace(new ServiceDescriptor(
@@ -207,21 +230,27 @@ namespace NValidation
                 // a later scan finds for the same type.
                 this.Services.TryAdd(new ServiceDescriptor(
                     validatedType,
-                    serviceProvider => Create(serviceProvider, validatorType),
+                    serviceProvider => Create(serviceProvider, validatorType, validationBehaviors),
                     lifetime ?? this.ValidatorLifetime));
             }
         }
 
-        private static object Create(IServiceProvider serviceProvider, Type validatorType)
+        private static object Create(
+            IServiceProvider serviceProvider, Type validatorType, ValidationBehaviors validationBehaviors)
         {
             var factory = Factories.GetOrAdd(
                 validatorType, static type => ActivatorUtilities.CreateFactory(type, Type.EmptyTypes));
 
             var validator = factory(serviceProvider, arguments: null);
 
-            if (validator is IMessageProviderTarget target)
+            if (validator is IMessageProviderTarget messageProviderTarget)
             {
-                target.Messages = serviceProvider.GetRequiredService<IValidationMessageProvider>();
+                messageProviderTarget.Messages = serviceProvider.GetRequiredService<IValidationMessageProvider>();
+            }
+
+            if (validator is IValidationBehaviorTarget validationBehaviorTarget)
+            {
+                validationBehaviorTarget.AmbientValidationBehaviors = validationBehaviors;
             }
 
             return validator;

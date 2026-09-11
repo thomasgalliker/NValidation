@@ -20,15 +20,15 @@ namespace NValidation.TestData.Validators
         }
     }
 
-    internal sealed class VinContinueOnFailureValidator : Validator<Car>
+    internal sealed class VinReportsEveryFailingRuleValidator : Validator<Car>
     {
         internal const string FirstMessage = "first";
         internal const string SecondMessage = "second";
 
-        public VinContinueOnFailureValidator()
+        public VinReportsEveryFailingRuleValidator()
         {
             this.Property(c => c.Vin)
-                .ContinueOnFailure()
+                .WithValidationBehavior(ValidationBehavior.All)
                 .Must(vin => vin != "wrong", FirstMessage)
                 .Must(vin => vin != "wrong", SecondMessage);
         }
@@ -59,7 +59,7 @@ namespace NValidation.TestData.Validators
         public VinWithMessageOnTheFirstRuleValidator()
         {
             this.Property(c => c.Vin)
-                .ContinueOnFailure()
+                .WithValidationBehavior(ValidationBehavior.All)
                 .NotEmpty().WithMessage("custom")
                 .MaximumLength(3);
         }
@@ -136,7 +136,7 @@ namespace NValidation.TestData.Validators
         public VinChainRequiredWhenSoldValidator()
         {
             this.Property(c => c.Vin)
-                .ContinueOnFailure()
+                .WithValidationBehavior(ValidationBehavior.All)
                 .NotEmpty()
                 .MaximumLength(3)
                 .When(c => c.SoldDate != null);
@@ -244,6 +244,195 @@ namespace NValidation.TestData.Validators
             this.Property(c => c.FeatureIds)
                 .WithErrorCode("features")
                 .Add(context => context.AddError(new ValidationError("features[0]", "the first entry is wrong")));
+        }
+    }
+
+    /// <summary>
+    /// Two properties which each break two rules, so a run can be told apart both by how many messages
+    /// it reports and by which properties they name. Both axes are taken through the constructor
+    /// because what is under test is the setting rather than the rules.
+    /// </summary>
+    internal sealed class TwoFailingPropertiesValidator : Validator<Car>
+    {
+        /// <summary>
+        /// Blank, and longer than the cap: one value which breaks both rules of a chain, which is what
+        /// makes the within-a-chain axis observable at all.
+        /// </summary>
+        internal const string BreaksBothRules = "      ";
+
+        internal const int MaximumLength = 3;
+
+        public TwoFailingPropertiesValidator(ValidationBehavior? classBehavior, ValidationBehavior? propertyBehavior)
+        {
+            this.ValidationBehaviors.Class = classBehavior;
+            this.ValidationBehaviors.Property = propertyBehavior;
+
+            this.Property(c => c.Vin).NotEmpty().MaximumLength(MaximumLength);
+            this.Property(c => c.RegistrationPlate).NotEmpty().MaximumLength(MaximumLength);
+        }
+
+        /// <summary>
+        /// A car whose every property this validator judges is wrong in every way it can be.
+        /// </summary>
+        internal static Car BrokenCar()
+        {
+            return new Car { Vin = BreaksBothRules, RegistrationPlate = BreaksBothRules };
+        }
+    }
+
+    /// <summary>
+    /// Reports on its first property and records whether the second was ever looked at, so a run which
+    /// stopped is told apart from one which judged everything and merely reported less.
+    /// </summary>
+    internal sealed class SecondPropertyProbeValidator : Validator<Car>
+    {
+        public SecondPropertyProbeValidator(ValidationBehavior classBehavior, Action onSecondProperty)
+        {
+            this.ValidationBehaviors.Class = classBehavior;
+
+            this.Property(c => c.Vin).NotEmpty();
+
+            this.Property(c => c.RegistrationPlate).Must(
+                _ =>
+                {
+                    onSecondProperty();
+                    return true;
+                },
+                "the probe never reports");
+        }
+    }
+
+    /// <summary>
+    /// A run which stops at the first error, over a chain which asked for all of its own rules — the
+    /// one place "everything about the first field that is wrong" is reachable. The property after it
+    /// records whether the run carried on regardless.
+    /// </summary>
+    internal sealed class ChainOverridingAStoppingRunValidator : Validator<Car>
+    {
+        public ChainOverridingAStoppingRunValidator(Action onSecondProperty)
+        {
+            this.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+            this.Property(c => c.Vin)
+                .WithValidationBehavior(ValidationBehavior.All)
+                .NotEmpty()
+                .MaximumLength(TwoFailingPropertiesValidator.MaximumLength);
+
+            this.Property(c => c.RegistrationPlate).Must(
+                _ =>
+                {
+                    onSecondProperty();
+                    return true;
+                },
+                "the probe never reports");
+        }
+    }
+
+    /// <summary>
+    /// Declares its behaviour after its rules, which must make no difference: the setting is resolved
+    /// while validating, not while the rules are declared.
+    /// </summary>
+    internal sealed class BehaviorAfterTheRulesValidator : Validator<Car>
+    {
+        public BehaviorAfterTheRulesValidator()
+        {
+            this.Property(c => c.Vin).NotEmpty().MaximumLength(TwoFailingPropertiesValidator.MaximumLength);
+            this.Property(c => c.RegistrationPlate).NotEmpty();
+
+            this.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+        }
+    }
+
+    /// <summary>
+    /// A stopping run whose first property only applies to a car that has been sold. Where the
+    /// condition does not hold that property reports nothing, so there is nothing to stop the run and
+    /// the second property is reached.
+    /// </summary>
+    internal sealed class StoppingRunWithAConditionalPropertyValidator : Validator<Car>
+    {
+        public StoppingRunWithAConditionalPropertyValidator()
+        {
+            this.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+            this.Property(c => c.Vin).NotEmpty().When(c => c.SoldDate != null);
+            this.Property(c => c.RegistrationPlate).NotEmpty();
+        }
+    }
+
+    /// <summary>
+    /// Stops at its own first error, to be composed into a parent which does not.
+    /// </summary>
+    internal sealed class StoppingCarModelValidator : Validator<CarModel>
+    {
+        public StoppingCarModelValidator()
+        {
+            this.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+            this.Property(m => m.Name).NotEmpty();
+            this.Property(m => m.SeatCount).GreaterThan(0);
+        }
+    }
+
+    /// <summary>
+    /// Reports everything, and composes a child which stops at its own first error — so the test can
+    /// prove the two decisions are independent in both directions.
+    /// </summary>
+    internal sealed class CarWithAStoppingModelValidator : Validator<Car>
+    {
+        public CarWithAStoppingModelValidator()
+        {
+            this.Property(c => c.Model).SetValidator(new StoppingCarModelValidator());
+            this.Property(c => c.Vin).NotEmpty();
+        }
+    }
+
+    /// <summary>
+    /// Reports everything about the model it is given, to be composed into a parent which stops.
+    /// </summary>
+    internal sealed class ReportingCarModelValidator : Validator<CarModel>
+    {
+        public ReportingCarModelValidator()
+        {
+            this.Property(m => m.Name).NotEmpty();
+            this.Property(m => m.SeatCount).GreaterThan(0);
+        }
+    }
+
+    /// <summary>
+    /// A stopping run whose very first rule is a whole validator of its own. One rule can report more
+    /// than one message, and a run is stopped between rules — so what the child found is passed on
+    /// whole and the stop takes effect only afterwards.
+    /// </summary>
+    internal sealed class StoppingRunComposingAReportingValidator : Validator<Car>
+    {
+        public StoppingRunComposingAReportingValidator()
+        {
+            this.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+            this.Property(c => c.Model).SetValidator(new ReportingCarModelValidator());
+            this.Property(c => c.Vin).NotEmpty();
+        }
+    }
+
+    /// <summary>
+    /// Reports every rule of every property, except for the one chain which asked to stop — the
+    /// mirror of <see cref="ChainOverridingAStoppingRunValidator"/>, so the override is proven to work
+    /// in both directions rather than only as the old boolean did.
+    /// </summary>
+    internal sealed class ChainStoppingWithinAReportingValidator : Validator<Car>
+    {
+        public ChainStoppingWithinAReportingValidator()
+        {
+            this.ValidationBehaviors.Property = ValidationBehavior.All;
+
+            this.Property(c => c.Vin)
+                .WithValidationBehavior(ValidationBehavior.StopAtFirstError)
+                .NotEmpty()
+                .MaximumLength(TwoFailingPropertiesValidator.MaximumLength);
+
+            this.Property(c => c.RegistrationPlate)
+                .NotEmpty()
+                .MaximumLength(TwoFailingPropertiesValidator.MaximumLength);
         }
     }
 }

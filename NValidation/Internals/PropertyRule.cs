@@ -25,10 +25,10 @@ namespace NValidation.Internals
         public string? ErrorCode { get; set; }
 
         /// <summary>
-        /// When <c>false</c> (the default) the chain stops at its first failing rule, so a property
-        /// reports at most one message.
+        /// What this chain does once one of its rules has failed, where the chain declared it for
+        /// itself. <c>null</c> — the default — means it takes whatever the validator resolved.
         /// </summary>
-        public bool ContinueOnFailure { get; set; }
+        public ValidationBehavior? ValidationBehaviorOverride { get; set; }
 
         /// <summary>
         /// Decides whether this property is validated at all. <c>null</c> means always.
@@ -73,6 +73,7 @@ namespace NValidation.Internals
             List<ValidationError> errors,
             IValidationMessageProvider messages,
             PropertyDisplayNames displayNames,
+            ValidationBehavior propertyBehavior,
             CancellationToken cancellationToken)
         {
             var context = this.CreateContext(instance, errors, messages, displayNames);
@@ -82,11 +83,13 @@ namespace NValidation.Internals
                 return;
             }
 
+            var behavior = this.ValidationBehaviorOverride ?? propertyBehavior;
+
             foreach (var ruleCheck in this.checks)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (!this.ContinueOnFailure && context.HasFailed)
+                if (behavior == ValidationBehavior.StopAtFirstError && context.HasFailed)
                 {
                     return;
                 }

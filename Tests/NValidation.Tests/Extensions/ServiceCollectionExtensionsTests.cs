@@ -493,6 +493,209 @@ namespace NValidation.Tests.Extensions
             result.Succeeded.Should().BeTrue();
         }
 
+        /// <summary>
+        /// The registration's setting reaches a validator which declared nothing of its own, on each
+        /// axis independently — a validator built by the container is handed it exactly as it is handed
+        /// the configured message provider.
+        /// </summary>
+        [Theory]
+        [InlineData(null, 2)] // the defaults: every property, one message each
+        [InlineData(ValidationBehavior.StopAtFirstError, 1)]
+        public async Task ValidationBehaviors_Class_ReachesTheValidator(
+            ValidationBehavior? classBehavior,
+            int expectedCount)
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o =>
+            {
+                o.ValidationBehaviors.Class = classBehavior;
+                o.AddValidator<Manufacturer, ManufacturerValidator>();
+            });
+
+            var validator = Resolve<IValidator<Manufacturer>>(services);
+
+            // Act
+            var result = await validator.ValidateAsync(new Manufacturer());
+
+            // Assert
+            result.Errors.Should().HaveCount(expectedCount);
+        }
+
+        /// <inheritdoc cref="ValidationBehaviors_Class_ReachesTheValidator" path="/summary"/>
+        [Theory]
+        [InlineData(null, 2)] // one message per property, so the blank name reports NotEmpty alone
+        [InlineData(ValidationBehavior.All, 3)] // the blank country code also fails its exact length
+        public async Task ValidationBehaviors_Property_ReachesTheValidator(
+            ValidationBehavior? propertyBehavior,
+            int expectedCount)
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o =>
+            {
+                o.ValidationBehaviors.Property = propertyBehavior;
+                o.AddValidator<Manufacturer, ManufacturerValidator>();
+            });
+
+            var validator = Resolve<IValidator<Manufacturer>>(services);
+
+            // Act
+            var result = await validator.ValidateAsync(new Manufacturer { CountryCode = " " });
+
+            // Assert
+            result.Errors.Should().HaveCount(expectedCount);
+        }
+
+        /// <summary>
+        /// A validator which named an axis for itself keeps it, while the axis it did not name still
+        /// takes what the registration configured — the two levels layer per axis rather than wholesale.
+        /// </summary>
+        [Fact]
+        public async Task ValidationBehaviors_OfTheValidator_WinPerAxis()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o =>
+            {
+                // Both stopping, so a validator which overrules only one of them is visible.
+                o.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+                o.ValidationBehaviors.Property = ValidationBehavior.StopAtFirstError;
+
+                o.AddValidator<Car, ReportsEveryPropertyCarValidator>();
+            });
+
+            var validator = Resolve<IValidator<Car>>(services);
+
+            // Act
+            var result = await validator.ValidateAsync(new Car { Vin = "      " });
+
+            // Assert
+            result.Errors.Select(error => error.Code).Should().BeEquivalentTo(
+                nameof(Car.Vin),
+                nameof(Car.RegistrationPlate));
+        }
+
+        /// <summary>
+        /// An element builder is built where it is declared rather than by the container, so — like a
+        /// validator constructed with <c>new</c> — the registration's setting does not reach it and it
+        /// keeps the built-in defaults. Pinned because it is a boundary a caller can be surprised by:
+        /// the same setting governs the payload's own properties.
+        /// </summary>
+        [Fact]
+        public async Task ValidationBehaviors_DoNotReachAnElementBuilder()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o =>
+            {
+                o.ValidationBehaviors.Property = ValidationBehavior.All;
+                o.AddValidator<Car, ServiceHistoryPlainElementChainValidator>();
+            });
+
+            var validator = Resolve<IValidator<Car>>(services);
+
+            // Blank and longer than the cap, so the entry's chain breaks both of its rules.
+            var car = new Car { ServiceHistory = [new ServiceRecord { Workshop = "      " }] };
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Errors.Should().ContainSingle(
+                "the element chain keeps the built-in default of one message per property")
+                .Which.Code.Should().Be("ServiceHistory[0].Workshop");
+        }
+
+        /// <summary>
+        /// The chain axis layers the same way the run axis does. Tested on its own because the run-axis
+        /// test cannot see it: there the resolved chain behaviour coincides with the built-in default,
+        /// so it would pass even if the two levels were consulted in the wrong order.
+        /// </summary>
+        [Fact]
+        public async Task ValidationBehaviors_OfTheValidator_WinOnThePropertyAxis()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o =>
+            {
+                o.ValidationBehaviors.Property = ValidationBehavior.All;
+                o.AddValidator<Car, StopsItsChainsCarValidator>();
+            });
+
+            var validator = Resolve<IValidator<Car>>(services);
+
+            // Only the VIN is wrong, and wrong in both the ways its chain asks about, so what the
+            // result holds is decided by the chain axis alone.
+            var car = new Car { Vin = "      ", RegistrationPlate = "AB 123" };
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Errors.Should().ContainSingle("the validator's own word outranks the registration's")
+                .Which.Code.Should().Be(nameof(Car.Vin));
+        }
+
+        /// <summary>
+        /// The behaviours are copied while the registrations are written, so options a caller kept hold
+        /// of and changed afterwards cannot reach back into validators that were already registered.
+        /// </summary>
+        [Fact]
+        public async Task ValidationBehaviors_ChangedAfterRegistration_DoNotReachTheValidator()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            NValidationOptions? kept = null;
+
+            services.AddNValidation(o =>
+            {
+                kept = o;
+                o.AddValidator<Car, StopsItsChainsCarValidator>();
+            });
+
+            kept!.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+            var validator = Resolve<IValidator<Car>>(services);
+
+            // Act
+            var result = await validator.ValidateAsync(new Car { Vin = "      " });
+
+            // Assert
+            result.Errors.Select(error => error.Code).Should().BeEquivalentTo(
+                nameof(Car.Vin),
+                nameof(Car.RegistrationPlate));
+        }
+
+        /// <summary>
+        /// Names the chain axis for itself and leaves the run axis inheriting.
+        /// </summary>
+        private sealed class StopsItsChainsCarValidator : Validator<Car>
+        {
+            public StopsItsChainsCarValidator()
+            {
+                this.ValidationBehaviors.Property = ValidationBehavior.StopAtFirstError;
+
+                this.Property(c => c.Vin).NotEmpty().MaximumLength(3);
+                this.Property(c => c.RegistrationPlate).NotEmpty();
+            }
+        }
+
+        /// <summary>
+        /// Overrules the registration on the run axis only, so its chain axis still stops and each of
+        /// its properties reports once.
+        /// </summary>
+        private sealed class ReportsEveryPropertyCarValidator : Validator<Car>
+        {
+            public ReportsEveryPropertyCarValidator()
+            {
+                this.ValidationBehaviors.Class = ValidationBehavior.All;
+
+                this.Property(c => c.Vin).NotEmpty().MaximumLength(3);
+                this.Property(c => c.RegistrationPlate).NotEmpty();
+            }
+        }
+
         private static TService Resolve<TService>(IServiceCollection services)
             where TService : notnull
         {

@@ -44,11 +44,20 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Reports every violated rule of this property instead of stopping at the first one.
+        /// Decides for this one property whether its chain reports every rule it breaks or stops at the
+        /// first: <c>this.Property(x => x.Password).MinimumLength(12).Matches("[0-9]").WithValidationBehavior(ValidationBehavior.All);</c>
         /// </summary>
-        public PropertyRuleBuilder<T, TProperty> ContinueOnFailure()
+        /// <remarks>
+        /// The local exception to what the validator or the registration settled through
+        /// <see cref="ValidationBehaviors.Property"/>, and the only thing that outranks a
+        /// <see cref="ValidationBehaviors.Class"/> of
+        /// <see cref="ValidationBehavior.StopAtFirstError"/> — a run which stops at the first error
+        /// still lets this chain finish, then stops. Applies to the whole chain wherever it is written,
+        /// not to the rule it happens to follow.
+        /// </remarks>
+        public PropertyRuleBuilder<T, TProperty> WithValidationBehavior(ValidationBehavior validationBehavior)
         {
-            this.RequireRule().ContinueOnFailure = true;
+            this.RequireRule().ValidationBehaviorOverride = validationBehavior;
 
             return this;
         }
