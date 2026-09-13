@@ -25,7 +25,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[1].Workshop");
+            result.ShouldReport("ServiceHistory[1].Workshop", "Workshop is required.");
         }
 
         [Fact]
@@ -48,8 +48,9 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Select(error => error.Code).Should()
-                .BeEquivalentTo(["ServiceHistory[0].Workshop", "ServiceHistory[2].Workshop"]);
+            result.ShouldReport([
+                new("ServiceHistory[0].Workshop", "Workshop is required."),
+                new("ServiceHistory[2].Workshop", "Workshop is required.")]);
         }
 
         [Fact]
@@ -67,7 +68,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(car);
 
             // Assert
-            result.ShouldReport("ServiceHistory[0].Workshop", ValidationMessageKeys.NotEmpty);
+            result.ShouldReport("ServiceHistory[0].Workshop", "NotEmpty");
         }
 
         [Theory]
@@ -109,7 +110,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[1].Workshop");
+            result.ShouldReport("ServiceHistory[1].Workshop", "Workshop is required.");
         }
 
         [Fact]
@@ -127,7 +128,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[0].Cost");
+            result.ShouldReport("ServiceHistory[0].Cost", "Cost must be greater than 0.");
         }
 
         /// <summary>
@@ -154,7 +155,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[1].Workshop");
+            result.ShouldReport("ServiceHistory[1].Workshop", "Workshop is required.");
         }
 
         [Fact]
@@ -173,7 +174,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("history[0].Workshop");
+            result.ShouldReport("history[0].Workshop", "Workshop is required.");
         }
 
         /// <summary>
@@ -196,7 +197,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceMileages[1]");
+            result.ShouldReport("ServiceMileages[1]", "ServiceMileages[1] must be greater than or equal to 0.");
             sequence.Enumerated.Should().Be(3);
         }
 
@@ -222,7 +223,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Message.Should().Be("Entry 1 is incomplete.");
+            result.ShouldReport("ServiceHistory[1].Workshop", "Entry 1 is incomplete.");
         }
 
         /// <summary>
@@ -255,9 +256,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            var error = result.Errors.Should().ContainSingle().Subject;
-            error.Code.Should().Be("ServiceHistory[1].Workshop");
-            error.Message.Should().Be("Entry 1 is incomplete.");
+            result.ShouldReport("ServiceHistory[1].Workshop", "Entry 1 is incomplete.");
         }
 
         private sealed class TemplateMessageProvider(string template) : IValidationMessageProvider
@@ -292,7 +291,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[0].Cost");
+            result.ShouldReport("ServiceHistory[0].Cost", "Cost must be greater than 0.");
         }
 
         /// <summary>
@@ -318,7 +317,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[1].Cost");
+            result.ShouldReport("ServiceHistory[1].Cost", "Cost must be greater than 0.");
         }
 
         /// <summary>
@@ -344,7 +343,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[0].Workshop");
+            result.ShouldReport("ServiceHistory[0].Workshop", "Workshop is required.");
         }
 
         /// <summary>
@@ -370,8 +369,10 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Select(error => error.Code).Should().BeEquivalentTo(
-                ["ServiceHistory[0].Workshop", "ServiceHistory[0].Mileage", "ServiceHistory[0].Cost"]);
+            result.ShouldReport([
+                new("ServiceHistory[0].Workshop", "Workshop is required."),
+                new("ServiceHistory[0].Mileage", "Mileage must be greater than 0."),
+                new("ServiceHistory[0].Cost", "Cost must be greater than or equal to 0.")]);
         }
 
         /// <summary>
@@ -403,7 +404,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[1].Workshop");
+            result.ShouldReport("ServiceHistory[1].Workshop", "Workshop must not exceed 20 characters.");
         }
 
         /// <summary>
@@ -434,9 +435,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            var error = result.Errors.Should().ContainSingle().Subject;
-            error.Code.Should().Be("ServiceHistory[1].Mileage");
-            error.Message.Should().Be(message);
+            result.ShouldReport("ServiceHistory[1].Mileage", message);
         }
 
         /// <summary>
@@ -464,8 +463,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().HaveCount(1);
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[Northgate].Cost");
+            result.ShouldReport("ServiceHistory[Northgate].Cost", "Cost must be greater than 0.");
         }
 
         /// <summary>
@@ -495,7 +493,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Message.Should().Be("Entry 1 is wrong.");
+            result.ShouldReport("ServiceHistory[Northgate].Cost", "Entry 1 is wrong.");
         }
 
         [Fact]
@@ -534,7 +532,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[row2].Cost");
+            result.ShouldReport("ServiceHistory[row2].Cost", "Cost must be greater than 0.");
         }
 
         /// <summary>
@@ -562,7 +560,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[1].Workshop");
+            result.ShouldReport("ServiceHistory[1].Workshop", "Workshop is required.");
         }
 
         /// <summary>
@@ -591,7 +589,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be(nameof(Car.ServiceHistory));
+            result.ShouldReport("ServiceHistory", "ServiceHistory must not contain more than 2 entries.");
         }
 
         /// <summary>
@@ -624,8 +622,9 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Select(error => error.Code).Should()
-                .BeEquivalentTo(["ServiceHistory[0].Workshop", "ServiceHistory[1].Workshop"]);
+            result.ShouldReport([
+                new("ServiceHistory[0].Workshop", "Workshop is required."),
+                new("ServiceHistory[1].Workshop", "Workshop is required.")]);
         }
 
         /// <summary>
@@ -658,8 +657,9 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Select(error => error.Code).Should()
-                .BeEquivalentTo(["ServiceHistory[0].Workshop", "ServiceHistory[0].Cost"]);
+            result.ShouldReport([
+                new("ServiceHistory[0].Workshop", "Workshop is required."),
+                new("ServiceHistory[0].Cost", "Cost must be greater than 0.")]);
         }
 
         /// <inheritdoc cref="ValidatorTests.ValidateAsync_StoppingAtTheFirstError_DoesNotTruncateWhatOneRuleReported" path="/summary"/>
@@ -688,8 +688,9 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Select(error => error.Code).Should()
-                .BeEquivalentTo(["ServiceHistory[0].Workshop", "ServiceHistory[1].Workshop"]);
+            result.ShouldReport([
+                new("ServiceHistory[0].Workshop", "Workshop is required."),
+                new("ServiceHistory[1].Workshop", "Workshop is required.")]);
         }
 
         /// <summary>

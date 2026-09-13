@@ -205,7 +205,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(manufacturer);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be(nameof(Manufacturer.Website));
+            result.ShouldReport("Website", "Website has an invalid format.");
         }
 
         [Fact]
@@ -266,7 +266,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Manufacturer { Name = "AB" });
 
             // Assert
-            result.ShouldReport(nameof(Manufacturer.Name), ValidationMessageKeys.MinimumLength);
+            result.ShouldReport("Name", "MinimumLength");
         }
 
         [Fact]
@@ -280,7 +280,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Manufacturer { Name = "Aurora" });
 
             // Assert
-            result.ShouldReport(nameof(Manufacturer.Name), ValidationMessageKeys.MaximumLength);
+            result.ShouldReport("Name", "MaximumLength");
         }
 
         [Fact]
@@ -294,7 +294,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Manufacturer { CountryCode = "CH" });
 
             // Assert
-            result.ShouldReport(nameof(Manufacturer.CountryCode), ValidationMessageKeys.Length);
+            result.ShouldReport("CountryCode", "Length");
         }
 
         [Fact]
@@ -308,7 +308,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Manufacturer { Name = "AB" });
 
             // Assert
-            result.ShouldReport(nameof(Manufacturer.Name), ValidationMessageKeys.LengthBetween);
+            result.ShouldReport("Name", "LengthBetween");
         }
 
         /// <summary>
@@ -337,7 +337,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(manufacturer);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("ContactEmail", "ContactEmail is not a valid email address.");
         }
 
         [Theory]
@@ -400,7 +400,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(manufacturer);
 
             // Assert
-            result.ShouldReport(nameof(Manufacturer.ContactEmail), ValidationMessageKeys.EmailTopLevelDomain);
+            result.ShouldReport("ContactEmail", "EmailTopLevelDomain");
         }
 
         [Fact]
@@ -417,7 +417,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(manufacturer);
 
             // Assert
-            result.ShouldReport(nameof(Manufacturer.ContactEmail), ValidationMessageKeys.EmailTopLevelDomainNotAllowed);
+            result.ShouldReport("ContactEmail", "EmailTopLevelDomainNotAllowed");
         }
 
         [Theory]
@@ -481,7 +481,7 @@ namespace NValidation.Tests
             var keyed = await validator.ValidateForKeysAsync(manufacturer);
 
             // Assert
-            keyed.ShouldReport(nameof(Manufacturer.Name), ValidationMessageKeys.NotContaining);
+            keyed.ShouldReport("Name", "NotContaining");
             english.Errors.Should().ContainSingle().Which.Message.Should().NotContain("admin");
         }
 
@@ -514,7 +514,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Manufacturer { ContactEmail = "not an email" });
 
             // Assert
-            result.ShouldReport(nameof(Manufacturer.ContactEmail), ValidationMessageKeys.EmailAddress);
+            result.ShouldReport("ContactEmail", "EmailAddress");
         }
 
         [Fact]
@@ -528,7 +528,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Manufacturer { Website = "ftp://x" });
 
             // Assert
-            result.ShouldReport(nameof(Manufacturer.Website), ValidationMessageKeys.Matches);
+            result.ShouldReport("Website", "Matches");
         }
     }
 }

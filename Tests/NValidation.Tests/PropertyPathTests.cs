@@ -90,7 +90,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("Model.Manufacturer.Name");
+            result.ShouldReport("Model.Manufacturer.Name", "Model.Manufacturer.Name is required.");
         }
     }
 }

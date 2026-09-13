@@ -568,11 +568,51 @@ public async Task ValidateAsync_WithoutAName_ReportsTheName()
     var result = await validator.ValidateAsync(manufacturer);
 
     // Assert
-    result.Errors.Should().ContainSingle().Which.Code.Should().Be("Name");
+    result.Errors.Should().BeEquivalentTo([
+        new { Code = "Name", Message = "Name is required." }]);
 }
 ```
 
-That is also how a rule of your own is tested: declare a validator whose only rule is the one under test, and take its
+Assert the message as well as the code. A test which only checks the code passes when the rule reports the right
+property with the wrong message — a value that is too large reported as "must be greater than" — so the message is what
+pins down *which* rule fired. Stating the errors as one list also makes the assertion exhaustive: nothing else may be
+present, and the count is implied.
+
+For a suite of any size it is worth wrapping that in one helper, so every test reads the same and a fragment of a
+message is as easy to express as the whole of it:
+
+```csharp
+internal sealed record ExpectedError(string Code, string Message = "*");
+
+internal static class ValidationAssertions
+{
+    public static void ShouldReport(this ValidationResult result, string code, string message)
+    {
+        result.ShouldReport([new ExpectedError(code, message)]);
+    }
+
+    public static void ShouldReport(this ValidationResult result, IEnumerable<ExpectedError> expected)
+    {
+        result.Errors.Should().BeEquivalentTo(expected, options => options
+            .Using<string>(context => context.Subject.Should().Match(context.Expectation))
+            .When(info => info.Path.EndsWith("Message", StringComparison.Ordinal)));
+    }
+}
+```
+
+`Match` gives the message wildcards, and `ExpectedError` defaults it to `"*"` for a test which is about the properties
+that report rather than the wording:
+
+```csharp
+result.ShouldReport("Name", "Name is required.");          // code + message
+result.ShouldReport("Mileage", "*greater than*");          // code + part of the message
+result.ShouldReport([
+    new("FeatureIds"),                                     // code only
+    new("Model.Manufacturer.ContactEmail", "*email address*"),
+    new("ServiceHistory[0].Workshop", "Workshop is required.")]);
+```
+
+A rule of your own is tested the same way: declare a validator whose only rule is the one under test, and take its
 parameters through the constructor where the test needs to vary them.
 
 ```csharp
@@ -581,6 +621,10 @@ internal sealed class VinValidator : Validator<Car>
     public VinValidator(int length) => this.Property(c => c.Vin).Length(length);
 }
 ```
+
+Because rules report a message *key* rather than a text, a test can also assert the key instead of the wording, by
+validating against a provider which resolves every key to itself. That keeps the test independent of translations:
+`result.ShouldReport("Vin", "NotEmpty")`.
 
 ## License
 

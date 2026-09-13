@@ -42,9 +42,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle()
-                .Which.Should().Match<ValidationError>(
-                    error => error.Code == nameof(Car.Vin) && error.Message == VinMustBeSeventeenCharactersMessage);
+            result.ShouldReport("Vin", VinMustBeSeventeenCharactersMessage);
         }
 
         /// <summary>
@@ -64,7 +62,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(Cars.Car());
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Message.Should().Be("second");
+            result.ShouldReport("Vin", "second");
         }
 
         [Theory]
@@ -101,7 +99,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(Cars.Car());
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Message.Should().Be("second");
+            result.ShouldReport("PurchasePrice", "second");
         }
 
         [Fact]
@@ -151,7 +149,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("Model.Name");
+            result.ShouldReport("Model.Name", "Name is required.");
         }
 
         /// <summary>
@@ -176,7 +174,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(car);
 
             // Assert
-            result.ShouldReport("Model.Name", ValidationMessageKeys.NotEmpty);
+            result.ShouldReport("Model.Name", "NotEmpty");
         }
 
         [Fact]

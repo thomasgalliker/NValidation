@@ -55,8 +55,11 @@ namespace NValidation.Tests
             var result = await this.validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Select(error => error.Code).Should()
-                .BeEquivalentTo(["Vin", "Mileage", "SoldDate", "FeatureIds"]);
+            result.ShouldReport([
+                new("Vin", "The VIN must be exactly 17 characters long."),
+                new("Mileage", "Mileage must be greater than or equal to 0."),
+                new("SoldDate", "SoldDate must be greater than or equal to Registration date."),
+                new("FeatureIds", "FeatureIds must not contain duplicate entries.")]);
         }
 
         /// <summary>
@@ -76,7 +79,7 @@ namespace NValidation.Tests
             var result = await this.validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("Vin");
+            result.ShouldReport("Vin", "Vin is required.");
         }
 
         /// <summary>
@@ -95,8 +98,9 @@ namespace NValidation.Tests
             var result = await this.validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Select(error => error.Code).Should()
-                .BeEquivalentTo(["Model.Name", "Model.Manufacturer.CountryCode"]);
+            result.ShouldReport([
+                new("Model.Name", "Name is required."),
+                new("Model.Manufacturer.CountryCode", "CountryCode must be exactly 3 characters long.")]);
         }
 
         /// <summary>
@@ -119,8 +123,9 @@ namespace NValidation.Tests
             var result = await this.validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Select(error => error.Code).Should()
-                .BeEquivalentTo(["ServiceHistory[1].Workshop", "ServiceHistory[2].Cost"]);
+            result.ShouldReport([
+                new("ServiceHistory[1].Workshop", "Workshop is required."),
+                new("ServiceHistory[2].Cost", "Cost must be greater than 0.")]);
         }
 
         /// <summary>
@@ -140,8 +145,10 @@ namespace NValidation.Tests
             var result = await this.validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Select(error => error.Code).Should().BeEquivalentTo(
-                ["FeatureIds", "Model.Manufacturer.ContactEmail", "ServiceHistory[0].Workshop"]);
+            result.ShouldReport([
+                new("FeatureIds", "FeatureIds must not contain duplicate entries."),
+                new("Model.Manufacturer.ContactEmail", "ContactEmail is not a valid email address."),
+                new("ServiceHistory[0].Workshop", "Workshop is required.")]);
         }
 
         /// <summary>
@@ -160,7 +167,8 @@ namespace NValidation.Tests
             var result = await this.validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory");
+            result.ShouldReport(
+                "ServiceHistory", "A service cannot be recorded at a higher mileage than the car has reached.");
         }
 
         /// <summary>
@@ -181,7 +189,7 @@ namespace NValidation.Tests
             var result = await this.validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory");
+            result.ShouldReport("ServiceHistory", "ServiceHistory must not contain more than 20 entries.");
         }
 
         /// <summary>

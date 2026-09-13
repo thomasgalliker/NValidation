@@ -13,7 +13,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(new Car());
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("vehicleId");
+            result.ShouldReport("vehicleId", "Vin is required.");
         }
 
         /// <summary>
@@ -30,7 +30,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(new Car { Model = new CarModel() });
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("manufacturerName");
+            result.ShouldReport("manufacturerName", "Model.Name is required.");
         }
 
         /// <summary>
@@ -48,7 +48,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(new Car { Model = new CarModel() });
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("Model.Name");
+            result.ShouldReport("Model.Name", "Model.Name is required.");
         }
 
         /// <summary>
@@ -69,9 +69,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(new Car());
 
             // Assert
-            var error = result.Errors.Should().ContainSingle().Subject;
-            error.Code.Should().Be("vehicleId");
-            error.Message.Should().Be("Vehicle identification number is required.");
+            result.ShouldReport("vehicleId", "Vehicle identification number is required.");
         }
 
         /// <summary>
@@ -91,7 +89,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(new Car());
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("features[0]");
+            result.ShouldReport("features[0]", "the first entry is wrong");
         }
 
         [Fact]

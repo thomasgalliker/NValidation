@@ -39,7 +39,7 @@ namespace NValidation.Tests
 
             // Assert
             result.Succeeded.Should().BeFalse();
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("Vin");
+            result.ShouldReport("Vin", "The VIN is required.");
         }
 
         [Fact]
@@ -53,7 +53,7 @@ namespace NValidation.Tests
 
             // Assert
             result.Succeeded.Should().BeFalse();
-            result.Errors.Should().ContainSingle();
+            result.ShouldReport("Vin", "The VIN is required.");
         }
 
         [Fact]
@@ -136,7 +136,7 @@ namespace NValidation.Tests
             errors[0] = new ValidationError("Vin", "changed afterwards");
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Message.Should().Be("original");
+            result.ShouldReport("Vin", "original");
         }
     }
 }

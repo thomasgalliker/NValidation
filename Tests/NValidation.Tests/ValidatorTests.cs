@@ -39,7 +39,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(new Car());
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be(nameof(Car.Vin));
+            result.ShouldReport("Vin", "Vin is required.");
         }
 
         /// <summary>
@@ -58,7 +58,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("Model.Name");
+            result.ShouldReport("Model.Name", "Model.Name is required.");
         }
 
         /// <summary>
@@ -77,21 +77,18 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle();
+            result.ShouldReport("Vin", "Vin is required.");
         }
 
         [Fact]
         public async Task ValidateAsync_ReportsEveryFailingRule_WhenTheChainAsksForAll()
         {
             // Arrange
-            const string firstMessage = "first";
-            const string secondMessage = "second";
-
             var validator = new TestValidator<Car>();
             validator.Property(c => c.Vin)
                 .WithValidationBehavior(ValidationBehavior.All)
-                .Must(vin => vin != "wrong", firstMessage)
-                .Must(vin => vin != "wrong", secondMessage);
+                .Must(vin => vin != "wrong", "first")
+                .Must(vin => vin != "wrong", "second");
 
             var car = new Car { Vin = "wrong" };
 
@@ -99,9 +96,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Select(error => error.Message).Should().BeEquivalentTo(
-                firstMessage,
-                secondMessage);
+            result.ShouldReport([new("Vin", "first"), new("Vin", "second")]);
         }
 
         /// <summary>
@@ -110,10 +105,10 @@ namespace NValidation.Tests
         /// a change to either axis that is not intended turns this red.
         /// </summary>
         [Theory]
-        [InlineData(null, null, nameof(Car.Vin), nameof(Car.RegistrationPlate))] // the defaults: every property, one message each
-        [InlineData(ValidationBehavior.All, ValidationBehavior.StopAtFirstError, nameof(Car.Vin), nameof(Car.RegistrationPlate))]
-        [InlineData(ValidationBehavior.All, ValidationBehavior.All, nameof(Car.Vin), nameof(Car.Vin), nameof(Car.RegistrationPlate), nameof(Car.RegistrationPlate))]
-        [InlineData(ValidationBehavior.StopAtFirstError, ValidationBehavior.StopAtFirstError, nameof(Car.Vin))]
+        [InlineData(null, null, "Vin", "RegistrationPlate")] // the defaults: every property, one message each
+        [InlineData(ValidationBehavior.All, ValidationBehavior.StopAtFirstError, "Vin", "RegistrationPlate")]
+        [InlineData(ValidationBehavior.All, ValidationBehavior.All, "Vin", "Vin", "RegistrationPlate", "RegistrationPlate")]
+        [InlineData(ValidationBehavior.StopAtFirstError, ValidationBehavior.StopAtFirstError, "Vin")]
         public async Task ValidateAsync_ReportsWhatTheValidationBehaviorsAskFor(
             ValidationBehavior? classBehavior,
             ValidationBehavior? propertyBehavior,
@@ -126,7 +121,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
 
             // Assert
-            result.Errors.Select(error => error.Code).Should().BeEquivalentTo(expectedCodes);
+            result.ShouldReport(expectedCodes.Select(code => new ExpectedError(code)));
         }
 
         /// <summary>
@@ -144,7 +139,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be(nameof(Car.Vin));
+            result.ShouldReport("Vin", "Vin is required.");
         }
 
         /// <summary>
@@ -235,8 +230,10 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
 
             // Assert
-            result.Errors.Should().HaveCount(2);
-            result.Errors.Should().OnlyContain(error => error.Code == nameof(Car.Vin));
+            result.ShouldReport([
+                new("Vin", "Vin is required."),
+                new("Vin", "Vin must not exceed 3 characters.")]);
+
             reached.Should().BeFalse("the run still stops once that chain has had its say");
         }
 
@@ -265,9 +262,9 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
 
             // Assert
-            result.Errors.Select(error => error.Code).Should().BeEquivalentTo(
-                nameof(Car.Vin),                                      // held back to one by the override
-                nameof(Car.RegistrationPlate), nameof(Car.RegistrationPlate)); // still reports both
+            result.ShouldReport([
+                new("Vin"),                                          // held back to one by the override
+                new("RegistrationPlate"), new("RegistrationPlate")]); // still reports both
         }
 
         /// <summary>
@@ -275,12 +272,12 @@ namespace NValidation.Tests
         /// the other.
         /// </summary>
         [Theory]
-        [InlineData(ValidationBehavior.All, null, 2)] // the chain axis keeps its default of one message per property
-        [InlineData(null, ValidationBehavior.All, 4)] // the run axis keeps its default of every property
+        [InlineData(ValidationBehavior.All, null, "Vin", "RegistrationPlate")] // the chain axis keeps its default of one message per property
+        [InlineData(null, ValidationBehavior.All, "Vin", "Vin", "RegistrationPlate", "RegistrationPlate")] // the run axis keeps its default of every property
         public async Task ValidateAsync_NamingOneValidationBehavior_LeavesTheOtherInheriting(
             ValidationBehavior? classBehavior,
             ValidationBehavior? propertyBehavior,
-            int expectedCount)
+            params string[] expectedCodes)
         {
             // Arrange
             var validator = new TwoFailingPropertiesValidator(classBehavior, propertyBehavior);
@@ -289,7 +286,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
 
             // Assert
-            result.Errors.Should().HaveCount(expectedCount);
+            result.ShouldReport(expectedCodes.Select(code => new ExpectedError(code)));
         }
 
         /// <summary>
@@ -310,7 +307,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be(nameof(Car.Vin));
+            result.ShouldReport("Vin", "Vin is required.");
         }
 
         /// <summary>
@@ -318,11 +315,12 @@ namespace NValidation.Tests
         /// stopping run to stop on and the property after it is still judged.
         /// </summary>
         [Theory]
-        [InlineData(false, nameof(Car.RegistrationPlate))]
-        [InlineData(true, nameof(Car.Vin))]
+        [InlineData(false, "RegistrationPlate", "RegistrationPlate is required.")]
+        [InlineData(true, "Vin", "Vin is required.")]
         public async Task ValidateAsync_StoppingAtTheFirstError_IsNotStoppedByASkippedProperty(
             bool sold,
-            string expectedCode)
+            string expectedCode,
+            string expectedMessage)
         {
             // Arrange
             var validator = new TestValidator<Car>();
@@ -337,7 +335,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be(expectedCode);
+            result.ShouldReport(expectedCode, expectedMessage);
         }
 
         /// <summary>
@@ -365,13 +363,10 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Select(error => error.Code).Should().BeEquivalentTo(
-                "Model.Name",
-                "Model.SeatCount");
-
-            result.Errors.Should().NotContain(
-                error => error.Code == nameof(Car.Vin),
-                "the run still stops once that rule has reported");
+            // Vin is absent: the run still stops once that rule has reported
+            result.ShouldReport([
+                new("Model.Name", "Name is required."),
+                new("Model.SeatCount", "SeatCount must be greater than 0.")]);
         }
 
         /// <summary>
@@ -398,8 +393,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Select(error => error.Code).Should().BeEquivalentTo(
-                "Model.Name", nameof(Car.Vin));
+            result.ShouldReport([new("Model.Name", "Name is required."), new("Vin", "Vin is required.")]);
         }
 
         [Fact]
@@ -415,9 +409,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(new Car());
 
             // Assert
-            result.Errors.Should().ContainSingle()
-                .Which.Should().Match<ValidationError>(
-                    error => error.Code == nameof(Car.Vin) && error.Message == message);
+            result.ShouldReport("Vin", message);
         }
 
         /// <summary>
@@ -439,8 +431,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle()
-                .Which.Message.Should().Be("Vin must not exceed 3 characters.");
+            result.ShouldReport("Vin", "Vin must not exceed 3 characters.");
         }
 
         [Fact]
@@ -457,7 +448,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(new Car());
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Message.Should().Be("second");
+            result.ShouldReport("Vin", "second");
         }
 
         /// <summary>
@@ -468,21 +459,16 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithMessage_KeepsTheCodeARuleReportsUnderItself()
         {
             // Arrange
-            const string code = "FeatureIds[0]";
-            const string message = "the replacement";
-
             var validator = new TestValidator<Car>();
             validator.Property(c => c.FeatureIds)
-                .Add(context => context.AddError(new ValidationError(code, "the original message")))
-                .WithMessage(message);
+                .Add(context => context.AddError(new ValidationError("FeatureIds[0]", "the original message")))
+                .WithMessage("the replacement");
 
             // Act
             var result = await validator.ValidateAsync(new Car());
 
             // Assert
-            result.Errors.Should().ContainSingle()
-                .Which.Should().Match<ValidationError>(
-                    error => error.Code == code && error.Message == message);
+            result.ShouldReport("FeatureIds[0]", "the replacement");
         }
 
         [Fact]
@@ -513,9 +499,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(new Car());
 
             // Assert
-            result.Errors.Should().ContainSingle()
-                .Which.Should().Match<ValidationError>(
-                    error => error.Code == nameof(Car.Vin) && error.Message == "Vehicle identification number is required.");
+            result.ShouldReport("Vin", "Vehicle identification number is required.");
         }
 
         [Fact]
@@ -529,7 +513,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(new Car());
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Message.Should().Be("Vin is required.");
+            result.ShouldReport("Vin", "Vin is required.");
         }
 
         /// <summary>
@@ -550,7 +534,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(new Car());
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Message.Should().Be("second is required.");
+            result.ShouldReport("Vin", "second is required.");
         }
 
         [Theory]
@@ -647,7 +631,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("Vin", "Vin is required.");
         }
 
         /// <summary>
@@ -716,7 +700,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("Model.Manufacturer.Name");
+            result.ShouldReport("Model.Manufacturer.Name", "Model.Manufacturer.Name is required.");
         }
 
         /// <summary>
@@ -818,7 +802,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(Cars.Car());
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("Vin");
+            result.ShouldReport("Vin", "checked elsewhere");
         }
 
         /// <summary>

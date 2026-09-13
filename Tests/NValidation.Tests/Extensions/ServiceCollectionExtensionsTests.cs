@@ -82,8 +82,9 @@ namespace NValidation.Tests.Extensions
             var result = await validator.ValidateAsync(new Manufacturer());
 
             // Assert
-            result.Errors.Should().NotBeEmpty();
-            result.Errors.Should().OnlyContain(error => error.Message == TestMessageProvider.Message);
+            result.ShouldReport([
+                new("Name", "message from the configured provider"),
+                new("CountryCode", "message from the configured provider")]);
         }
 
         /// <summary>
@@ -103,7 +104,9 @@ namespace NValidation.Tests.Extensions
             var result = await validator.ValidateAsync(new Manufacturer());
 
             // Assert
-            result.Errors.Should().Contain(error => error.Message == "Name is required.");
+            result.ShouldReport([
+                new("Name", "Name is required."),
+                new("CountryCode", "CountryCode is required.")]);
         }
 
         /// <summary>
@@ -120,11 +123,15 @@ namespace NValidation.Tests.Extensions
 
             var validator = Resolve<IValidator<CarModel>>(services);
 
+            // Only the nested manufacturer is wrong, so what comes back is what the dependency reported.
+            var carModel = Cars.CarModel();
+            carModel.Manufacturer!.Name = null;
+
             // Act
-            var result = await validator.ValidateAsync(new CarModel { Manufacturer = new Manufacturer() });
+            var result = await validator.ValidateAsync(carModel);
 
             // Assert
-            result.Errors.Should().Contain(error => error.Code == "Manufacturer.Name");
+            result.ShouldReport("Manufacturer.Name", "Name is required.");
         }
 
         /// <summary>
@@ -145,7 +152,7 @@ namespace NValidation.Tests.Extensions
 
             // Assert
             validator.Should().BeOfType<HandWrittenManufacturerValidator>();
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be("HandWritten");
+            result.ShouldReport("HandWritten", "brings its own message");
         }
 
         /// <summary>
@@ -163,12 +170,16 @@ namespace NValidation.Tests.Extensions
 
             var validator = Resolve<IValidator<CarModel>>(services);
 
+            // Only the nested manufacturer is wrong, so what comes back is what the dependency reported.
+            var carModel = Cars.CarModel();
+            carModel.Manufacturer!.Name = null;
+
             // Act
-            var result = await validator.ValidateAsync(new CarModel { Manufacturer = new Manufacturer() });
+            var result = await validator.ValidateAsync(carModel);
 
             // Assert
             validator.Should().BeOfType<CarModelValidator>();
-            result.Errors.Should().Contain(error => error.Code == "Manufacturer.Name");
+            result.ShouldReport("Manufacturer.Name", "Name is required.");
         }
 
         [Fact]
@@ -207,7 +218,7 @@ namespace NValidation.Tests.Extensions
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().Contain(error => error.Code == "Model.Manufacturer.Name");
+            result.ShouldReport("Model.Manufacturer.Name", "Name is required.");
         }
 
         /// <summary>
@@ -252,7 +263,7 @@ namespace NValidation.Tests.Extensions
 
             // Assert
             validator.Should().BeOfType<FirstAmbiguousValidator>();
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be(FirstAmbiguousValidator.Code);
+            result.ShouldReport("First", "Name is required.");
         }
 
         [Fact]
@@ -461,8 +472,9 @@ namespace NValidation.Tests.Extensions
             var result = await validator.ValidateAsync(new Manufacturer());
 
             // Assert
-            result.Errors.Should().NotBeEmpty();
-            result.Errors.Should().OnlyContain(error => error.Message == "built by the container");
+            result.ShouldReport([
+                new("Name", "built by the container"),
+                new("CountryCode", "built by the container")]);
         }
 
         /// <summary>
@@ -499,11 +511,11 @@ namespace NValidation.Tests.Extensions
         /// the configured message provider.
         /// </summary>
         [Theory]
-        [InlineData(null, 2)] // the defaults: every property, one message each
-        [InlineData(ValidationBehavior.StopAtFirstError, 1)]
+        [InlineData(null, "Name", "CountryCode")] // the defaults: every property, one message each
+        [InlineData(ValidationBehavior.StopAtFirstError, "Name")]
         public async Task ValidationBehaviors_Class_ReachesTheValidator(
             ValidationBehavior? classBehavior,
-            int expectedCount)
+            params string[] expectedCodes)
         {
             // Arrange
             var services = new ServiceCollection();
@@ -519,16 +531,16 @@ namespace NValidation.Tests.Extensions
             var result = await validator.ValidateAsync(new Manufacturer());
 
             // Assert
-            result.Errors.Should().HaveCount(expectedCount);
+            result.ShouldReport(expectedCodes.Select(code => new ExpectedError(code)));
         }
 
         /// <inheritdoc cref="ValidationBehaviors_Class_ReachesTheValidator" path="/summary"/>
         [Theory]
-        [InlineData(null, 2)] // one message per property, so the blank name reports NotEmpty alone
-        [InlineData(ValidationBehavior.All, 3)] // the blank country code also fails its exact length
+        [InlineData(null, "Name", "CountryCode")] // one message per property, so the blank name reports NotEmpty alone
+        [InlineData(ValidationBehavior.All, "Name", "CountryCode", "CountryCode")] // the blank country code also fails its exact length
         public async Task ValidationBehaviors_Property_ReachesTheValidator(
             ValidationBehavior? propertyBehavior,
-            int expectedCount)
+            params string[] expectedCodes)
         {
             // Arrange
             var services = new ServiceCollection();
@@ -544,7 +556,7 @@ namespace NValidation.Tests.Extensions
             var result = await validator.ValidateAsync(new Manufacturer { CountryCode = " " });
 
             // Assert
-            result.Errors.Should().HaveCount(expectedCount);
+            result.ShouldReport(expectedCodes.Select(code => new ExpectedError(code)));
         }
 
         /// <summary>
@@ -571,9 +583,9 @@ namespace NValidation.Tests.Extensions
             var result = await validator.ValidateAsync(new Car { Vin = "      " });
 
             // Assert
-            result.Errors.Select(error => error.Code).Should().BeEquivalentTo(
-                nameof(Car.Vin),
-                nameof(Car.RegistrationPlate));
+            result.ShouldReport([
+                new("Vin", "Vin is required."),
+                new("RegistrationPlate", "RegistrationPlate is required.")]);
         }
 
         /// <summary>
@@ -602,9 +614,8 @@ namespace NValidation.Tests.Extensions
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle(
-                "the element chain keeps the built-in default of one message per property")
-                .Which.Code.Should().Be("ServiceHistory[0].Workshop");
+            // one message only: the element chain keeps the built-in default of one per property
+            result.ShouldReport("ServiceHistory[0].Workshop", "Workshop is required.");
         }
 
         /// <summary>
@@ -633,8 +644,8 @@ namespace NValidation.Tests.Extensions
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle("the validator's own word outranks the registration's")
-                .Which.Code.Should().Be(nameof(Car.Vin));
+            // one message only: the validator's own word outranks the registration's
+            result.ShouldReport("Vin", "Vin is required.");
         }
 
         /// <summary>
@@ -662,9 +673,9 @@ namespace NValidation.Tests.Extensions
             var result = await validator.ValidateAsync(new Car { Vin = "      " });
 
             // Assert
-            result.Errors.Select(error => error.Code).Should().BeEquivalentTo(
-                nameof(Car.Vin),
-                nameof(Car.RegistrationPlate));
+            result.ShouldReport([
+                new("Vin", "Vin is required."),
+                new("RegistrationPlate", "RegistrationPlate is required.")]);
         }
 
         /// <summary>

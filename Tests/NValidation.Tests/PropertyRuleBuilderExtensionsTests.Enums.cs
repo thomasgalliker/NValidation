@@ -36,7 +36,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("Condition", "Condition has an invalid value.");
         }
 
         /// <summary>
@@ -94,7 +94,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("Equipment", "Equipment has an invalid value.");
         }
 
         /// <summary>
@@ -130,7 +130,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car { Condition = (CarCondition)99 });
 
             // Assert
-            result.ShouldReport(nameof(Car.Condition), ValidationMessageKeys.IsInEnum);
+            result.ShouldReport("Condition", "IsInEnum");
         }
 
     }

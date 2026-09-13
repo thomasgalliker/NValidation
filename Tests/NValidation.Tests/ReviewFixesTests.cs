@@ -45,7 +45,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(car);
 
             // Assert
-            result.ShouldReport("Mileage", ValidationMessageKeys.LessThanOrEqualToOtherProperty);
+            result.ShouldReport("Mileage", "LessThanOrEqualToOtherProperty");
         }
 
         [Fact]
@@ -62,7 +62,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(car);
 
             // Assert
-            result.ShouldReport("Mileage", ValidationMessageKeys.NotEqualToOtherProperty);
+            result.ShouldReport("Mileage", "NotEqualToOtherProperty");
         }
 
         [Fact]
@@ -119,7 +119,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(car);
 
             // Assert
-            result.ShouldReport("SoldDate", ValidationMessageKeys.EqualToOtherProperty);
+            result.ShouldReport("SoldDate", "EqualToOtherProperty");
         }
 
         [Theory]
@@ -252,7 +252,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("ServiceMileages", "ServiceMileages must not contain more than 2 entries.");
             sequence.Enumerated.Should().Be(3, "the third entry is what busts a cap of two");
         }
 

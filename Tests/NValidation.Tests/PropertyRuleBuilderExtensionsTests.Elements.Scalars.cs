@@ -22,9 +22,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            var error = result.Errors.Should().ContainSingle().Subject;
-            error.Code.Should().Be("ServiceMileages[1]");
-            error.Message.Should().Be("ServiceMileages[1] must be greater than or equal to 0.");
+            result.ShouldReport("ServiceMileages[1]", "ServiceMileages[1] must be greater than or equal to 0.");
         }
 
         /// <summary>
@@ -47,9 +45,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            var error = result.Errors.Should().ContainSingle().Subject;
-            error.Code.Should().Be("ServiceInvoiceNumbers[1]");
-            error.Message.Should().Be("ServiceInvoiceNumbers[1] must not exceed 6 characters.");
+            result.ShouldReport("ServiceInvoiceNumbers[1]", "ServiceInvoiceNumbers[1] must not exceed 6 characters.");
         }
 
         /// <summary>
@@ -70,9 +66,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            var error = result.Errors.Should().ContainSingle().Subject;
-            error.Code.Should().Be("ServiceMileages[0]");
-            error.Message.Should().Be("Service mileage must be greater than or equal to 0.");
+            result.ShouldReport("ServiceMileages[0]", "Service mileage must be greater than or equal to 0.");
         }
 
         /// <summary>
@@ -93,9 +87,8 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            var error = result.Errors.Should().ContainSingle().Subject;
-            error.Code.Should().Be("ServiceMileages[entry-0]");
-            error.Message.Should().Be("ServiceMileages[entry-0] must be greater than or equal to 0.");
+            result.ShouldReport(
+                "ServiceMileages[entry-0]", "ServiceMileages[entry-0] must be greater than or equal to 0.");
         }
     }
 }

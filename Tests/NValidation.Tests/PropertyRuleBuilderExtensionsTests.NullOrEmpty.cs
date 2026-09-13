@@ -37,7 +37,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Message.Should().Be("Vin is required.");
+            result.ShouldReport("Vin", "Vin is required.");
         }
 
         /// <summary>
@@ -57,7 +57,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("FirstRegistration", "FirstRegistration is required.");
         }
 
         [Fact]
@@ -114,7 +114,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("SoldDate", "SoldDate is required.");
         }
 
         [Fact]
@@ -131,7 +131,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("SoldDate", "SoldDate is required.");
         }
 
         [Fact]
@@ -148,7 +148,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("Model", "Model is required.");
         }
 
         [Fact]
@@ -199,7 +199,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("FeatureIds", "FeatureIds is required.");
         }
 
         [Fact]
@@ -216,7 +216,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("FeatureIds", "FeatureIds is required.");
         }
 
         [Fact]
@@ -251,7 +251,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("PreviousOwnerIds", "PreviousOwnerIds is required.");
         }
 
         /// <summary>
@@ -286,7 +286,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car());
 
             // Assert
-            result.ShouldReport(nameof(Car.Vin), ValidationMessageKeys.NotEmpty);
+            result.ShouldReport("Vin", "NotEmpty");
         }
 
         [Fact]
@@ -300,7 +300,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car { FeatureIds = [] });
 
             // Assert
-            result.ShouldReport(nameof(Car.FeatureIds), ValidationMessageKeys.NotEmpty);
+            result.ShouldReport("FeatureIds", "NotEmpty");
         }
 
         [Fact]
@@ -314,7 +314,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car());
 
             // Assert
-            result.ShouldReport(nameof(Car.FirstRegistration), ValidationMessageKeys.NotDefault);
+            result.ShouldReport("FirstRegistration", "NotDefault");
         }
 
         [Fact]
@@ -328,7 +328,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car());
 
             // Assert
-            result.ShouldReport(nameof(Car.Model), ValidationMessageKeys.NotNull);
+            result.ShouldReport("Model", "NotNull");
         }
     }
 }

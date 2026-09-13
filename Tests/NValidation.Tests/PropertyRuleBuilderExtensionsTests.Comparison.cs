@@ -298,7 +298,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be(nameof(Car.FirstRegistration));
+            result.ShouldReport("FirstRegistration", "FirstRegistration must be less than or equal to SoldDate.");
         }
 
         [Fact]
@@ -332,7 +332,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("WarrantyEndsOn", "WarrantyEndsOn must be greater than SoldDate.");
         }
 
         [Theory]
@@ -373,8 +373,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Message.Should()
-                .Be("SoldDate must be greater than or equal to FirstRegistration.");
+            result.ShouldReport("SoldDate", "SoldDate must be greater than or equal to FirstRegistration.");
         }
 
         [Fact]
@@ -392,8 +391,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Message.Should()
-                .Be("SoldDate must be greater than or equal to the registration date.");
+            result.ShouldReport("SoldDate", "SoldDate must be greater than or equal to the registration date.");
         }
 
         // --- ranges ------------------------------------------------------------------------------
@@ -607,7 +605,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car { Mileage = 5 });
 
             // Assert
-            result.ShouldReport(nameof(Car.Mileage), ValidationMessageKeys.GreaterThan);
+            result.ShouldReport("Mileage", "GreaterThan");
         }
 
         [Fact]
@@ -621,7 +619,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car { Mileage = 5 });
 
             // Assert
-            result.ShouldReport(nameof(Car.Mileage), ValidationMessageKeys.GreaterThanOrEqualTo);
+            result.ShouldReport("Mileage", "GreaterThanOrEqualTo");
         }
 
         [Fact]
@@ -635,7 +633,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car { Mileage = 20 });
 
             // Assert
-            result.ShouldReport(nameof(Car.Mileage), ValidationMessageKeys.LessThan);
+            result.ShouldReport("Mileage", "LessThan");
         }
 
         [Fact]
@@ -649,7 +647,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car { Mileage = 20 });
 
             // Assert
-            result.ShouldReport(nameof(Car.Mileage), ValidationMessageKeys.LessThanOrEqualTo);
+            result.ShouldReport("Mileage", "LessThanOrEqualTo");
         }
 
         [Fact]
@@ -663,7 +661,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new CarModel { SeatCount = 9 });
 
             // Assert
-            result.ShouldReport(nameof(CarModel.SeatCount), ValidationMessageKeys.Between);
+            result.ShouldReport("SeatCount", "Between");
         }
 
         [Fact]
@@ -677,7 +675,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car { Mileage = 20 });
 
             // Assert
-            result.ShouldReport(nameof(Car.Mileage), ValidationMessageKeys.EqualTo);
+            result.ShouldReport("Mileage", "EqualTo");
         }
 
         [Fact]
@@ -691,7 +689,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car { Mileage = 10 });
 
             // Assert
-            result.ShouldReport(nameof(Car.Mileage), ValidationMessageKeys.NotEqualTo);
+            result.ShouldReport("Mileage", "NotEqualTo");
         }
 
         [Fact]
@@ -711,7 +709,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(car);
 
             // Assert
-            result.ShouldReport(nameof(Car.SoldDate), ValidationMessageKeys.GreaterThanOrEqualToOtherProperty);
+            result.ShouldReport("SoldDate", "GreaterThanOrEqualToOtherProperty");
         }
 
         [Fact]
@@ -731,7 +729,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(car);
 
             // Assert
-            result.ShouldReport(nameof(Car.FirstRegistration), ValidationMessageKeys.LessThanOrEqualToOtherProperty);
+            result.ShouldReport("FirstRegistration", "LessThanOrEqualToOtherProperty");
         }
 
     }

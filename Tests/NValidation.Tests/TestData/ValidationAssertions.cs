@@ -1,8 +1,8 @@
 namespace NValidation.Tests.TestData
 {
     /// <summary>
-    /// Runs a validator against the <see cref="MessageKeyProvider"/> and asserts what it reported —
-    /// the property it blamed and the message it chose, not merely that it failed.
+    /// Asserts what a validator reported — the properties it blamed and the messages it chose, not
+    /// merely that it failed.
     /// </summary>
     internal static class ValidationAssertions
     {
@@ -21,18 +21,24 @@ namespace NValidation.Tests.TestData
         }
 
         /// <summary>
-        /// Asserts that the only failure is <paramref name="messageKey"/>, reported under
-        /// <paramref name="code"/>.
+        /// Asserts that the only failure is <paramref name="message"/>, reported under
+        /// <paramref name="code"/>. The message is matched with wildcards.
         /// </summary>
-        public static void ShouldReport(this ValidationResult result, string code, string messageKey)
+        public static void ShouldReport(this ValidationResult result, string code, string message)
         {
-            result.Errors.Should().ContainSingle(
-                $"the rule should report exactly one failure, under {code}, as {messageKey}");
+            result.ShouldReport([new ExpectedError(code, message)]);
+        }
 
-            var error = result.Errors[0];
-
-            error.Code.Should().Be(code, "the failure names the property a caller binds to");
-            error.Message.Should().Be(messageKey, "the rule reports its own message, not another rule's");
+        /// <summary>
+        /// Asserts that the result reports exactly <paramref name="expected"/> — no more and no fewer,
+        /// in any order, so a repeated entry asks for a repeated failure. Each code is matched exactly
+        /// and each message with wildcards.
+        /// </summary>
+        public static void ShouldReport(this ValidationResult result, IEnumerable<ExpectedError> expected)
+        {
+            result.Errors.Should().BeEquivalentTo(expected, options => options
+                .Using<string>(context => context.Subject.Should().Match(context.Expectation))
+                .When(info => info.Path.EndsWith("Message", StringComparison.Ordinal)));
         }
     }
 }

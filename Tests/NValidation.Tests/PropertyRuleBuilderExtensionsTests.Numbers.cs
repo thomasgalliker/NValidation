@@ -139,7 +139,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(carModel);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("FuelConsumption", "FuelConsumption must be a number.");
         }
 
         /// <summary>
@@ -179,7 +179,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(carModel);
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Message.Should().Be("FuelConsumption must be a number.");
+            result.ShouldReport("FuelConsumption", "FuelConsumption must be a number.");
         }
 
         [Theory]
@@ -215,7 +215,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(carModel);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("TopSpeed", "TopSpeed must be a number.");
         }
 
         [Fact]
@@ -229,7 +229,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car { PurchasePrice = 0.03m });
 
             // Assert
-            result.ShouldReport(nameof(Car.PurchasePrice), ValidationMessageKeys.MultipleOf);
+            result.ShouldReport("PurchasePrice", "MultipleOf");
         }
 
         [Fact]
@@ -243,7 +243,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new CarModel { FuelConsumption = double.NaN });
 
             // Assert
-            result.ShouldReport(nameof(CarModel.FuelConsumption), ValidationMessageKeys.NotNaN);
+            result.ShouldReport("FuelConsumption", "NotNaN");
         }
 
     }

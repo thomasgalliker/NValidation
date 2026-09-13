@@ -33,7 +33,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("FeatureIds", "FeatureIds must not contain duplicate entries.");
         }
 
         [Fact]
@@ -90,7 +90,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("PreviousOwnerIds", "PreviousOwnerIds must not contain duplicate entries.");
         }
 
         [Theory]
@@ -184,7 +184,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(new Car { ServiceMileages = sequence });
 
             // Assert
-            result.Errors.Should().ContainSingle().Which.Code.Should().Be(nameof(Car.ServiceMileages));
+            result.ShouldReport("ServiceMileages", "ServiceMileages must not contain more than 2 entries.");
         }
 
         [Fact]
@@ -198,7 +198,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car { FeatureIds = [1] });
 
             // Assert
-            result.ShouldReport(nameof(Car.FeatureIds), ValidationMessageKeys.MinimumCount);
+            result.ShouldReport("FeatureIds", "MinimumCount");
         }
 
         [Fact]
@@ -212,7 +212,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car { FeatureIds = [1, 2, 3] });
 
             // Assert
-            result.ShouldReport(nameof(Car.FeatureIds), ValidationMessageKeys.MaximumCount);
+            result.ShouldReport("FeatureIds", "MaximumCount");
         }
 
         [Fact]
@@ -226,7 +226,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(new Car { FeatureIds = [1, 1] });
 
             // Assert
-            result.ShouldReport(nameof(Car.FeatureIds), ValidationMessageKeys.NoDuplicates);
+            result.ShouldReport("FeatureIds", "NoDuplicates");
         }
 
     }

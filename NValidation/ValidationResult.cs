@@ -8,15 +8,15 @@ namespace NValidation
     /// </summary>
     public sealed class ValidationResult
     {
-        private ValidationResult(IReadOnlyList<ValidationError> errors)
-        {
-            this.Errors = errors;
-        }
-
         /// <summary>
         /// A shared, successful result (no errors).
         /// </summary>
         public static ValidationResult Success { get; } = new ValidationResult([]);
+
+        private ValidationResult(IReadOnlyList<ValidationError> errors)
+        {
+            this.Errors = errors;
+        }
 
         /// <summary>
         /// <c>true</c> when there are no validation errors.

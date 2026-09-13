@@ -28,7 +28,8 @@
 - ❌ Catching and swallowing exceptions
 - ❌ Large methods (>50 lines)
 - ❌ Complex nested conditionals
-- ❌ Magic numbers or strings
+- ❌ Magic numbers or strings — except the expected code and message of an assertion, which are
+  always plain literals (see Testing)
 - ❌ Unused code
 - ❌ Unused non-public code only used by unit tests
 - ❌ Unused using directives
@@ -66,6 +67,25 @@
 - The naming convention for unit tests is `{ClassName}.Tests`.
 - Use xUnit as test framework.
 - Use AwesomeAssertions for asserts.
+- A `ValidationResult` is asserted with `ShouldReport`
+  (`Tests/NValidation.Tests/TestData/ValidationAssertions.cs`), which states the *whole* expected
+  result: `result.ShouldReport("Vin", "Vin is required.")` for one failure, and the list form for
+  several. Nothing else may be present and the count is implied, so a repeated entry asks for a
+  repeated failure; order is ignored.
+  ```csharp
+  result.ShouldReport([
+      new("FeatureIds"),                                       // the wording is not the point here
+      new("Model.Manufacturer.ContactEmail", "*email address*"), // a fragment
+      new("ServiceHistory[0].Workshop", "Workshop is required.")]);
+  ```
+  The message is matched with wildcards (`*` any run of characters, `?` one), and `ExpectedError`
+  defaults it to `"*"` — accept any message — for a test about which properties report rather than
+  about the wording. Use that default sparingly: a pinned message is what makes the test catch a
+  rule wired to the wrong key. Success is `result.Errors.Should().BeEmpty()`. A negative match
+  (`Message.Should().NotContain(...)`) has no wildcard spelling and stays on AwesomeAssertions.
+- The expected code and message are written as plain string literals, never as `nameof`, a shared
+  constant or a local: the literal is what a reader needs to see. Renames then cost a few more
+  edits, which is the trade. A theory carries them in its `[InlineData]` rows.
 - Use Moq, AutoMocker to setup and verify mocks (if applicable).
 - All unit tests must follow the Arrange-Act-Assert (AAA) pattern.
 - Separate AAA sections with blank lines.
@@ -98,7 +118,8 @@
 ## Library-specific rules
 - Every shipped rule needs at least one test, including its boundary values and its null/absent case.
 - Every shipped rule also needs a test asserting the error's `Code` and its message key, resolved
-  through `MessageKeyProvider` (see `ValidationAssertions`). These live beside the rule's own tests, in
+  through `ValidateForKeysAsync`/`MessageKeyProvider`:
+  `result.ShouldReport("Vin", "NotEmpty")`. These live beside the rule's own tests, in
   the matching `PropertyRuleBuilderExtensionsTests.*` part. Asserting only `result.Succeeded` lets a
   rule wired to a neighbouring key pass the whole suite — a value that is too large reported as "must
   be greater than". The bar is a mutation: changing any rule's key must turn the suite red.

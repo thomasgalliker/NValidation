@@ -35,7 +35,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("FirstRegistration", "FirstRegistration must be a date in the past.");
         }
 
         [Fact]
@@ -151,7 +151,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            result.Succeeded.Should().BeFalse();
+            result.ShouldReport("WarrantyEndsOn", "WarrantyEndsOn must be a date in the future.");
         }
 
         [Fact]
@@ -210,7 +210,7 @@ namespace NValidation.Tests
             var afterTheDate = await validator.ValidateAsync(car);
 
             // Assert
-            beforeTheDate.Succeeded.Should().BeFalse();
+            beforeTheDate.ShouldReport("FirstRegistration", "FirstRegistration must be a date in the past.");
             afterTheDate.Succeeded.Should().BeTrue();
         }
 
@@ -227,7 +227,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(car);
 
             // Assert
-            result.ShouldReport(nameof(Car.SoldDate), ValidationMessageKeys.InThePast);
+            result.ShouldReport("SoldDate", "InThePast");
         }
 
         [Fact]
@@ -243,7 +243,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateForKeysAsync(car);
 
             // Assert
-            result.ShouldReport(nameof(Car.NextServiceAt), ValidationMessageKeys.InTheFuture);
+            result.ShouldReport("NextServiceAt", "InTheFuture");
         }
 
     }
