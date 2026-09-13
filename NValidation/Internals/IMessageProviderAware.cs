@@ -17,18 +17,11 @@ namespace NValidation.Internals
     /// </remarks>
     internal interface IMessageProviderAware<in T>
     {
-        ValueTask<ValidationResult> ValidateAsync(
-            T instance,
-            IValidationMessageProvider messages,
-            CancellationToken cancellationToken);
+        ValueTask<ValidationResult> ValidateAsync(T instance, IValidationMessageProvider messages, CancellationToken cancellationToken);
 
         /// <summary>
         /// The same, reporting into a list the caller owns rather than into a result of its own.
         /// </summary>
-        ValueTask ValidateIntoAsync(
-            T instance,
-            List<ValidationError> errors,
-            IValidationMessageProvider messages,
-            CancellationToken cancellationToken);
+        ValueTask ValidateIntoAsync(T instance, List<ValidationError> errors, IValidationMessageProvider messages, CancellationToken cancellationToken);
     }
 }

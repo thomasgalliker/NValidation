@@ -119,10 +119,7 @@ namespace NValidation
         /// carries, so a caller which resolves messages differently — an element of a collection, whose
         /// messages know its index — does not have to mutate shared state to do it.
         /// </summary>
-        internal async ValueTask<ValidationResult> ValidateAsync(
-            T instance,
-            IValidationMessageProvider messages,
-            CancellationToken cancellationToken)
+        internal async ValueTask<ValidationResult> ValidateAsync(T instance, IValidationMessageProvider messages, CancellationToken cancellationToken)
         {
             var errors = new List<ValidationError>();
 
@@ -139,11 +136,7 @@ namespace NValidation
         /// For a caller running this validator many times over — once per entry of a collection — where
         /// a list and a result per entry would be the bulk of what the entry costs.
         /// </remarks>
-        internal async ValueTask ValidateIntoAsync(
-            T instance,
-            List<ValidationError> errors,
-            IValidationMessageProvider messages,
-            CancellationToken cancellationToken)
+        internal async ValueTask ValidateIntoAsync(T instance, List<ValidationError> errors, IValidationMessageProvider messages, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(instance);
 
@@ -184,20 +177,13 @@ namespace NValidation
         }
 
         /// <inheritdoc/>
-        ValueTask<ValidationResult> IMessageProviderAware<T>.ValidateAsync(
-            T instance,
-            IValidationMessageProvider messages,
-            CancellationToken cancellationToken)
+        ValueTask<ValidationResult> IMessageProviderAware<T>.ValidateAsync(T instance, IValidationMessageProvider messages, CancellationToken cancellationToken)
         {
             return this.ValidateAsync(instance, messages, cancellationToken);
         }
 
         /// <inheritdoc/>
-        ValueTask IMessageProviderAware<T>.ValidateIntoAsync(
-            T instance,
-            List<ValidationError> errors,
-            IValidationMessageProvider messages,
-            CancellationToken cancellationToken)
+        ValueTask IMessageProviderAware<T>.ValidateIntoAsync(T instance, List<ValidationError> errors, IValidationMessageProvider messages, CancellationToken cancellationToken)
         {
             return this.ValidateIntoAsync(instance, errors, messages, cancellationToken);
         }
