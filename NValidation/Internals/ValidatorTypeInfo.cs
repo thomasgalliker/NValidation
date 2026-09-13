@@ -9,13 +9,17 @@ namespace NValidation.Internals
     {
         /// <summary>
         /// The closed <see cref="IValidator{T}"/> interfaces a type implements. A validator may serve
-        /// more than one, and an open generic validator serves none until it is closed.
+        /// more than one; a type a scan could never construct — abstract, an interface, or still open on
+        /// a type parameter — serves none.
         /// </summary>
         public static IEnumerable<Type> GetValidatedTypes(Type validatorType)
         {
             ArgumentNullException.ThrowIfNull(validatorType);
 
-            if (validatorType.IsAbstract || validatorType.IsInterface || validatorType.ContainsGenericParameters)
+            // Nothing a scan could construct: still open on a type parameter, or abstract — which is
+            // also what excludes an interface, because the CLI requires an interface definition to carry
+            // the abstract flag. A clause of its own for IsInterface would never decide anything.
+            if (validatorType.IsAbstract || validatorType.ContainsGenericParameters)
             {
                 return [];
             }

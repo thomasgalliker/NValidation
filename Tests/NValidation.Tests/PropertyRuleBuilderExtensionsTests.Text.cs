@@ -12,7 +12,9 @@ namespace NValidation.Tests
         public async Task MinimumLength_RejectsOnlyShorterText(string? name, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new NameMinimumLengthValidator(3);
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).MinimumLength(3);
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.Name = name;
 
@@ -31,7 +33,9 @@ namespace NValidation.Tests
         public async Task MaximumLength_RejectsOnlyLongerText(string? name, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new NameMaximumLengthValidator(5);
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).MaximumLength(5);
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.Name = name;
 
@@ -50,7 +54,9 @@ namespace NValidation.Tests
         public async Task Length_RequiresAnExactNumberOfCharacters(string? countryCode, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new CountryCodeLengthValidator(3);
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.CountryCode).Length(3);
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.CountryCode = countryCode;
 
@@ -71,7 +77,9 @@ namespace NValidation.Tests
         public async Task Length_MeasuresWhitespace_AsPartOfTheValue(string countryCode)
         {
             // Arrange
-            var validator = new CountryCodeLengthValidator(3);
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.CountryCode).Length(3);
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.CountryCode = countryCode;
 
@@ -91,7 +99,9 @@ namespace NValidation.Tests
         public async Task Length_WithARange_RequiresBothBounds(string? name, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new NameLengthRangeValidator(3, 5);
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).Length(3, 5);
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.Name = name;
 
@@ -105,8 +115,11 @@ namespace NValidation.Tests
         [Fact]
         public void Length_WithAMinimumAboveTheMaximum_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+
             // Act
-            var act = () => new NameLengthRangeValidator(5, 3);
+            var act = () => validator.Property(m => m.Name).Length(5, 3);
 
             // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();
@@ -126,7 +139,9 @@ namespace NValidation.Tests
         public async Task EmailAddress_AcceptsWhatCanBeParsedAsAMailAddress(string? email, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new ContactEmailValidator();
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.ContactEmail).EmailAddress();
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.ContactEmail = email;
 
@@ -146,7 +161,9 @@ namespace NValidation.Tests
         public async Task Matches_RequiresThePatternToMatch(string? website, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new WebsitePatternValidator("^https?://");
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Website).Matches("^https?://");
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.Website = website;
 
@@ -161,7 +178,9 @@ namespace NValidation.Tests
         public async Task Matches_AcceptsAPreparedRegex()
         {
             // Arrange
-            var validator = new WebsiteRegexValidator(new Regex("^https://", RegexOptions.IgnoreCase));
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Website).Matches(new Regex("^https://", RegexOptions.IgnoreCase));
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.Website = "HTTPS://aurora-motors.example";
 
@@ -176,7 +195,9 @@ namespace NValidation.Tests
         public async Task Matches_NamesThePatternInTheMessage()
         {
             // Arrange
-            var validator = new WebsitePatternValidator("^https?://");
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Website).Matches("^https?://");
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.Website = "aurora-motors.example";
 
@@ -190,8 +211,11 @@ namespace NValidation.Tests
         [Fact]
         public void Matches_WithoutAPattern_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+
             // Act
-            var act = () => new WebsitePatternValidator(null!);
+            var act = () => validator.Property(m => m.Website).Matches((string)null!);
 
             // Assert
             act.Should().Throw<ArgumentNullException>();
@@ -200,8 +224,11 @@ namespace NValidation.Tests
         [Fact]
         public void Matches_WithoutARegex_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+
             // Act
-            var act = () => new WebsiteRegexValidator(null!);
+            var act = () => validator.Property(m => m.Website).Matches((Regex)null!);
 
             // Assert
             act.Should().Throw<ArgumentNullException>();
@@ -216,8 +243,9 @@ namespace NValidation.Tests
         public async Task Matches_WhenThePatternTimesOut_ReportsAFailureInsteadOfThrowing()
         {
             // Arrange
-            var regex = new Regex("(a+)+$", RegexOptions.None, TimeSpan.FromMilliseconds(1));
-            var validator = new WebsiteRegexValidator(regex);
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Website).Matches(new Regex("(a+)+$", RegexOptions.None, TimeSpan.FromMilliseconds(1)));
+
             var manufacturer = new Manufacturer { Website = new string('a', 5_000) + "!" };
 
             // Act
@@ -230,8 +258,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task MinimumLength_ReportsMinimumLength()
         {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).MinimumLength(10);
+
             // Act
-            var result = await new NameMinimumLengthValidator(10).ValidateForKeysAsync(new Manufacturer { Name = "AB" });
+            var result = await validator.ValidateForKeysAsync(new Manufacturer { Name = "AB" });
 
             // Assert
             result.ShouldReport(nameof(Manufacturer.Name), ValidationMessageKeys.MinimumLength);
@@ -240,8 +272,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task MaximumLength_ReportsMaximumLength()
         {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).MaximumLength(2);
+
             // Act
-            var result = await new NameMaximumLengthValidator(2).ValidateForKeysAsync(new Manufacturer { Name = "Aurora" });
+            var result = await validator.ValidateForKeysAsync(new Manufacturer { Name = "Aurora" });
 
             // Assert
             result.ShouldReport(nameof(Manufacturer.Name), ValidationMessageKeys.MaximumLength);
@@ -250,8 +286,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task Length_ReportsLength()
         {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.CountryCode).Length(3);
+
             // Act
-            var result = await new CountryCodeLengthValidator(3).ValidateForKeysAsync(new Manufacturer { CountryCode = "CH" });
+            var result = await validator.ValidateForKeysAsync(new Manufacturer { CountryCode = "CH" });
 
             // Assert
             result.ShouldReport(nameof(Manufacturer.CountryCode), ValidationMessageKeys.Length);
@@ -260,8 +300,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task LengthRange_ReportsLengthBetween()
         {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).Length(5, 10);
+
             // Act
-            var result = await new NameLengthRangeValidator(5, 10).ValidateForKeysAsync(new Manufacturer { Name = "AB" });
+            var result = await validator.ValidateForKeysAsync(new Manufacturer { Name = "AB" });
 
             // Assert
             result.ShouldReport(nameof(Manufacturer.Name), ValidationMessageKeys.LengthBetween);
@@ -283,7 +327,9 @@ namespace NValidation.Tests
         public async Task EmailAddress_RefusesAValueWhichIsMoreThanTheAddress(string email)
         {
             // Arrange
-            var validator = new ContactEmailValidator();
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.ContactEmail).EmailAddress();
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.ContactEmail = email;
 
@@ -306,7 +352,9 @@ namespace NValidation.Tests
         public async Task EmailTopLevelDomainIn_AcceptsOnlyTheDomainsItNames(string? email, string topLevelDomain, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new ContactEmailTopLevelDomainInValidator(topLevelDomain);
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.ContactEmail).EmailTopLevelDomainIn(topLevelDomain);
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.ContactEmail = email;
 
@@ -325,7 +373,9 @@ namespace NValidation.Tests
         public async Task EmailTopLevelDomainNotIn_RefusesTheDomainsItNames(string email, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new ContactEmailTopLevelDomainNotInValidator("test", "invalid");
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.ContactEmail).EmailTopLevelDomainNotIn("test", "invalid");
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.ContactEmail = email;
 
@@ -340,7 +390,9 @@ namespace NValidation.Tests
         public async Task EmailTopLevelDomainIn_ReportsEmailTopLevelDomain()
         {
             // Arrange
-            var validator = new ContactEmailTopLevelDomainInValidator("example");
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.ContactEmail).EmailTopLevelDomainIn("example");
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.ContactEmail = "info@aurora-motors.com";
 
@@ -355,7 +407,9 @@ namespace NValidation.Tests
         public async Task EmailTopLevelDomainNotIn_ReportsEmailTopLevelDomainNotAllowed()
         {
             // Arrange
-            var validator = new ContactEmailTopLevelDomainNotInValidator("test");
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.ContactEmail).EmailTopLevelDomainNotIn("test");
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.ContactEmail = "info@aurora-motors.test";
 
@@ -374,7 +428,9 @@ namespace NValidation.Tests
         public async Task NotContaining_RefusesTheTermsItNames(string? name, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new NameNotContainingValidator("admin", "support");
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).NotContaining("admin", "support");
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.Name = name;
 
@@ -391,7 +447,9 @@ namespace NValidation.Tests
         public async Task NotContaining_WithAComparison_ComparesTheWayItWasTold(string name, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new NameNotContainingOrdinalValidator("admin");
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).NotContaining(StringComparison.Ordinal, "admin");
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.Name = name;
 
@@ -410,13 +468,17 @@ namespace NValidation.Tests
         public async Task NotContaining_ReportsNotContaining_WithoutNamingTheTerm()
         {
             // Arrange
-            var validator = new NameNotContainingValidator("admin");
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).NotContaining("admin");
+
             var manufacturer = Cars.Manufacturer();
             manufacturer.Name = "Aurora admin Motors";
 
             // Act
+            // The built-in wording first: ValidateForKeysAsync swaps the provider for the rest of this
+            // validator's life, and the message provider is read per run rather than per rule.
+            var english = await validator.ValidateAsync(manufacturer);
             var keyed = await validator.ValidateForKeysAsync(manufacturer);
-            var english = await new NameNotContainingValidator("admin").ValidateAsync(manufacturer);
 
             // Assert
             keyed.ShouldReport(nameof(Manufacturer.Name), ValidationMessageKeys.NotContaining);
@@ -426,12 +488,15 @@ namespace NValidation.Tests
         [Fact]
         public void NotContaining_WithNothingToLookFor_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+
             // Act
             var acts = new Action[]
             {
-                () => new NameNotContainingValidator(),
-                () => new NameNotContainingValidator("  "),
-                () => new ContactEmailTopLevelDomainInValidator(),
+                () => validator.Property(m => m.Name).NotContaining(),
+                () => validator.Property(m => m.Name).NotContaining("  "),
+                () => validator.Property(m => m.ContactEmail).EmailTopLevelDomainIn(),
             };
 
             // Assert
@@ -441,8 +506,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task EmailAddress_ReportsEmailAddress()
         {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.ContactEmail).EmailAddress();
+
             // Act
-            var result = await new ContactEmailValidator().ValidateForKeysAsync(new Manufacturer { ContactEmail = "not an email" });
+            var result = await validator.ValidateForKeysAsync(new Manufacturer { ContactEmail = "not an email" });
 
             // Assert
             result.ShouldReport(nameof(Manufacturer.ContactEmail), ValidationMessageKeys.EmailAddress);
@@ -451,12 +520,15 @@ namespace NValidation.Tests
         [Fact]
         public async Task Matches_ReportsMatches()
         {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Website).Matches(@"^https://");
+
             // Act
-            var result = await new WebsitePatternValidator(@"^https://").ValidateForKeysAsync(new Manufacturer { Website = "ftp://x" });
+            var result = await validator.ValidateForKeysAsync(new Manufacturer { Website = "ftp://x" });
 
             // Assert
             result.ShouldReport(nameof(Manufacturer.Website), ValidationMessageKeys.Matches);
         }
-
     }
 }

@@ -6,7 +6,9 @@ namespace NValidation.Tests
         public async Task NoDuplicates_AcceptsDistinctEntries()
         {
             // Arrange
-            var validator = new FeatureIdsNoDuplicatesValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).NoDuplicates();
+
             var car = Cars.Car();
             car.FeatureIds = [1, 2, 3];
 
@@ -21,7 +23,9 @@ namespace NValidation.Tests
         public async Task NoDuplicates_RejectsRepeatedEntries()
         {
             // Arrange
-            var validator = new FeatureIdsNoDuplicatesValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).NoDuplicates();
+
             var car = Cars.Car();
             car.FeatureIds = [1, 2, 1];
 
@@ -36,7 +40,9 @@ namespace NValidation.Tests
         public async Task NoDuplicates_AcceptsAMissingCollection()
         {
             // Arrange
-            var validator = new FeatureIdsNoDuplicatesValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).NoDuplicates();
+
             var car = Cars.Car();
             car.FeatureIds = null;
 
@@ -51,7 +57,9 @@ namespace NValidation.Tests
         public async Task NoDuplicates_AcceptsAnEmptyCollection()
         {
             // Arrange
-            var validator = new FeatureIdsNoDuplicatesValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).NoDuplicates();
+
             var car = Cars.Car();
             car.FeatureIds = [];
 
@@ -71,7 +79,10 @@ namespace NValidation.Tests
         {
             // Arrange
             var ownerId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-            var validator = new PreviousOwnerIdsNoDuplicatesValidator();
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.PreviousOwnerIds).NoDuplicates();
+
             var car = Cars.Car();
             car.PreviousOwnerIds = [ownerId, ownerId];
 
@@ -89,7 +100,9 @@ namespace NValidation.Tests
         public async Task MinimumCount_RequiresEnoughEntries(int minimumCount, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new FeatureIdsMinimumCountValidator(minimumCount);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).MinimumCount(minimumCount);
+
             var car = Cars.Car();
             car.FeatureIds = [1, 2, 3];
 
@@ -104,7 +117,9 @@ namespace NValidation.Tests
         public async Task MinimumCount_AcceptsAMissingCollection()
         {
             // Arrange
-            var validator = new FeatureIdsMinimumCountValidator(1);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).MinimumCount(1);
+
             var car = Cars.Car();
             car.FeatureIds = null;
 
@@ -122,7 +137,9 @@ namespace NValidation.Tests
         public async Task MaximumCount_CapsTheNumberOfEntries(int maximumCount, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new FeatureIdsMaximumCountValidator(maximumCount);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).MaximumCount(maximumCount);
+
             var car = Cars.Car();
             car.FeatureIds = [1, 2, 3];
 
@@ -137,7 +154,9 @@ namespace NValidation.Tests
         public async Task MaximumCount_AcceptsAMissingCollection()
         {
             // Arrange
-            var validator = new FeatureIdsMaximumCountValidator(1);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).MaximumCount(1);
+
             var car = Cars.Car();
             car.FeatureIds = null;
 
@@ -156,8 +175,10 @@ namespace NValidation.Tests
         public async Task MaximumCount_OnALazySequence_SeesEveryEntry()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceMileages).MaximumCount(2);
+
             var sequence = new CountingSequence([1, 2, 3]);
-            var validator = new ServiceMileagesMaximumCountValidator(2);
 
             // Act
             var result = await validator.ValidateAsync(new Car { ServiceMileages = sequence });
@@ -169,8 +190,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task MinimumCount_ReportsMinimumCount()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).MinimumCount(3);
+
             // Act
-            var result = await new FeatureIdsMinimumCountValidator(3).ValidateForKeysAsync(new Car { FeatureIds = [1] });
+            var result = await validator.ValidateForKeysAsync(new Car { FeatureIds = [1] });
 
             // Assert
             result.ShouldReport(nameof(Car.FeatureIds), ValidationMessageKeys.MinimumCount);
@@ -179,8 +204,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task MaximumCount_ReportsMaximumCount()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).MaximumCount(1);
+
             // Act
-            var result = await new FeatureIdsMaximumCountValidator(1).ValidateForKeysAsync(new Car { FeatureIds = [1, 2, 3] });
+            var result = await validator.ValidateForKeysAsync(new Car { FeatureIds = [1, 2, 3] });
 
             // Assert
             result.ShouldReport(nameof(Car.FeatureIds), ValidationMessageKeys.MaximumCount);
@@ -189,8 +218,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task NoDuplicates_ReportsNoDuplicates()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).NoDuplicates();
+
             // Act
-            var result = await new FeatureIdsNoDuplicatesValidator().ValidateForKeysAsync(new Car { FeatureIds = [1, 1] });
+            var result = await validator.ValidateForKeysAsync(new Car { FeatureIds = [1, 1] });
 
             // Assert
             result.ShouldReport(nameof(Car.FeatureIds), ValidationMessageKeys.NoDuplicates);

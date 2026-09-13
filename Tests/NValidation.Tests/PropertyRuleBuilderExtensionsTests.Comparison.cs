@@ -9,7 +9,9 @@ namespace NValidation.Tests
         public async Task GreaterThan_ExcludesTheBound(int mileage, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new MileageGreaterThanValidator(0);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).GreaterThan(0);
+
             var car = Cars.Car();
             car.Mileage = mileage;
 
@@ -27,7 +29,9 @@ namespace NValidation.Tests
         public async Task GreaterThanOrEqualTo_IncludesTheBound(int mileage, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new MileageGreaterThanOrEqualToValidator(0);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).GreaterThanOrEqualTo(0);
+
             var car = Cars.Car();
             car.Mileage = mileage;
 
@@ -45,7 +49,9 @@ namespace NValidation.Tests
         public async Task LessThan_ExcludesTheBound(int mileage, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new MileageLessThanValidator(100);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).LessThan(100);
+
             var car = Cars.Car();
             car.Mileage = mileage;
 
@@ -63,7 +69,9 @@ namespace NValidation.Tests
         public async Task LessThanOrEqualTo_IncludesTheBound(int mileage, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new MileageLessThanOrEqualToValidator(100);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).LessThanOrEqualTo(100);
+
             var car = Cars.Car();
             car.Mileage = mileage;
 
@@ -80,7 +88,9 @@ namespace NValidation.Tests
         public async Task GreaterThan_WorksWithANegativeBound(int mileage, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new MileageGreaterThanValidator(-5);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).GreaterThan(-5);
+
             var car = Cars.Car();
             car.Mileage = mileage;
 
@@ -97,7 +107,9 @@ namespace NValidation.Tests
         public async Task GreaterThan_WithADecimal_ExcludesTheBound(double purchasePrice, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new PurchasePriceGreaterThanValidator(0m);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.PurchasePrice).GreaterThan(0m);
+
             var car = Cars.Car();
             car.PurchasePrice = (decimal)purchasePrice;
 
@@ -118,7 +130,9 @@ namespace NValidation.Tests
         public async Task GreaterThan_WorksWithALong(long unitsProduced, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new UnitsProducedGreaterThanValidator(1_000L);
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.UnitsProduced).GreaterThan(1_000L);
+
             var carModel = Cars.CarModel();
             carModel.UnitsProduced = unitsProduced;
 
@@ -136,7 +150,9 @@ namespace NValidation.Tests
         public async Task LessThanOrEqualTo_WorksWithATimeSpan(int hours, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new ServiceIntervalLessThanOrEqualToValidator(TimeSpan.FromHours(24));
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceInterval).LessThanOrEqualTo(TimeSpan.FromHours(24));
+
             var car = Cars.Car();
             car.ServiceInterval = TimeSpan.FromHours(hours);
 
@@ -155,8 +171,9 @@ namespace NValidation.Tests
         public async Task GreaterThanOrEqualTo_WorksWithADateTimeOffset(int year, bool expectedToSucceed)
         {
             // Arrange
-            var bound = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
-            var validator = new RegisteredAtGreaterThanOrEqualToValidator(bound);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.RegisteredAt).GreaterThanOrEqualTo(new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero));
+
             var car = Cars.Car();
             car.RegisteredAt = new DateTimeOffset(year, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
@@ -174,7 +191,9 @@ namespace NValidation.Tests
         public async Task GreaterThan_WithANullableProperty_JudgesOnlyAValueThatIsThere(double? tradeInValue, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new TradeInValueGreaterThanValidator(0m);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.TradeInValue).GreaterThan(0m);
+
             var car = Cars.Car();
             car.TradeInValue = tradeInValue == null ? null : (decimal)tradeInValue.Value;
 
@@ -192,7 +211,9 @@ namespace NValidation.Tests
         public async Task LessThan_WithANullableProperty_JudgesOnlyAValueThatIsThere(float? topSpeed, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new TopSpeedLessThanValidator(200f);
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.TopSpeed).LessThan(200f);
+
             var carModel = Cars.CarModel();
             carModel.TopSpeed = topSpeed;
 
@@ -212,7 +233,9 @@ namespace NValidation.Tests
         public async Task GreaterThanOrEqualTo_ComparesAgainstAnotherProperty(int daysAfterRegistration, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new SoldDateAfterFirstRegistrationValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+
             var car = Cars.Car();
             car.SoldDate = car.FirstRegistration.AddDays(daysAfterRegistration);
 
@@ -227,7 +250,9 @@ namespace NValidation.Tests
         public async Task GreaterThanOrEqualTo_AgainstAnotherProperty_SkipsAMissingValue()
         {
             // Arrange
-            var validator = new SoldDateAfterFirstRegistrationValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+
             var car = Cars.Car();
             car.SoldDate = null;
 
@@ -246,7 +271,9 @@ namespace NValidation.Tests
         public async Task LessThanOrEqualTo_AgainstAMissingOtherProperty_Passes()
         {
             // Arrange
-            var validator = new FirstRegistrationBeforeSoldDateValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FirstRegistration).LessThanOrEqualTo(c => c.SoldDate);
+
             var car = Cars.Car();
             car.SoldDate = null;
 
@@ -261,7 +288,9 @@ namespace NValidation.Tests
         public async Task LessThanOrEqualTo_AgainstAnOtherProperty_ReportsTheBrokenComparison()
         {
             // Arrange
-            var validator = new FirstRegistrationBeforeSoldDateValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FirstRegistration).LessThanOrEqualTo(c => c.SoldDate);
+
             var car = Cars.Car();
             car.SoldDate = car.FirstRegistration.AddDays(-1);
 
@@ -276,7 +305,9 @@ namespace NValidation.Tests
         public async Task GreaterThan_WithBothSidesNullable_PassesWhenEitherIsMissing()
         {
             // Arrange
-            var validator = new WarrantyEndsOnAfterSoldDateValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.WarrantyEndsOn).GreaterThan(c => c.SoldDate);
+
             var car = Cars.Car();
             car.WarrantyEndsOn = null;
 
@@ -291,7 +322,9 @@ namespace NValidation.Tests
         public async Task GreaterThan_WithBothSidesNullable_ComparesWhenBothAreThere()
         {
             // Arrange
-            var validator = new WarrantyEndsOnAfterSoldDateValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.WarrantyEndsOn).GreaterThan(c => c.SoldDate);
+
             var car = Cars.Car();
             car.WarrantyEndsOn = car.SoldDate!.Value.AddDays(-1);
 
@@ -309,7 +342,9 @@ namespace NValidation.Tests
         public async Task LessThanOrEqualTo_WithNeitherSideNullable_ComparesTheTwoProperties(int mileage, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new MileageWithinWarrantyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).LessThanOrEqualTo(c => c.WarrantyMileageLimit);
+
             var car = Cars.Car();
             car.Mileage = mileage;
 
@@ -328,7 +363,9 @@ namespace NValidation.Tests
         public async Task GreaterThanOrEqualTo_NamesTheOtherProperty_ByItsCode()
         {
             // Arrange
-            var validator = new SoldDateAfterFirstRegistrationValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+
             var car = Cars.Car();
             car.SoldDate = car.FirstRegistration.AddDays(-1);
 
@@ -344,7 +381,10 @@ namespace NValidation.Tests
         public async Task GreaterThanOrEqualTo_NamesTheOtherProperty_ByItsDisplayName()
         {
             // Arrange
-            var validator = new SoldDateAfterNamedFirstRegistrationValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+            validator.Property(c => c.FirstRegistration).WithDisplayName("the registration date");
+
             var car = Cars.Car();
             car.SoldDate = car.FirstRegistration.AddDays(-1);
 
@@ -367,7 +407,9 @@ namespace NValidation.Tests
         public async Task Between_IncludesBothBoundsByDefault(int seatCount, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new SeatCountBetweenValidator(1, 9);
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.SeatCount).Between(1, 9);
+
             var carModel = Cars.CarModel();
             carModel.SeatCount = seatCount;
 
@@ -385,7 +427,9 @@ namespace NValidation.Tests
         public async Task Between_ExcludesBothBounds_WhenAskedTo(int seatCount, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new SeatCountBetweenExclusiveValidator(1, 9, inclusive: false);
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.SeatCount).Between(1, 9, inclusive: false);
+
             var carModel = Cars.CarModel();
             carModel.SeatCount = seatCount;
 
@@ -407,7 +451,9 @@ namespace NValidation.Tests
         public async Task Between_AppliesEachBoundOnItsOwn(int seatCount, bool inclusiveFrom, bool inclusiveTo, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new SeatCountBetweenBoundsValidator(1, 9, inclusiveFrom, inclusiveTo);
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.SeatCount).Between(1, 9, inclusiveFrom, inclusiveTo);
+
             var carModel = Cars.CarModel();
             carModel.SeatCount = seatCount;
 
@@ -425,7 +471,9 @@ namespace NValidation.Tests
         public async Task Between_WithANullableProperty_JudgesOnlyAValueThatIsThere(double? tradeInValue, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new TradeInValueBetweenValidator(1m, 999m);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.TradeInValue).Between(1m, 999m);
+
             var car = Cars.Car();
             car.TradeInValue = tradeInValue == null ? null : (decimal)tradeInValue.Value;
 
@@ -439,8 +487,11 @@ namespace NValidation.Tests
         [Fact]
         public void Between_WithALowerBoundAboveTheUpperOne_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<CarModel>();
+
             // Act
-            var act = () => new SeatCountBetweenValidator(9, 1);
+            var act = () => validator.Property(m => m.SeatCount).Between(9, 1);
 
             // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();
@@ -454,7 +505,9 @@ namespace NValidation.Tests
         public async Task EqualTo_RequiresTheValue(int mileage, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new MileageEqualToValidator(42);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).EqualTo(42);
+
             var car = Cars.Car();
             car.Mileage = mileage;
 
@@ -471,7 +524,9 @@ namespace NValidation.Tests
         public async Task NotEqualTo_RejectsTheValue(int mileage, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new MileageNotEqualToValidator(42);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).NotEqualTo(42);
+
             var car = Cars.Car();
             car.Mileage = mileage;
 
@@ -489,7 +544,9 @@ namespace NValidation.Tests
         public async Task EqualTo_WithANullableProperty_JudgesOnlyAValueThatIsThere(double? tradeInValue, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new TradeInValueEqualToValidator(42m);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.TradeInValue).EqualTo(42m);
+
             var car = Cars.Car();
             car.TradeInValue = tradeInValue == null ? null : (decimal)tradeInValue.Value;
 
@@ -507,7 +564,9 @@ namespace NValidation.Tests
         public async Task EqualTo_WithText_HonoursTheComparison(string vin, StringComparison comparison, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new VinEqualToValidator("abc", comparison);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).EqualTo("abc", comparison);
+
             var car = Cars.Car();
             car.Vin = vin;
 
@@ -524,7 +583,9 @@ namespace NValidation.Tests
         public async Task EqualTo_ComparesAgainstAnotherProperty(int mileage, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new MileageEqualToWarrantyLimitValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).EqualTo(c => c.WarrantyMileageLimit);
+
             var car = Cars.Car();
             car.Mileage = mileage;
 
@@ -538,8 +599,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task GreaterThan_ReportsGreaterThan()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).GreaterThan(10);
+
             // Act
-            var result = await new MileageGreaterThanValidator(10).ValidateForKeysAsync(new Car { Mileage = 5 });
+            var result = await validator.ValidateForKeysAsync(new Car { Mileage = 5 });
 
             // Assert
             result.ShouldReport(nameof(Car.Mileage), ValidationMessageKeys.GreaterThan);
@@ -548,8 +613,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task GreaterThanOrEqualTo_ReportsGreaterThanOrEqualTo()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).GreaterThanOrEqualTo(10);
+
             // Act
-            var result = await new MileageGreaterThanOrEqualToValidator(10).ValidateForKeysAsync(new Car { Mileage = 5 });
+            var result = await validator.ValidateForKeysAsync(new Car { Mileage = 5 });
 
             // Assert
             result.ShouldReport(nameof(Car.Mileage), ValidationMessageKeys.GreaterThanOrEqualTo);
@@ -558,8 +627,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task LessThan_ReportsLessThan()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).LessThan(10);
+
             // Act
-            var result = await new MileageLessThanValidator(10).ValidateForKeysAsync(new Car { Mileage = 20 });
+            var result = await validator.ValidateForKeysAsync(new Car { Mileage = 20 });
 
             // Assert
             result.ShouldReport(nameof(Car.Mileage), ValidationMessageKeys.LessThan);
@@ -568,8 +641,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task LessThanOrEqualTo_ReportsLessThanOrEqualTo()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).LessThanOrEqualTo(10);
+
             // Act
-            var result = await new MileageLessThanOrEqualToValidator(10).ValidateForKeysAsync(new Car { Mileage = 20 });
+            var result = await validator.ValidateForKeysAsync(new Car { Mileage = 20 });
 
             // Assert
             result.ShouldReport(nameof(Car.Mileage), ValidationMessageKeys.LessThanOrEqualTo);
@@ -578,8 +655,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task Between_ReportsBetween()
         {
+            // Arrange
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.SeatCount).Between(2, 5);
+
             // Act
-            var result = await new SeatCountBetweenValidator(2, 5).ValidateForKeysAsync(new CarModel { SeatCount = 9 });
+            var result = await validator.ValidateForKeysAsync(new CarModel { SeatCount = 9 });
 
             // Assert
             result.ShouldReport(nameof(CarModel.SeatCount), ValidationMessageKeys.Between);
@@ -588,8 +669,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task EqualTo_ReportsEqualTo()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).EqualTo(10);
+
             // Act
-            var result = await new MileageEqualToValidator(10).ValidateForKeysAsync(new Car { Mileage = 20 });
+            var result = await validator.ValidateForKeysAsync(new Car { Mileage = 20 });
 
             // Assert
             result.ShouldReport(nameof(Car.Mileage), ValidationMessageKeys.EqualTo);
@@ -598,8 +683,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task NotEqualTo_ReportsNotEqualTo()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).NotEqualTo(10);
+
             // Act
-            var result = await new MileageNotEqualToValidator(10).ValidateForKeysAsync(new Car { Mileage = 10 });
+            var result = await validator.ValidateForKeysAsync(new Car { Mileage = 10 });
 
             // Assert
             result.ShouldReport(nameof(Car.Mileage), ValidationMessageKeys.NotEqualTo);
@@ -609,6 +698,9 @@ namespace NValidation.Tests
         public async Task GreaterThanOrEqualTo_AgainstAnotherProperty_ReportsGreaterThanOrEqualToOtherProperty()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+
             var car = new Car
             {
                 FirstRegistration = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
@@ -616,7 +708,7 @@ namespace NValidation.Tests
             };
 
             // Act
-            var result = await new SoldDateAfterFirstRegistrationValidator().ValidateForKeysAsync(car);
+            var result = await validator.ValidateForKeysAsync(car);
 
             // Assert
             result.ShouldReport(nameof(Car.SoldDate), ValidationMessageKeys.GreaterThanOrEqualToOtherProperty);
@@ -626,6 +718,9 @@ namespace NValidation.Tests
         public async Task LessThanOrEqualTo_AgainstAnotherProperty_ReportsLessThanOrEqualToOtherProperty()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FirstRegistration).LessThanOrEqualTo(c => c.SoldDate);
+
             var car = new Car
             {
                 FirstRegistration = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
@@ -633,7 +728,7 @@ namespace NValidation.Tests
             };
 
             // Act
-            var result = await new FirstRegistrationBeforeSoldDateValidator().ValidateForKeysAsync(car);
+            var result = await validator.ValidateForKeysAsync(car);
 
             // Assert
             result.ShouldReport(nameof(Car.FirstRegistration), ValidationMessageKeys.LessThanOrEqualToOtherProperty);

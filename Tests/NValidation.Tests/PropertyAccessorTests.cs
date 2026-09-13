@@ -16,8 +16,12 @@ namespace NValidation.Tests
         public async Task For_DistinguishesTheSamePath_ReachedWithADifferentPropertyType()
         {
             // Arrange
-            var typed = new MileageGreaterThanValidator(0);
-            var boxed = new MileageAsObjectValidator();
+            var typed = new TestValidator<Car>();
+            typed.Property(c => c.Mileage).GreaterThan(0);
+
+            var boxed = new TestValidator<Car>();
+            boxed.Property(c => (object)c.Mileage).NotNull();
+
             await typed.ValidateAsync(Cars.Car());
 
             // Act

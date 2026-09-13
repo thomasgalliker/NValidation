@@ -17,8 +17,11 @@ namespace NValidation.Tests
         [Fact]
         public void Property_WithAPathThroughAnIndexer_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new IndexedPathValidator();
+            var act = () => validator.Property(c => c.ServiceInvoiceNumbers![0].Length);
 
             // Assert
             act.Should().Throw<ArgumentException>().WithMessage("*must select a property*");
@@ -27,8 +30,11 @@ namespace NValidation.Tests
         [Fact]
         public void Property_WithAPathThroughAMethodCall_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new MethodCallPathValidator();
+            var act = () => validator.Property(c => c.Vin!.Trim().Length);
 
             // Assert
             act.Should().Throw<ArgumentException>().WithMessage("*must select a property*");
@@ -41,8 +47,13 @@ namespace NValidation.Tests
         [Fact]
         public void Property_WithAPathRootedInACapturedObject_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
+            var other = Cars.Manufacturer();
+
             // Act
-            var act = () => new CapturedPathValidator(Cars.Manufacturer());
+            var act = () => validator.Property(_ => other.Name);
 
             // Assert
             act.Should().Throw<ArgumentException>().WithMessage("*through its own parameter*");
@@ -51,8 +62,11 @@ namespace NValidation.Tests
         [Fact]
         public void Property_WithAPathRootedInAStaticMember_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new StaticPathValidator();
+            var act = () => validator.Property(_ => DateTime.Now.Year);
 
             // Assert
             act.Should().Throw<ArgumentException>().WithMessage("*through its own parameter*");
@@ -66,7 +80,9 @@ namespace NValidation.Tests
         public async Task Property_WithANestedPathThroughTheParameter_IsAccepted()
         {
             // Arrange
-            var validator = new ManufacturerNameNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model!.Manufacturer!.Name).NotEmpty();
+
             var car = Cars.Car();
             car.Model!.Manufacturer!.Name = null;
 

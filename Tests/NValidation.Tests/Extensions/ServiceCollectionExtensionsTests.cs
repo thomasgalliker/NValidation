@@ -696,6 +696,23 @@ namespace NValidation.Tests.Extensions
             }
         }
 
+        /// <summary>
+        /// Element rules with nothing declared about their behaviour, so a test can prove what an element
+        /// builder falls back to when the registration configured something the parent did receive.
+        /// </summary>
+        /// <remarks>
+        /// A named class rather than an inline one because the container constructs it by type: there is
+        /// no instance for the registration to be handed.
+        /// </remarks>
+        private sealed class ServiceHistoryPlainElementChainValidator : Validator<Car>
+        {
+            public ServiceHistoryPlainElementChainValidator()
+            {
+                this.Property(c => c.ServiceHistory)
+                    .ForEach(record => record.Property(r => r.Workshop).NotEmpty().MaximumLength(3));
+            }
+        }
+
         private static TService Resolve<TService>(IServiceCollection services)
             where TService : notnull
         {

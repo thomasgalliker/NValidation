@@ -10,7 +10,9 @@ namespace NValidation.Tests
         public async Task NotEmpty_RequiresANonBlankText(string? vin, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new VinNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty();
+
             var car = Cars.Car();
             car.Vin = vin;
 
@@ -25,7 +27,9 @@ namespace NValidation.Tests
         public async Task NotEmpty_ReportsUnderTheNotEmptyKey()
         {
             // Arrange
-            var validator = new VinNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty();
+
             var car = Cars.Car();
             car.Vin = null;
 
@@ -43,7 +47,9 @@ namespace NValidation.Tests
         public async Task NotDefault_TreatsADefaultDate_AsMissing()
         {
             // Arrange
-            var validator = new FirstRegistrationNotDefaultValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FirstRegistration).NotDefault();
+
             var car = Cars.Car();
             car.FirstRegistration = default;
 
@@ -58,7 +64,8 @@ namespace NValidation.Tests
         public async Task NotDefault_AcceptsADateThatWasSet()
         {
             // Arrange
-            var validator = new FirstRegistrationNotDefaultValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FirstRegistration).NotDefault();
 
             // Act
             var result = await validator.ValidateAsync(Cars.Car());
@@ -77,7 +84,9 @@ namespace NValidation.Tests
         public async Task NotDefault_RequiresAChoice_ToHaveBeenMade(CarCondition condition, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new ConditionNotDefaultValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Condition).NotDefault();
+
             var car = Cars.Car();
             car.Condition = condition;
 
@@ -95,7 +104,9 @@ namespace NValidation.Tests
         public async Task NotDefault_WithANullableProperty_TreatsAMissingValue_AsMissing()
         {
             // Arrange
-            var validator = new SoldDateNotDefaultValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.SoldDate).NotDefault();
+
             var car = Cars.Car();
             car.SoldDate = null;
 
@@ -110,7 +121,9 @@ namespace NValidation.Tests
         public async Task NotDefault_WithANullableProperty_TreatsADefaultValue_AsMissing()
         {
             // Arrange
-            var validator = new SoldDateNotDefaultValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.SoldDate).NotDefault();
+
             var car = Cars.Car();
             car.SoldDate = default(DateTime);
 
@@ -125,7 +138,9 @@ namespace NValidation.Tests
         public async Task NotNull_RequiresTheObject()
         {
             // Arrange
-            var validator = new ModelNotNullValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model).NotNull();
+
             var car = Cars.Car();
             car.Model = null;
 
@@ -140,7 +155,8 @@ namespace NValidation.Tests
         public async Task NotNull_AcceptsAnObjectThatIsThere()
         {
             // Arrange
-            var validator = new ModelNotNullValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model).NotNull();
 
             // Act
             var result = await validator.ValidateAsync(Cars.Car());
@@ -156,7 +172,9 @@ namespace NValidation.Tests
         public async Task NotNull_WithAValueType_RequiresAValue(double? tradeInValue, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new TradeInValueNotNullValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.TradeInValue).NotNull();
+
             var car = Cars.Car();
             car.TradeInValue = tradeInValue == null ? null : (decimal)tradeInValue.Value;
 
@@ -171,7 +189,9 @@ namespace NValidation.Tests
         public async Task NotEmpty_WithACollection_RejectsAnEmptyOne()
         {
             // Arrange
-            var validator = new FeatureIdsNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).NotEmpty();
+
             var car = Cars.Car();
             car.FeatureIds = [];
 
@@ -186,7 +206,9 @@ namespace NValidation.Tests
         public async Task NotEmpty_WithACollection_RejectsAMissingOne()
         {
             // Arrange
-            var validator = new FeatureIdsNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).NotEmpty();
+
             var car = Cars.Car();
             car.FeatureIds = null;
 
@@ -201,7 +223,8 @@ namespace NValidation.Tests
         public async Task NotEmpty_WithACollection_AcceptsOneThatHasEntries()
         {
             // Arrange
-            var validator = new FeatureIdsNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).NotEmpty();
 
             // Act
             var result = await validator.ValidateAsync(Cars.Car());
@@ -218,7 +241,9 @@ namespace NValidation.Tests
         public async Task NotEmpty_WithAConcreteListProperty_Binds()
         {
             // Arrange
-            var validator = new PreviousOwnerIdsNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.PreviousOwnerIds).NotEmpty();
+
             var car = Cars.Car();
             car.PreviousOwnerIds = [];
 
@@ -237,8 +262,10 @@ namespace NValidation.Tests
         public async Task NotEmpty_OnALazySequence_StopsAtTheFirstEntry()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceMileages).NotEmpty();
+
             var sequence = new CountingSequence([1, 2, 3, 4, 5]);
-            var validator = new ServiceMileagesNotEmptyValidator();
 
             // Act
             var result = await validator.ValidateAsync(new Car { ServiceMileages = sequence });
@@ -251,8 +278,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task NotEmpty_OnText_ReportsNotEmpty()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty();
+
             // Act
-            var result = await new VinNotEmptyValidator().ValidateForKeysAsync(new Car());
+            var result = await validator.ValidateForKeysAsync(new Car());
 
             // Assert
             result.ShouldReport(nameof(Car.Vin), ValidationMessageKeys.NotEmpty);
@@ -261,8 +292,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task NotEmpty_OnACollection_ReportsNotEmpty()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds).NotEmpty();
+
             // Act
-            var result = await new FeatureIdsNotEmptyValidator().ValidateForKeysAsync(new Car { FeatureIds = [] });
+            var result = await validator.ValidateForKeysAsync(new Car { FeatureIds = [] });
 
             // Assert
             result.ShouldReport(nameof(Car.FeatureIds), ValidationMessageKeys.NotEmpty);
@@ -271,8 +306,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task NotDefault_ReportsNotDefault_NotNotEmpty()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FirstRegistration).NotDefault();
+
             // Act
-            var result = await new FirstRegistrationNotDefaultValidator().ValidateForKeysAsync(new Car());
+            var result = await validator.ValidateForKeysAsync(new Car());
 
             // Assert
             result.ShouldReport(nameof(Car.FirstRegistration), ValidationMessageKeys.NotDefault);
@@ -281,12 +320,15 @@ namespace NValidation.Tests
         [Fact]
         public async Task NotNull_ReportsNotNull()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model).NotNull();
+
             // Act
-            var result = await new ModelNotNullValidator().ValidateForKeysAsync(new Car());
+            var result = await validator.ValidateForKeysAsync(new Car());
 
             // Assert
             result.ShouldReport(nameof(Car.Model), ValidationMessageKeys.NotNull);
         }
-
     }
 }

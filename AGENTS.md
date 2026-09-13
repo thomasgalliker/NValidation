@@ -80,6 +80,14 @@
 - Test both success and failure scenarios.
 - Include edge cases: null inputs, empty collections, boundary values, and error conditions.
 - Prioritize testing complex logic, error handling, and edge cases over trivial code.
+- The rules a test is about are declared in the test itself, on `TestValidator<T>`
+  (`Tests/NValidation.Tests/TestData/TestValidator.cs`), which re-exposes the base class's `protected`
+  `Property`: `var validator = new TestValidator<Car>(); validator.Property(c => c.Vin).NotEmpty();`.
+  Rules first, a blank line, then the payload. Do not add a validator class per test case — the reader
+  should not have to open a second file to learn what is being validated. A named validator, declared
+  `private sealed` inside the test class that needs it, is for the case where something other than the
+  rule chain depends on the *type*: the container constructs it by type, or a constant or payload factory
+  it declares serves several tests.
 - Every test carries `[Trait(Traits.Category, Traits.UnitTests)]`, declared once on the test class (a
   partial class carries it on whichever part declares it). The trait is what lets a run be filtered by
   category; CI currently runs everything, so a missing trait costs nothing today and everything on the

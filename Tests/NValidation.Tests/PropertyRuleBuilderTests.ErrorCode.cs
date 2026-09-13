@@ -6,7 +6,8 @@ namespace NValidation.Tests
         public async Task ErrorCode_ReportsTheFailureUnderTheOverride()
         {
             // Arrange
-            var validator = new VinErrorCodeValidator("vehicleId");
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).WithErrorCode("vehicleId").NotEmpty();
 
             // Act
             var result = await validator.ValidateAsync(new Car());
@@ -22,7 +23,8 @@ namespace NValidation.Tests
         public async Task ErrorCode_ReplacesTheWholeMemberPath_NotOnlyItsLastSegment()
         {
             // Arrange
-            var validator = new NestedNameErrorCodeValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model!.Name).WithErrorCode("manufacturerName").NotEmpty();
 
             // Act
             var result = await validator.ValidateAsync(new Car { Model = new CarModel() });
@@ -39,7 +41,8 @@ namespace NValidation.Tests
         public async Task ErrorCode_WhenNotDeclared_ReportsUnderTheMemberPath()
         {
             // Arrange
-            var validator = new ModelNameNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model!.Name).NotEmpty();
 
             // Act
             var result = await validator.ValidateAsync(new Car { Model = new CarModel() });
@@ -56,7 +59,11 @@ namespace NValidation.Tests
         public async Task ErrorCode_DoesNotChangeWhatTheMessageCallsTheProperty()
         {
             // Arrange
-            var validator = new VinErrorCodeAndDisplayNameValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin)
+                .WithErrorCode("vehicleId")
+                .WithDisplayName("Vehicle identification number")
+                .NotEmpty();
 
             // Act
             var result = await validator.ValidateAsync(new Car());
@@ -75,7 +82,10 @@ namespace NValidation.Tests
         public async Task ErrorCode_LeavesACodeARuleReportsUnderItself()
         {
             // Arrange
-            var validator = new FeatureIdsErrorCodeWithCustomCodeValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds)
+                .WithErrorCode("features")
+                .Add(context => context.AddError(new ValidationError("features[0]", "the first entry is wrong")));
 
             // Act
             var result = await validator.ValidateAsync(new Car());
@@ -87,8 +97,11 @@ namespace NValidation.Tests
         [Fact]
         public void ErrorCode_WithoutACode_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new VinErrorCodeValidator(null!);
+            var act = () => validator.Property(c => c.Vin).WithErrorCode(null!);
 
             // Assert
             act.Should().Throw<ArgumentNullException>();

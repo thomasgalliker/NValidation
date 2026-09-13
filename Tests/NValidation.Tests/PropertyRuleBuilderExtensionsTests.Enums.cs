@@ -9,7 +9,9 @@ namespace NValidation.Tests
         public async Task IsInEnum_RejectsValuesOutsideTheEnum(CarCondition condition, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new ConditionIsInEnumValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Condition).IsInEnum();
+
             var car = Cars.Car();
             car.Condition = condition;
 
@@ -24,7 +26,9 @@ namespace NValidation.Tests
         public async Task IsInEnum_RejectsANegativeValue()
         {
             // Arrange
-            var validator = new ConditionIsInEnumValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Condition).IsInEnum();
+
             var car = Cars.Car();
             car.Condition = (CarCondition)(-1);
 
@@ -43,7 +47,9 @@ namespace NValidation.Tests
         public async Task IsInEnum_AcceptsACombinationOfFlags()
         {
             // Arrange
-            var validator = new EquipmentIsInEnumValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Equipment).IsInEnum();
+
             var car = Cars.Car();
             car.Equipment = CarEquipment.AirConditioning | CarEquipment.TowBar | CarEquipment.SunRoof;
 
@@ -58,7 +64,9 @@ namespace NValidation.Tests
         public async Task IsInEnum_AcceptsTheEmptyFlagCombination()
         {
             // Arrange
-            var validator = new EquipmentIsInEnumValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Equipment).IsInEnum();
+
             var car = Cars.Car();
             car.Equipment = CarEquipment.None;
 
@@ -76,7 +84,9 @@ namespace NValidation.Tests
         public async Task IsInEnum_RejectsAFlagNoMemberDeclares()
         {
             // Arrange
-            var validator = new EquipmentIsInEnumValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Equipment).IsInEnum();
+
             var car = Cars.Car();
             car.Equipment = CarEquipment.AirConditioning | (CarEquipment)64;
 
@@ -99,7 +109,8 @@ namespace NValidation.Tests
         public async Task IsInEnum_OnAnEnumWithANegativeMember_JudgesItWithoutThrowing(GearDirection gearDirection, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new GearDirectionIsInEnumValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.GearDirection).IsInEnum();
 
             // Act
             var result = await validator.ValidateAsync(new Car { GearDirection = gearDirection });
@@ -111,8 +122,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task IsInEnum_ReportsIsInEnum()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Condition).IsInEnum();
+
             // Act
-            var result = await new ConditionIsInEnumValidator().ValidateForKeysAsync(new Car { Condition = (CarCondition)99 });
+            var result = await validator.ValidateForKeysAsync(new Car { Condition = (CarCondition)99 });
 
             // Assert
             result.ShouldReport(nameof(Car.Condition), ValidationMessageKeys.IsInEnum);

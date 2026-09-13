@@ -11,7 +11,10 @@ namespace NValidation.Tests
         public async Task Element_NamesTheElement_InTheMessage()
         {
             // Arrange
-            var validator = new ServiceMileagesElementValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceMileages)
+                .ForEach(mileage => mileage.Element().GreaterThanOrEqualTo(0));
+
             var car = Cars.Car();
             car.ServiceMileages = [3, -1];
 
@@ -34,7 +37,9 @@ namespace NValidation.Tests
         public async Task Element_OnACollectionOfReferenceTypes_NamesTheElement_InTheMessage()
         {
             // Arrange
-            var validator = new ServiceInvoiceNumbersElementValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceInvoiceNumbers).ForEach(number => number.Element().MaximumLength(6));
+
             var car = Cars.Car();
             car.ServiceInvoiceNumbers = ["INV-01", "INV-0002"];
 
@@ -54,7 +59,10 @@ namespace NValidation.Tests
         public async Task Element_WithADisplayName_NamesTheElementByIt()
         {
             // Arrange
-            var validator = new ServiceMileagesElementDisplayNameValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceMileages)
+                .ForEach(mileage => mileage.Element().WithDisplayName("Service mileage").GreaterThanOrEqualTo(0));
+
             var car = Cars.Car();
             car.ServiceMileages = [-1];
 
@@ -74,7 +82,10 @@ namespace NValidation.Tests
         public async Task Element_WithAnIndexer_NamesTheElementByTheIdentity()
         {
             // Arrange
-            var validator = new ServiceMileagesIndexedElementValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceMileages)
+                .ForEach(mileage => mileage.WithIndexer((_, position) => $"entry-{position}").Element().GreaterThanOrEqualTo(0));
+
             var car = Cars.Car();
             car.ServiceMileages = [-1];
 

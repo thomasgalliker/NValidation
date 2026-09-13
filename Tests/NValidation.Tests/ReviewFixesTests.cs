@@ -17,7 +17,9 @@ namespace NValidation.Tests
         public async Task Comparison_WithTheComparedPropertyBehindAMissingObject_Passes()
         {
             // Arrange
-            var validator = new MileageWithinModelWarrantyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).LessThanOrEqualTo(c => c.Model!.WarrantyMileageCap);
+
             var car = Cars.Car();
             car.Model = null;
 
@@ -32,7 +34,9 @@ namespace NValidation.Tests
         public async Task Comparison_WithTheComparedPropertyReachable_StillReports()
         {
             // Arrange
-            var validator = new MileageWithinModelWarrantyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).LessThanOrEqualTo(c => c.Model!.WarrantyMileageCap);
+
             var car = Cars.Car();
             car.Model!.WarrantyMileageCap = 10_000;
             car.Mileage = 42_000;
@@ -48,7 +52,9 @@ namespace NValidation.Tests
         public async Task NotEqualTo_WithAnotherProperty_ReportsWhenTheyMatch()
         {
             // Arrange
-            var validator = new MileageNotEqualToWarrantyLimitValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).NotEqualTo(c => c.WarrantyMileageLimit);
+
             var car = Cars.Car();
             car.Mileage = car.WarrantyMileageLimit;
 
@@ -63,7 +69,9 @@ namespace NValidation.Tests
         public async Task NotEqualTo_WithAnotherProperty_PassesWhenTheyDiffer()
         {
             // Arrange
-            var validator = new MileageNotEqualToWarrantyLimitValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).NotEqualTo(c => c.WarrantyMileageLimit);
+
             var car = Cars.Car();
             car.Mileage = car.WarrantyMileageLimit - 1;
 
@@ -82,7 +90,9 @@ namespace NValidation.Tests
             string? plate, string? previousPlate, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new RegistrationPlateNotEqualToPreviousValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.RegistrationPlate).NotEqualTo(c => c.PreviousRegistrationPlate);
+
             var car = Cars.Car();
             car.RegistrationPlate = plate;
             car.PreviousRegistrationPlate = previousPlate;
@@ -98,7 +108,9 @@ namespace NValidation.Tests
         public async Task EqualTo_WithAnotherNullableProperty_ReportsWhenTheyDiffer()
         {
             // Arrange
-            var validator = new SoldDateEqualToWarrantyEndValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.SoldDate).EqualTo(c => c.WarrantyEndsOn);
+
             var car = Cars.Car();
             car.SoldDate = new DateTime(2023, 9, 15, 0, 0, 0, DateTimeKind.Utc);
             car.WarrantyEndsOn = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -117,7 +129,9 @@ namespace NValidation.Tests
         public async Task MultipleOf_WithANullableWholeNumber_JudgesOnlyAValueThatIsThere(int? serviceIntervalKm, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new ServiceIntervalMultipleOfValidator(1_000);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceIntervalKm).MultipleOf(1_000);
+
             var car = Cars.Car();
             car.ServiceIntervalKm = serviceIntervalKm;
 
@@ -135,7 +149,9 @@ namespace NValidation.Tests
         public async Task IsInEnum_WithANullableEnum_JudgesOnlyAValueThatIsThere(CarCondition? intakeCondition, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new IntakeConditionIsInEnumValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.IntakeCondition).IsInEnum();
+
             var car = Cars.Car();
             car.IntakeCondition = intakeCondition;
 
@@ -158,7 +174,9 @@ namespace NValidation.Tests
         public async Task EqualTo_WithText_JudgesOnlyAValueThatIsThere(string? plate, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new PlateEqualToTextValidator("ZH 100 200");
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.RegistrationPlate).EqualTo("ZH 100 200");
+
             var car = Cars.Car();
             car.RegistrationPlate = plate;
 
@@ -176,7 +194,9 @@ namespace NValidation.Tests
         public async Task NotEqualTo_WithText_JudgesOnlyAValueThatIsThere(string? plate, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new PlateNotEqualToTextValidator("ZH 100 200");
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.RegistrationPlate).NotEqualTo("ZH 100 200");
+
             var car = Cars.Car();
             car.RegistrationPlate = plate;
 
@@ -196,12 +216,19 @@ namespace NValidation.Tests
         public async Task CollectionRules_WalkTheSequence_OncePerRule()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceMileages)
+                .WithValidationBehavior(ValidationBehavior.All)
+                .NotEmpty()
+                .MinimumCount(1)
+                .MaximumCount(2);
+
             var sequence = new CountingSequence([1, 2]);
             var car = Cars.Car();
             car.ServiceMileages = sequence;
 
             // Act
-            await new ServiceMileagesCollectionChainValidator().ValidateAsync(car);
+            await validator.ValidateAsync(car);
 
             // Assert
             sequence.Passes.Should().Be(3, "NotEmpty, MinimumCount and MaximumCount each ask once");
@@ -214,12 +241,15 @@ namespace NValidation.Tests
         public async Task MaximumCount_StopsAtTheEntryThatBustsTheCap()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceMileages).MaximumCount(2);
+
             var sequence = new CountingSequence([1, 2, 3, 4, 5]);
             var car = Cars.Car();
             car.ServiceMileages = sequence;
 
             // Act
-            var result = await new ServiceMileagesMaximumCountValidator(2).ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Succeeded.Should().BeFalse();
@@ -229,8 +259,11 @@ namespace NValidation.Tests
         [Fact]
         public void WithErrorCode_WithABlankCode_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new BlankErrorCodeValidator("  ");
+            var act = () => validator.Property(c => c.Vin).WithErrorCode("  ");
 
             // Assert
             act.Should().Throw<ArgumentException>();
@@ -239,8 +272,11 @@ namespace NValidation.Tests
         [Fact]
         public void WithDisplayName_WithABlankName_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new BlankDisplayNameValidator("  ");
+            var act = () => validator.Property(c => c.Vin).WithDisplayName("  ");
 
             // Assert
             act.Should().Throw<ArgumentException>();

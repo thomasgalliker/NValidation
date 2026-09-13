@@ -10,6 +10,10 @@ namespace NValidation.Tests
         public async Task ForEach_ReportsTheFailureUnderTheElementsPosition()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
+
             var car = Cars.Car();
             car.ServiceHistory =
             [
@@ -18,7 +22,7 @@ namespace NValidation.Tests
             ];
 
             // Act
-            var result = await new ServiceHistoryElementValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[1].Workshop");
@@ -28,6 +32,10 @@ namespace NValidation.Tests
         public async Task ForEach_ReportsEveryFailingElement()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
+
             var car = Cars.Car();
             car.ServiceHistory =
             [
@@ -37,7 +45,7 @@ namespace NValidation.Tests
             ];
 
             // Act
-            var result = await new ServiceHistoryElementValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Select(error => error.Code).Should()
@@ -48,11 +56,15 @@ namespace NValidation.Tests
         public async Task ForEach_ReportsTheMessageTheRuleChose()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
+
             var car = Cars.Car();
             car.ServiceHistory = [new ServiceRecord { Workshop = null }];
 
             // Act
-            var result = await new ServiceHistoryElementValidator().ValidateForKeysAsync(car);
+            var result = await validator.ValidateForKeysAsync(car);
 
             // Assert
             result.ShouldReport("ServiceHistory[0].Workshop", ValidationMessageKeys.NotEmpty);
@@ -64,11 +76,15 @@ namespace NValidation.Tests
         public async Task ForEach_WithNothingToWalk_ReportsNothing(int? entryCount)
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
+
             var car = Cars.Car();
             car.ServiceHistory = entryCount == null ? null : [];
 
             // Act
-            var result = await new ServiceHistoryElementValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Succeeded.Should().BeTrue();
@@ -82,11 +98,15 @@ namespace NValidation.Tests
         public async Task ForEach_SkipsANullElement_WithoutDisturbingTheIndexes()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
+
             var car = Cars.Car();
             car.ServiceHistory = [null!, new ServiceRecord { Workshop = null }];
 
             // Act
-            var result = await new ServiceHistoryElementValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[1].Workshop");
@@ -96,11 +116,15 @@ namespace NValidation.Tests
         public async Task ForEach_WithAnElementValidator_MergesItsErrorsUnderThePosition()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(new ServiceRecordValidator());
+
             var car = Cars.Car();
             car.ServiceHistory = [new ServiceRecord { Workshop = "Aurora Service", Mileage = 1, Cost = 0m }];
 
             // Act
-            var result = await new ServiceHistoryNestedValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[0].Cost");
@@ -113,6 +137,12 @@ namespace NValidation.Tests
         public async Task Where_JudgesOnlyTheElementsItAccepts_AndLeavesTheIndexesAlone()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record
+                    .Where(r => r.Cost > 0m)
+                    .Property(r => r.Workshop).NotEmpty());
+
             var car = Cars.Car();
             car.ServiceHistory =
             [
@@ -121,7 +151,7 @@ namespace NValidation.Tests
             ];
 
             // Act
-            var result = await new ServiceHistoryPaidElementValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[1].Workshop");
@@ -131,11 +161,16 @@ namespace NValidation.Tests
         public async Task ErrorCode_OnACollection_ReplacesThePathButKeepsTheIndexAndTheProperty()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .WithErrorCode("history")
+                .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
+
             var car = Cars.Car();
             car.ServiceHistory = [new ServiceRecord { Workshop = null }];
 
             // Act
-            var result = await new ServiceHistoryErrorCodeElementValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Should().ContainSingle().Which.Code.Should().Be("history[0].Workshop");
@@ -149,12 +184,16 @@ namespace NValidation.Tests
         public async Task ForEach_OnALazySequence_WalksItExactlyOnce()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceMileages)
+                .ForEach(mileage => mileage.Element().GreaterThanOrEqualTo(0));
+
             var sequence = new CountingSequence([3, -1, 7]);
             var car = Cars.Car();
             car.ServiceMileages = sequence;
 
             // Act
-            var result = await new ServiceMileagesElementValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceMileages[1]");
@@ -169,13 +208,15 @@ namespace NValidation.Tests
         public async Task ForEach_OffersTheElementsPosition_AsAMessagePlaceholder()
         {
             // Arrange
-            var car = Cars.Car();
-            car.ServiceHistory = [new ServiceRecord { Workshop = "Aurora" }, new ServiceRecord { Workshop = null }];
-
-            var validator = new ServiceHistoryElementValidator
+            var validator = new TestValidator<Car>
             {
                 Messages = new TemplateMessageProvider("Entry {CollectionIndex} is incomplete."),
             };
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
+
+            var car = Cars.Car();
+            car.ServiceHistory = [new ServiceRecord { Workshop = "Aurora" }, new ServiceRecord { Workshop = null }];
 
             // Act
             var result = await validator.ValidateAsync(car);
@@ -196,17 +237,19 @@ namespace NValidation.Tests
         public async Task ForEach_WithAnElementValidator_ResolvesMessagesThroughTheRunsProvider()
         {
             // Arrange
+            var validator = new TestValidator<Car>
+            {
+                Messages = new TemplateMessageProvider("Entry {CollectionIndex} is incomplete."),
+            };
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(new ServiceRecordValidator());
+
             var car = Cars.Car();
             car.ServiceHistory =
             [
                 new ServiceRecord { Workshop = "Aurora", Mileage = 1_000, Cost = 120m },
                 new ServiceRecord { Workshop = null, Mileage = 2_000, Cost = 90m },
             ];
-
-            var validator = new ServiceHistoryNestedValidator
-            {
-                Messages = new TemplateMessageProvider("Entry {CollectionIndex} is incomplete."),
-            };
 
             // Act
             var result = await validator.ValidateAsync(car);
@@ -233,6 +276,11 @@ namespace NValidation.Tests
         public async Task ForEach_WhenOnAnElementChain_JudgesOnlyTheElementsTheConditionAccepts()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record
+                    .Property(r => r.Cost).GreaterThan(0m).When(r => r.Mileage > 0));
+
             var car = Cars.Car();
             car.ServiceHistory =
             [
@@ -241,7 +289,7 @@ namespace NValidation.Tests
             ];
 
             // Act
-            var result = await new ServiceHistoryConditionalElementValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[0].Cost");
@@ -254,6 +302,11 @@ namespace NValidation.Tests
         public async Task ForEach_UnlessOnAnElementChain_SkipsTheElementsTheConditionAccepts()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record
+                    .Property(r => r.Cost).GreaterThan(0m).Unless(r => r.Mileage == 0));
+
             var car = Cars.Car();
             car.ServiceHistory =
             [
@@ -262,7 +315,7 @@ namespace NValidation.Tests
             ];
 
             // Act
-            var result = await new ServiceHistoryUnlessElementValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[1].Cost");
@@ -276,11 +329,19 @@ namespace NValidation.Tests
         public async Task ForEach_WhenOnOnePropertyOfAnElement_LeavesTheOtherPropertiesAlone()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record =>
+                {
+                    record.Property(r => r.Cost).GreaterThan(0m).When(r => r.Mileage > 0);
+                    record.Property(r => r.Workshop).NotEmpty();
+                });
+
             var car = Cars.Car();
             car.ServiceHistory = [new ServiceRecord { Workshop = null, Mileage = 0, Cost = 0m }];
 
             // Act
-            var result = await new ServiceHistoryConditionalAndRequiredValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[0].Workshop");
@@ -293,11 +354,20 @@ namespace NValidation.Tests
         public async Task ForEach_ReportsEveryBrokenPropertyOfAnElement()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record =>
+                {
+                    record.Property(r => r.Workshop).NotEmpty().MaximumLength(20);
+                    record.Property(r => r.Mileage).GreaterThan(0);
+                    record.Property(r => r.Cost).GreaterThanOrEqualTo(0m);
+                });
+
             var car = Cars.Car();
             car.ServiceHistory = [new ServiceRecord { Workshop = null, Mileage = 0, Cost = -1m }];
 
             // Act
-            var result = await new ServiceHistoryMultiPropertyValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Select(error => error.Code).Should().BeEquivalentTo(
@@ -312,6 +382,15 @@ namespace NValidation.Tests
         public async Task ForEach_ReportsTheBrokenPropertyOfTheBrokenElementOnly()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record =>
+                {
+                    record.Property(r => r.Workshop).NotEmpty().MaximumLength(20);
+                    record.Property(r => r.Mileage).GreaterThan(0);
+                    record.Property(r => r.Cost).GreaterThanOrEqualTo(0m);
+                });
+
             var car = Cars.Car();
             car.ServiceHistory =
             [
@@ -321,7 +400,7 @@ namespace NValidation.Tests
             ];
 
             // Act
-            var result = await new ServiceHistoryMultiPropertyValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[1].Workshop");
@@ -335,6 +414,14 @@ namespace NValidation.Tests
         public async Task ForEach_CrossPropertyRule_JudgesEachElementAgainstItself()
         {
             // Arrange
+            const string message = "A paid service has to record the mileage it happened at.";
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record
+                    .Property(r => r.Mileage)
+                    .Must((r, mileage) => r.Cost == 0m || mileage > 0, message));
+
             var car = Cars.Car();
             car.ServiceHistory =
             [
@@ -344,12 +431,12 @@ namespace NValidation.Tests
             ];
 
             // Act
-            var result = await new ServiceHistoryCrossPropertyValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             var error = result.Errors.Should().ContainSingle().Subject;
             error.Code.Should().Be("ServiceHistory[1].Mileage");
-            error.Message.Should().Be(ServiceHistoryCrossPropertyValidator.Message);
+            error.Message.Should().Be(message);
         }
 
         /// <summary>
@@ -360,6 +447,12 @@ namespace NValidation.Tests
         public async Task WithIndexer_IdentifiesTheElementByWhateverItReturns()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record
+                    .WithIndexer((r, _) => r.Workshop ?? "unknown")
+                    .Property(r => r.Cost).GreaterThan(0m));
+
             var car = Cars.Car();
             car.ServiceHistory =
             [
@@ -368,7 +461,7 @@ namespace NValidation.Tests
             ];
 
             // Act
-            var result = await new ServiceHistoryIndexedElementValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Should().HaveCount(1);
@@ -382,17 +475,21 @@ namespace NValidation.Tests
         public async Task WithIndexer_LeavesTheCollectionIndexPlaceholderAlone()
         {
             // Arrange
+            var validator = new TestValidator<Car>
+            {
+                Messages = new TemplateMessageProvider("Entry {CollectionIndex} is wrong."),
+            };
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record
+                    .WithIndexer((r, _) => r.Workshop ?? "unknown")
+                    .Property(r => r.Cost).GreaterThan(0m));
+
             var car = Cars.Car();
             car.ServiceHistory =
             [
                 new ServiceRecord { Workshop = "Aurora", Cost = 120m },
                 new ServiceRecord { Workshop = "Northgate", Cost = 0m },
             ];
-
-            var validator = new ServiceHistoryIndexedElementValidator
-            {
-                Messages = new TemplateMessageProvider("Entry {CollectionIndex} is wrong."),
-            };
 
             // Act
             var result = await validator.ValidateAsync(car);
@@ -404,8 +501,14 @@ namespace NValidation.Tests
         [Fact]
         public void WithIndexer_WithoutAnIndexer_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new ServiceHistoryCustomIndexerValidator(null!);
+            var act = () => validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record
+                    .WithIndexer(null!)
+                    .Property(r => r.Cost).GreaterThan(0m));
 
             // Assert
             act.Should().Throw<ArgumentNullException>();
@@ -418,10 +521,14 @@ namespace NValidation.Tests
         public async Task WithIndexer_IsGivenThePosition_AsWellAsTheElement()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record
+                    .WithIndexer((_, position) => $"row{position + 1}")
+                    .Property(r => r.Cost).GreaterThan(0m));
+
             var car = Cars.Car();
             car.ServiceHistory = [new ServiceRecord { Cost = 120m }, new ServiceRecord { Cost = 0m }];
-
-            var validator = new ServiceHistoryCustomIndexerValidator((_, position) => $"row{position + 1}");
 
             // Act
             var result = await validator.ValidateAsync(car);
@@ -438,6 +545,12 @@ namespace NValidation.Tests
         public async Task ForEach_RunsAfterTheCollectionsOwnRulesHavePassed()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .NotEmpty()
+                .MaximumCount(2)
+                .ForEach(new ServiceRecordValidator());
+
             var car = Cars.Car();
             car.ServiceHistory =
             [
@@ -446,7 +559,7 @@ namespace NValidation.Tests
             ];
 
             // Act
-            var result = await new ServiceHistoryBoundedAndCheckedValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Should().ContainSingle().Which.Code.Should().Be("ServiceHistory[1].Workshop");
@@ -460,6 +573,12 @@ namespace NValidation.Tests
         public async Task ForEach_IsNotReached_WhenAnEarlierRuleInTheChainFailed()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .NotEmpty()
+                .MaximumCount(2)
+                .ForEach(new ServiceRecordValidator());
+
             var car = Cars.Car();
             car.ServiceHistory =
             [
@@ -469,7 +588,7 @@ namespace NValidation.Tests
             ];
 
             // Act
-            var result = await new ServiceHistoryBoundedAndCheckedValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Should().ContainSingle().Which.Code.Should().Be(nameof(Car.ServiceHistory));
@@ -484,6 +603,16 @@ namespace NValidation.Tests
         public async Task ForEach_StoppingAtTheFirstError_StopsWithinAnEntryAndStillJudgesTheNext()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record =>
+                {
+                    record.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+                    record.Property(r => r.Workshop).NotEmpty();
+                    record.Property(r => r.Cost).GreaterThan(0m);
+                });
+
             var car = Cars.Car();
             car.ServiceHistory =
             [
@@ -492,7 +621,7 @@ namespace NValidation.Tests
             ];
 
             // Act
-            var result = await new ServiceHistoryStoppingElementValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Select(error => error.Code).Should()
@@ -509,11 +638,24 @@ namespace NValidation.Tests
         public async Task ForEach_AStoppingElementValidator_JudgesTheEntryAnInlineRuleAlreadyReportedOn()
         {
             // Arrange
+            var recordValidator = new TestValidator<ServiceRecord>();
+            recordValidator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+            recordValidator.Property(r => r.Cost).GreaterThan(0m);
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record =>
+                {
+                    record.SetValidator(recordValidator);
+
+                    record.Property(r => r.Workshop).NotEmpty();
+                });
+
             var car = Cars.Car();
             car.ServiceHistory = [new ServiceRecord { Workshop = null, Mileage = 1, Cost = 0m }];
 
             // Act
-            var result = await new ServiceHistoryInlineAndStoppingNestedValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Select(error => error.Code).Should()
@@ -529,6 +671,12 @@ namespace NValidation.Tests
         public async Task ForEach_UnderAStoppingRun_StillReportsOnEveryEntry()
         {
             // Arrange
+            var validator = new TestValidator<Car>();
+            validator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
+
             var car = Cars.Car();
             car.ServiceHistory =
             [
@@ -537,7 +685,7 @@ namespace NValidation.Tests
             ];
 
             // Act
-            var result = await new StoppingRunOverAServiceHistoryValidator().ValidateAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.Errors.Select(error => error.Code).Should()
@@ -551,8 +699,11 @@ namespace NValidation.Tests
         [Fact]
         public void ForEach_OnAString_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new VinForEachValidator();
+            var act = () => validator.Property(c => c.Vin).ForEach(character => character.Element().NotDefault());
 
             // Assert
             act.Should().Throw<InvalidOperationException>().WithMessage("*string*");

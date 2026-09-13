@@ -9,7 +9,9 @@ namespace NValidation.Tests
         public async Task MultipleOf_RequiresAnExactMultiple(double purchasePrice, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new PurchasePriceMultipleOfValidator(0.05m);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.PurchasePrice).MultipleOf(0.05m);
+
             var car = Cars.Car();
             car.PurchasePrice = (decimal)purchasePrice;
 
@@ -26,7 +28,9 @@ namespace NValidation.Tests
         public async Task MultipleOf_JudgesANegativeValue_TheSameWay(double purchasePrice, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new PurchasePriceMultipleOfValidator(0.05m);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.PurchasePrice).MultipleOf(0.05m);
+
             var car = Cars.Car();
             car.PurchasePrice = (decimal)purchasePrice;
 
@@ -44,7 +48,9 @@ namespace NValidation.Tests
         public async Task MultipleOf_WithANullableProperty_JudgesOnlyAValueThatIsThere(double? tradeInValue, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new TradeInValueMultipleOfValidator(0.05m);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.TradeInValue).MultipleOf(0.05m);
+
             var car = Cars.Car();
             car.TradeInValue = tradeInValue == null ? null : (decimal)tradeInValue.Value;
 
@@ -61,7 +67,9 @@ namespace NValidation.Tests
         public async Task MultipleOf_WithAWholeNumber_RequiresAnExactMultiple(int mileage, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new MileageMultipleOfValidator(12);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).MultipleOf(12);
+
             var car = Cars.Car();
             car.Mileage = mileage;
 
@@ -79,8 +87,11 @@ namespace NValidation.Tests
         [Fact]
         public void MultipleOf_WithAZeroStep_ThrowsWhileTheRuleIsDeclared()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new PurchasePriceMultipleOfValidator(0m);
+            var act = () => validator.Property(c => c.PurchasePrice).MultipleOf(0m);
 
             // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();
@@ -90,8 +101,11 @@ namespace NValidation.Tests
         [Fact]
         public void MultipleOf_WithAZeroWholeNumberStep_ThrowsWhileTheRuleIsDeclared()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new MileageMultipleOfValidator(0);
+            var act = () => validator.Property(c => c.Mileage).MultipleOf(0);
 
             // Assert
             act.Should().Throw<ArgumentOutOfRangeException>();
@@ -101,7 +115,8 @@ namespace NValidation.Tests
         public async Task NotNaN_AcceptsAMeasuredFigure()
         {
             // Arrange
-            var validator = new FuelConsumptionNotNaNValidator();
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.FuelConsumption).NotNaN();
 
             // Act
             var result = await validator.ValidateAsync(Cars.CarModel());
@@ -114,7 +129,9 @@ namespace NValidation.Tests
         public async Task NotNaN_TreatsNaN_AsMissing()
         {
             // Arrange
-            var validator = new FuelConsumptionNotNaNValidator();
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.FuelConsumption).NotNaN();
+
             var carModel = Cars.CarModel();
             carModel.FuelConsumption = double.NaN;
 
@@ -135,7 +152,9 @@ namespace NValidation.Tests
         public async Task NotNaN_AcceptsAnInfinity(double fuelConsumption)
         {
             // Arrange
-            var validator = new FuelConsumptionNotNaNValidator();
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.FuelConsumption).NotNaN();
+
             var carModel = Cars.CarModel();
             carModel.FuelConsumption = fuelConsumption;
 
@@ -150,7 +169,9 @@ namespace NValidation.Tests
         public async Task NotNaN_ReportsItsOwnMessage()
         {
             // Arrange
-            var validator = new FuelConsumptionNotNaNValidator();
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.FuelConsumption).NotNaN();
+
             var carModel = Cars.CarModel();
             carModel.FuelConsumption = double.NaN;
 
@@ -167,7 +188,9 @@ namespace NValidation.Tests
         public async Task NotNaN_WithANullableSingle_JudgesOnlyAValueThatIsThere(float? topSpeed, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new TopSpeedNotNaNValidator();
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.TopSpeed).NotNaN();
+
             var carModel = Cars.CarModel();
             carModel.TopSpeed = topSpeed;
 
@@ -182,7 +205,9 @@ namespace NValidation.Tests
         public async Task NotNaN_WithANullableSingle_RejectsNaN()
         {
             // Arrange
-            var validator = new TopSpeedNotNaNValidator();
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.TopSpeed).NotNaN();
+
             var carModel = Cars.CarModel();
             carModel.TopSpeed = float.NaN;
 
@@ -196,8 +221,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task MultipleOf_ReportsMultipleOf()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.PurchasePrice).MultipleOf(0.05m);
+
             // Act
-            var result = await new PurchasePriceMultipleOfValidator(0.05m).ValidateForKeysAsync(new Car { PurchasePrice = 0.03m });
+            var result = await validator.ValidateForKeysAsync(new Car { PurchasePrice = 0.03m });
 
             // Assert
             result.ShouldReport(nameof(Car.PurchasePrice), ValidationMessageKeys.MultipleOf);
@@ -206,8 +235,12 @@ namespace NValidation.Tests
         [Fact]
         public async Task NotNaN_ReportsNotNaN_NotNotEmpty()
         {
+            // Arrange
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.FuelConsumption).NotNaN();
+
             // Act
-            var result = await new FuelConsumptionNotNaNValidator().ValidateForKeysAsync(new CarModel { FuelConsumption = double.NaN });
+            var result = await validator.ValidateForKeysAsync(new CarModel { FuelConsumption = double.NaN });
 
             // Assert
             result.ShouldReport(nameof(CarModel.FuelConsumption), ValidationMessageKeys.NotNaN);

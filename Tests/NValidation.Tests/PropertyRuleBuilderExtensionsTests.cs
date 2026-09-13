@@ -12,11 +12,14 @@ namespace NValidation.Tests
     [Trait(Traits.Category, Traits.UnitTests)]
     public partial class PropertyRuleBuilderExtensionsTests
     {
+        private const string VinMustBeSeventeenCharactersMessage = "The VIN must be exactly 17 characters long.";
+
         [Fact]
         public async Task Must_WithASatisfiedPredicate_Succeeds()
         {
             // Arrange
-            var validator = new VinMustBeSeventeenCharactersValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).Must(vin => vin != null && vin.Length == 17, VinMustBeSeventeenCharactersMessage);
 
             // Act
             var result = await validator.ValidateAsync(Cars.Car());
@@ -29,7 +32,9 @@ namespace NValidation.Tests
         public async Task Must_ReportsTheSuppliedMessage_UnderThePropertyCode()
         {
             // Arrange
-            var validator = new VinMustBeSeventeenCharactersValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).Must(vin => vin != null && vin.Length == 17, VinMustBeSeventeenCharactersMessage);
+
             var car = Cars.Car();
             car.Vin = "TOOSHORT";
 
@@ -39,7 +44,7 @@ namespace NValidation.Tests
             // Assert
             result.Errors.Should().ContainSingle()
                 .Which.Should().Match<ValidationError>(
-                    error => error.Code == nameof(Car.Vin) && error.Message == VinMustBeSeventeenCharactersValidator.Message);
+                    error => error.Code == nameof(Car.Vin) && error.Message == VinMustBeSeventeenCharactersMessage);
         }
 
         /// <summary>
@@ -51,7 +56,8 @@ namespace NValidation.Tests
         {
             // Arrange
             var message = "first";
-            var validator = new VinMustDeferredMessageValidator(() => message);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).Must(_ => false, () => message);
 
             // Act
             message = "second";
@@ -68,7 +74,9 @@ namespace NValidation.Tests
         public async Task Must_CanDecideFromAnotherProperty(bool isListedForSale, decimal purchasePrice, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new ListedCarNeedsAPriceValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.PurchasePrice).Must((c, price) => !c.IsListedForSale || price != 0m, "A car listed for sale must have a price.");
+
             var car = Cars.Car();
             car.IsListedForSale = isListedForSale;
             car.PurchasePrice = purchasePrice;
@@ -85,7 +93,8 @@ namespace NValidation.Tests
         {
             // Arrange
             var message = "first";
-            var validator = new PurchasePriceMustDeferredMessageValidator(() => message);
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.PurchasePrice).Must((_, _) => false, () => message);
 
             // Act
             message = "second";
@@ -98,8 +107,11 @@ namespace NValidation.Tests
         [Fact]
         public void Must_WithoutAPredicate_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new VinMustValidator(null!, "a message");
+            var act = () => validator.Property(c => c.Vin).Must((Func<string?, bool>)null!, "a message");
 
             // Assert
             act.Should().Throw<ArgumentNullException>();
@@ -108,8 +120,11 @@ namespace NValidation.Tests
         [Fact]
         public void Must_WithoutAMessage_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new VinMustValidator(vin => vin != null, null!);
+            var act = () => validator.Property(c => c.Vin).Must(vin => vin != null, (string)null!);
 
             // Assert
             act.Should().Throw<ArgumentNullException>();
@@ -123,7 +138,12 @@ namespace NValidation.Tests
         public async Task SetValidator_PrefixesTheErrorsOfTheNestedValidator()
         {
             // Arrange
-            var validator = new ModelSetValidatorValidator(new CarModelNameValidator());
+            var modelValidator = new TestValidator<CarModel>();
+            modelValidator.Property(m => m.Name).NotEmpty();
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model).SetValidator(modelValidator);
+
             var car = Cars.Car();
             car.Model = new CarModel();
 
@@ -143,7 +163,12 @@ namespace NValidation.Tests
         public async Task SetValidator_ResolvesTheNestedValidatorsMessagesThroughTheRunsProvider()
         {
             // Arrange
-            var validator = new ModelSetValidatorValidator(new CarModelNameValidator());
+            var modelValidator = new TestValidator<CarModel>();
+            modelValidator.Property(m => m.Name).NotEmpty();
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model).SetValidator(modelValidator);
+
             var car = Cars.Car();
             car.Model = new CarModel();
 
@@ -158,7 +183,12 @@ namespace NValidation.Tests
         public async Task SetValidator_SkipsTheNestedValidator_WhenTheObjectIsMissing()
         {
             // Arrange
-            var validator = new ModelSetValidatorValidator(new CarModelNameValidator());
+            var modelValidator = new TestValidator<CarModel>();
+            modelValidator.Property(m => m.Name).NotEmpty();
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model).SetValidator(modelValidator);
+
             var car = Cars.Car();
             car.Model = null;
 
@@ -172,8 +202,11 @@ namespace NValidation.Tests
         [Fact]
         public void SetValidator_WithoutAValidator_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new ModelSetValidatorValidator(null!);
+            var act = () => validator.Property(c => c.Model).SetValidator(null!);
 
             // Assert
             act.Should().Throw<ArgumentNullException>();

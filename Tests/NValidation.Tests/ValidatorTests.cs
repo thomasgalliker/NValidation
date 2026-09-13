@@ -7,11 +7,18 @@ namespace NValidation.Tests
     [Trait(Traits.Category, Traits.UnitTests)]
     public class ValidatorTests
     {
+        /// <summary>
+        /// The message of a probe rule which always passes, so it never reaches a result: what the probe
+        /// records is whether it was run at all.
+        /// </summary>
+        private const string ProbeNeverReports = "the probe never reports";
+
         [Fact]
         public async Task ValidateAsync_WithValidInstance_Succeeds()
         {
             // Arrange
-            var validator = new VinNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty();
 
             // Act
             var result = await validator.ValidateAsync(Cars.Car());
@@ -25,7 +32,8 @@ namespace NValidation.Tests
         public async Task ValidateAsync_TakesTheErrorCode_FromThePropertyExpression()
         {
             // Arrange
-            var validator = new VinNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty();
 
             // Act
             var result = await validator.ValidateAsync(new Car());
@@ -41,7 +49,9 @@ namespace NValidation.Tests
         public async Task ValidateAsync_TakesTheErrorCode_FromANestedPropertyExpression()
         {
             // Arrange
-            var validator = new ModelNameNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model!.Name).NotEmpty();
+
             var car = new Car { Model = new CarModel() };
 
             // Act
@@ -58,7 +68,9 @@ namespace NValidation.Tests
         public async Task ValidateAsync_StopsTheChain_AtTheFirstFailingRule()
         {
             // Arrange
-            var validator = new VinNotEmptyAndBoundedValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty().MaximumLength(3);
+
             var car = new Car { Vin = "   " };
 
             // Act
@@ -72,7 +84,15 @@ namespace NValidation.Tests
         public async Task ValidateAsync_ReportsEveryFailingRule_WhenTheChainAsksForAll()
         {
             // Arrange
-            var validator = new VinReportsEveryFailingRuleValidator();
+            const string firstMessage = "first";
+            const string secondMessage = "second";
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin)
+                .WithValidationBehavior(ValidationBehavior.All)
+                .Must(vin => vin != "wrong", firstMessage)
+                .Must(vin => vin != "wrong", secondMessage);
+
             var car = new Car { Vin = "wrong" };
 
             // Act
@@ -80,8 +100,8 @@ namespace NValidation.Tests
 
             // Assert
             result.Errors.Select(error => error.Message).Should().BeEquivalentTo(
-                VinReportsEveryFailingRuleValidator.FirstMessage,
-                VinReportsEveryFailingRuleValidator.SecondMessage);
+                firstMessage,
+                secondMessage);
         }
 
         /// <summary>
@@ -136,8 +156,19 @@ namespace NValidation.Tests
         {
             // Arrange
             var reached = false;
-            var validator = new SecondPropertyProbeValidator(
-                ValidationBehavior.StopAtFirstError, () => reached = true);
+
+            var validator = new TestValidator<Car>();
+            validator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+            validator.Property(c => c.Vin).NotEmpty();
+
+            validator.Property(c => c.RegistrationPlate).Must(
+                _ =>
+                {
+                    reached = true;
+                    return true;
+                },
+                ProbeNeverReports);
 
             // Act
             await validator.ValidateAsync(new Car());
@@ -152,7 +183,19 @@ namespace NValidation.Tests
         {
             // Arrange
             var reached = false;
-            var validator = new SecondPropertyProbeValidator(ValidationBehavior.All, () => reached = true);
+
+            var validator = new TestValidator<Car>();
+            validator.ValidationBehaviors.Class = ValidationBehavior.All;
+
+            validator.Property(c => c.Vin).NotEmpty();
+
+            validator.Property(c => c.RegistrationPlate).Must(
+                _ =>
+                {
+                    reached = true;
+                    return true;
+                },
+                ProbeNeverReports);
 
             // Act
             await validator.ValidateAsync(new Car());
@@ -171,7 +214,22 @@ namespace NValidation.Tests
         {
             // Arrange
             var reached = false;
-            var validator = new ChainOverridingAStoppingRunValidator(() => reached = true);
+
+            var validator = new TestValidator<Car>();
+            validator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+            validator.Property(c => c.Vin)
+                .WithValidationBehavior(ValidationBehavior.All)
+                .NotEmpty()
+                .MaximumLength(TwoFailingPropertiesValidator.MaximumLength);
+
+            validator.Property(c => c.RegistrationPlate).Must(
+                _ =>
+                {
+                    reached = true;
+                    return true;
+                },
+                ProbeNeverReports);
 
             // Act
             var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
@@ -191,7 +249,17 @@ namespace NValidation.Tests
         public async Task ValidateAsync_AChainAskingToStop_ReportsOnceInAValidatorThatReportsAll()
         {
             // Arrange
-            var validator = new ChainStoppingWithinAReportingValidator();
+            var validator = new TestValidator<Car>();
+            validator.ValidationBehaviors.Property = ValidationBehavior.All;
+
+            validator.Property(c => c.Vin)
+                .WithValidationBehavior(ValidationBehavior.StopAtFirstError)
+                .NotEmpty()
+                .MaximumLength(TwoFailingPropertiesValidator.MaximumLength);
+
+            validator.Property(c => c.RegistrationPlate)
+                .NotEmpty()
+                .MaximumLength(TwoFailingPropertiesValidator.MaximumLength);
 
             // Act
             var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
@@ -225,14 +293,18 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// It is resolved while validating, not while the rules are declared, so where in the
-        /// constructor it is written makes no difference.
+        /// It is resolved while validating, not while the rules are declared, so whether it is written
+        /// before or after the rules makes no difference.
         /// </summary>
         [Fact]
         public async Task ValidateAsync_AppliesTheValidationBehaviors_DeclaredAfterTheRules()
         {
             // Arrange
-            var validator = new BehaviorAfterTheRulesValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty().MaximumLength(TwoFailingPropertiesValidator.MaximumLength);
+            validator.Property(c => c.RegistrationPlate).NotEmpty();
+
+            validator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
 
             // Act
             var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
@@ -253,7 +325,12 @@ namespace NValidation.Tests
             string expectedCode)
         {
             // Arrange
-            var validator = new StoppingRunWithAConditionalPropertyValidator();
+            var validator = new TestValidator<Car>();
+            validator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+            validator.Property(c => c.Vin).NotEmpty().When(c => c.SoldDate != null);
+            validator.Property(c => c.RegistrationPlate).NotEmpty();
+
             var car = new Car { SoldDate = sold ? new DateTime(2024, 1, 1) : null };
 
             // Act
@@ -272,7 +349,16 @@ namespace NValidation.Tests
         public async Task ValidateAsync_StoppingAtTheFirstError_DoesNotTruncateWhatOneRuleReported()
         {
             // Arrange
-            var validator = new StoppingRunComposingAReportingValidator();
+            var modelValidator = new TestValidator<CarModel>();
+            modelValidator.Property(m => m.Name).NotEmpty();
+            modelValidator.Property(m => m.SeatCount).GreaterThan(0);
+
+            var validator = new TestValidator<Car>();
+            validator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+            validator.Property(c => c.Model).SetValidator(modelValidator);
+            validator.Property(c => c.Vin).NotEmpty();
+
             var car = new Car { Model = new CarModel() };
 
             // Act
@@ -296,7 +382,16 @@ namespace NValidation.Tests
         public async Task ValidateAsync_AComposedValidator_DecidesForItself()
         {
             // Arrange
-            var validator = new CarWithAStoppingModelValidator();
+            var modelValidator = new TestValidator<CarModel>();
+            modelValidator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+
+            modelValidator.Property(m => m.Name).NotEmpty();
+            modelValidator.Property(m => m.SeatCount).GreaterThan(0);
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model).SetValidator(modelValidator);
+            validator.Property(c => c.Vin).NotEmpty();
+
             var car = new Car { Model = new CarModel() };
 
             // Act
@@ -311,7 +406,10 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithMessage_ReplacesTheMessageOfTheRuleItFollows()
         {
             // Arrange
-            var validator = new VinWithMessageValidator("Please tell us the VIN.");
+            const string message = "Please tell us the VIN.";
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty().WithMessage(message);
 
             // Act
             var result = await validator.ValidateAsync(new Car());
@@ -319,7 +417,7 @@ namespace NValidation.Tests
             // Assert
             result.Errors.Should().ContainSingle()
                 .Which.Should().Match<ValidationError>(
-                    error => error.Code == nameof(Car.Vin) && error.Message == "Please tell us the VIN.");
+                    error => error.Code == nameof(Car.Vin) && error.Message == message);
         }
 
         /// <summary>
@@ -329,7 +427,12 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithMessage_LeavesTheOtherRulesOfTheChainAlone()
         {
             // Arrange
-            var validator = new VinWithMessageOnTheFirstRuleValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin)
+                .WithValidationBehavior(ValidationBehavior.All)
+                .NotEmpty().WithMessage("custom")
+                .MaximumLength(3);
+
             var car = new Car { Vin = "far too long" };
 
             // Act
@@ -345,7 +448,9 @@ namespace NValidation.Tests
         {
             // Arrange
             var message = "first";
-            var validator = new VinWithDeferredMessageValidator(() => message);
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty().WithMessage(() => message);
 
             // Act
             message = "second";
@@ -363,7 +468,13 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithMessage_KeepsTheCodeARuleReportsUnderItself()
         {
             // Arrange
-            var validator = new FeatureIdsCustomCodeWithMessageValidator("the replacement");
+            const string code = "FeatureIds[0]";
+            const string message = "the replacement";
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FeatureIds)
+                .Add(context => context.AddError(new ValidationError(code, "the original message")))
+                .WithMessage(message);
 
             // Act
             var result = await validator.ValidateAsync(new Car());
@@ -371,14 +482,17 @@ namespace NValidation.Tests
             // Assert
             result.Errors.Should().ContainSingle()
                 .Which.Should().Match<ValidationError>(
-                    error => error.Code == FeatureIdsCustomCodeWithMessageValidator.Code && error.Message == "the replacement");
+                    error => error.Code == code && error.Message == message);
         }
 
         [Fact]
         public void WithMessage_WithoutARuleToApplyItTo_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new VinWithMessageAndNoRuleValidator();
+            var act = () => validator.Property(c => c.Vin).WithMessage("nothing to apply this to");
 
             // Assert
             act.Should().Throw<InvalidOperationException>();
@@ -392,7 +506,8 @@ namespace NValidation.Tests
         public async Task ValidateAsync_DisplayName_NamesThePropertyInTheMessage_WithoutChangingTheCode()
         {
             // Arrange
-            var validator = new VinDisplayNameValidator("Vehicle identification number");
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).WithDisplayName("Vehicle identification number").NotEmpty();
 
             // Act
             var result = await validator.ValidateAsync(new Car());
@@ -407,7 +522,8 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithoutADisplayName_NamesThePropertyByItsCode()
         {
             // Arrange
-            var validator = new VinNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty();
 
             // Act
             var result = await validator.ValidateAsync(new Car());
@@ -425,7 +541,9 @@ namespace NValidation.Tests
         {
             // Arrange
             var displayName = "first";
-            var validator = new VinDeferredDisplayNameValidator(() => displayName);
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).WithDisplayName(() => displayName).NotEmpty();
 
             // Act
             displayName = "second";
@@ -441,7 +559,9 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithWhen_AppliesTheRules_OnlyWhenTheConditionHolds(bool isSold, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new VinRequiredWhenSoldValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty().When(c => c.SoldDate != null);
+
             var car = new Car { SoldDate = isSold ? DateTime.UtcNow : null };
 
             // Act
@@ -457,7 +577,9 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithUnless_SkipsTheRules_WhenTheConditionHolds(bool isUnsold, bool expectedToSucceed)
         {
             // Arrange
-            var validator = new VinRequiredUnlessUnsoldValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty().Unless(c => c.SoldDate == null);
+
             var car = new Car { SoldDate = isUnsold ? null : DateTime.UtcNow };
 
             // Act
@@ -474,7 +596,13 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithWhen_AppliesToEveryRuleOfTheChain()
         {
             // Arrange
-            var validator = new VinChainRequiredWhenSoldValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin)
+                .WithValidationBehavior(ValidationBehavior.All)
+                .NotEmpty()
+                .MaximumLength(3)
+                .When(c => c.SoldDate != null);
+
             var car = new Car { Vin = "far too long" };
 
             // Act
@@ -488,7 +616,12 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithSeveralConditions_SkipsTheRules_WhenOnlyOneHolds()
         {
             // Arrange
-            var validator = new VinRequiredWhenSoldAndModelledValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin)
+                .NotEmpty()
+                .When(c => c.SoldDate != null)
+                .When(c => c.Model != null);
+
             var car = new Car { SoldDate = DateTime.UtcNow };
 
             // Act
@@ -502,7 +635,12 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithSeveralConditions_AppliesTheRules_WhenAllOfThemHold()
         {
             // Arrange
-            var validator = new VinRequiredWhenSoldAndModelledValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin)
+                .NotEmpty()
+                .When(c => c.SoldDate != null)
+                .When(c => c.Model != null);
+
             var car = new Car { SoldDate = DateTime.UtcNow, Model = new CarModel() };
 
             // Act
@@ -521,7 +659,9 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithANestedPath_SkipsTheChain_WhenTheObjectInBetweenIsMissing()
         {
             // Arrange
-            var validator = new ModelNameNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model!.Name).NotEmpty();
+
             var car = Cars.Car();
             car.Model = null;
 
@@ -540,7 +680,8 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithADeepNestedPath_SkipsTheChain_WhateverIsMissing()
         {
             // Arrange
-            var validator = new ManufacturerNameNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model!.Manufacturer!.Name).NotEmpty();
 
             var withoutManufacturer = Cars.Car();
             withoutManufacturer.Model!.Manufacturer = null;
@@ -565,7 +706,9 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithANestedPath_ReportsTheFailure_WhenThePathIsReachable()
         {
             // Arrange
-            var validator = new ManufacturerNameNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model!.Manufacturer!.Name).NotEmpty();
+
             var car = Cars.Car();
             car.Model!.Manufacturer!.Name = "";
 
@@ -584,7 +727,8 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithWhen_DoesNotReadTheProperty_WhenTheConditionDoesNotHold()
         {
             // Arrange
-            var validator = new ModelNameRequiredWhenModelPresentValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model!.Name).NotEmpty().When(c => c.Model != null);
 
             // Act
             var result = await validator.ValidateAsync(new Car());
@@ -597,7 +741,8 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithoutAnInstance_Throws()
         {
             // Arrange
-            var validator = new VinNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty();
 
             // Act
             var act = () => validator.ValidateAsync(null!).AsTask();
@@ -610,7 +755,9 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithACancelledToken_Throws()
         {
             // Arrange
-            var validator = new VinNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty();
+
             using var cancellation = new CancellationTokenSource();
             await cancellation.CancelAsync();
 
@@ -628,8 +775,11 @@ namespace NValidation.Tests
         [Fact]
         public void Property_WithAnExpressionWhichIsNotAProperty_Throws()
         {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
             // Act
-            var act = () => new NotAPropertyValidator();
+            var act = () => validator.Property(c => c.Vin!.Length + 1).GreaterThan(0);
 
             // Assert
             act.Should().Throw<ArgumentException>();
@@ -642,7 +792,7 @@ namespace NValidation.Tests
         public void Messages_DefaultToTheBuiltInProvider()
         {
             // Act
-            var validator = new VinNotEmptyValidator();
+            var validator = new TestValidator<Car>();
 
             // Assert
             validator.Messages.Should().BeOfType<DefaultValidationMessageProvider>();
@@ -656,7 +806,13 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithARuleThatSuspends_AwaitsIt()
         {
             // Arrange
-            var validator = new VinSuspendingValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).AddAsync(async (context, cancellationToken) =>
+            {
+                await Task.Delay(1, cancellationToken);
+
+                context.AddError(new ValidationError(context.Code, "checked elsewhere"));
+            });
 
             // Act
             var result = await validator.ValidateAsync(Cars.Car());
@@ -673,7 +829,9 @@ namespace NValidation.Tests
         public async Task ValidateAndThrowAsync_WithAnInvalidInstance_Throws()
         {
             // Arrange
-            var validator = new VinNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty();
+
             var car = Cars.Car();
             car.Vin = "";
 
@@ -689,7 +847,8 @@ namespace NValidation.Tests
         public async Task ValidateAndThrowAsync_WithAValidInstance_Returns()
         {
             // Arrange
-            var validator = new VinNotEmptyValidator();
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty();
 
             // Act
             var act = () => validator.ValidateAndThrowAsync(Cars.Car()).AsTask();
@@ -706,13 +865,46 @@ namespace NValidation.Tests
         public void Messages_CannotBeSetToNull()
         {
             // Arrange
-            var validator = new VinNotEmptyValidator();
+            var validator = new TestValidator<Car>();
 
             // Act
             var act = () => validator.Messages = null!;
 
             // Assert
             act.Should().Throw<ArgumentNullException>();
+        }
+
+        /// <summary>
+        /// Two properties which each break two rules, so a run can be told apart both by how many messages
+        /// it reports and by which properties they name. Both axes are taken through the constructor
+        /// because what is under test is the setting rather than the rules.
+        /// </summary>
+        private sealed class TwoFailingPropertiesValidator : Validator<Car>
+        {
+            /// <summary>
+            /// Blank, and longer than the cap: one value which breaks both rules of a chain, which is what
+            /// makes the within-a-chain axis observable at all.
+            /// </summary>
+            internal const string BreaksBothRules = "      ";
+
+            internal const int MaximumLength = 3;
+
+            public TwoFailingPropertiesValidator(ValidationBehavior? classBehavior, ValidationBehavior? propertyBehavior)
+            {
+                this.ValidationBehaviors.Class = classBehavior;
+                this.ValidationBehaviors.Property = propertyBehavior;
+
+                this.Property(c => c.Vin).NotEmpty().MaximumLength(MaximumLength);
+                this.Property(c => c.RegistrationPlate).NotEmpty().MaximumLength(MaximumLength);
+            }
+
+            /// <summary>
+            /// A car whose every property this validator judges is wrong in every way it can be.
+            /// </summary>
+            internal static Car BrokenCar()
+            {
+                return new Car { Vin = BreaksBothRules, RegistrationPlate = BreaksBothRules };
+            }
         }
     }
 }

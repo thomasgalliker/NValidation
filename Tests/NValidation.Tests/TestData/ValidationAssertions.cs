@@ -9,6 +9,10 @@ namespace NValidation.Tests.TestData
         /// <summary>
         /// Validates with messages resolved to their keys.
         /// </summary>
+        /// <remarks>
+        /// Rebinds the validator's provider for good rather than for the one call, so a test which wants
+        /// both the keyed wording and the built-in English one has to take the English run first.
+        /// </remarks>
         public static ValueTask<ValidationResult> ValidateForKeysAsync<T>(this Validator<T> validator, T instance)
         {
             validator.Messages = MessageKeyProvider.Instance;
