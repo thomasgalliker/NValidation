@@ -259,11 +259,11 @@ namespace NValidation.Tests
         public async Task MinimumLength_ReportsMinimumLength()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>();
+            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
             validator.Property(m => m.Name).MinimumLength(10);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Manufacturer { Name = "AB" });
+            var result = await validator.ValidateAsync(new Manufacturer { Name = "AB" });
 
             // Assert
             result.ShouldReport("Name", "MinimumLength");
@@ -273,11 +273,11 @@ namespace NValidation.Tests
         public async Task MaximumLength_ReportsMaximumLength()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>();
+            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
             validator.Property(m => m.Name).MaximumLength(2);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Manufacturer { Name = "Aurora" });
+            var result = await validator.ValidateAsync(new Manufacturer { Name = "Aurora" });
 
             // Assert
             result.ShouldReport("Name", "MaximumLength");
@@ -287,11 +287,11 @@ namespace NValidation.Tests
         public async Task Length_ReportsLength()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>();
+            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
             validator.Property(m => m.CountryCode).Length(3);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Manufacturer { CountryCode = "CH" });
+            var result = await validator.ValidateAsync(new Manufacturer { CountryCode = "CH" });
 
             // Assert
             result.ShouldReport("CountryCode", "Length");
@@ -301,11 +301,11 @@ namespace NValidation.Tests
         public async Task LengthRange_ReportsLengthBetween()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>();
+            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
             validator.Property(m => m.Name).Length(5, 10);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Manufacturer { Name = "AB" });
+            var result = await validator.ValidateAsync(new Manufacturer { Name = "AB" });
 
             // Assert
             result.ShouldReport("Name", "LengthBetween");
@@ -390,14 +390,14 @@ namespace NValidation.Tests
         public async Task EmailTopLevelDomainIn_ReportsEmailTopLevelDomain()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>();
+            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
             validator.Property(m => m.ContactEmail).EmailTopLevelDomainIn("example");
 
             var manufacturer = Cars.Manufacturer();
             manufacturer.ContactEmail = "info@aurora-motors.com";
 
             // Act
-            var result = await validator.ValidateForKeysAsync(manufacturer);
+            var result = await validator.ValidateAsync(manufacturer);
 
             // Assert
             result.ShouldReport("ContactEmail", "EmailTopLevelDomain");
@@ -407,14 +407,14 @@ namespace NValidation.Tests
         public async Task EmailTopLevelDomainNotIn_ReportsEmailTopLevelDomainNotAllowed()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>();
+            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
             validator.Property(m => m.ContactEmail).EmailTopLevelDomainNotIn("test");
 
             var manufacturer = Cars.Manufacturer();
             manufacturer.ContactEmail = "info@aurora-motors.test";
 
             // Act
-            var result = await validator.ValidateForKeysAsync(manufacturer);
+            var result = await validator.ValidateAsync(manufacturer);
 
             // Assert
             result.ShouldReport("ContactEmail", "EmailTopLevelDomainNotAllowed");
@@ -468,20 +468,23 @@ namespace NValidation.Tests
         public async Task NotContaining_ReportsNotContaining_WithoutNamingTheTerm()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>();
-            validator.Property(m => m.Name).NotContaining("admin");
+            var englishValidator = new TestValidator<Manufacturer>();
+            englishValidator.Property(m => m.Name).NotContaining("admin");
+
+            var keyedValidator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
+            keyedValidator.Property(m => m.Name).NotContaining("admin");
 
             var manufacturer = Cars.Manufacturer();
             manufacturer.Name = "Aurora admin Motors";
 
             // Act
-            // The built-in wording first: ValidateForKeysAsync swaps the provider for the rest of this
-            // validator's life, and the message provider is read per run rather than per rule.
-            var english = await validator.ValidateAsync(manufacturer);
-            var keyed = await validator.ValidateForKeysAsync(manufacturer);
+            var english = await englishValidator.ValidateAsync(manufacturer);
+            var keyed = await keyedValidator.ValidateAsync(manufacturer);
 
             // Assert
             keyed.ShouldReport("Name", "NotContaining");
+
+            // The one assertion wildcards cannot express: what the message must *not* carry.
             english.Errors.Should().ContainSingle().Which.Message.Should().NotContain("admin");
         }
 
@@ -507,11 +510,11 @@ namespace NValidation.Tests
         public async Task EmailAddress_ReportsEmailAddress()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>();
+            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
             validator.Property(m => m.ContactEmail).EmailAddress();
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Manufacturer { ContactEmail = "not an email" });
+            var result = await validator.ValidateAsync(new Manufacturer { ContactEmail = "not an email" });
 
             // Assert
             result.ShouldReport("ContactEmail", "EmailAddress");
@@ -521,11 +524,11 @@ namespace NValidation.Tests
         public async Task Matches_ReportsMatches()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>();
+            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
             validator.Property(m => m.Website).Matches(@"^https://");
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Manufacturer { Website = "ftp://x" });
+            var result = await validator.ValidateAsync(new Manufacturer { Website = "ftp://x" });
 
             // Assert
             result.ShouldReport("Website", "Matches");

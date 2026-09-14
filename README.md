@@ -16,10 +16,10 @@ what a validator checks is what you can read in its constructor.
 
 ## Packages
 
-| Package                  | What it adds                                                                                                 |
-|--------------------------|--------------------------------------------------------------------------------------------------------------|
-| `NValidation`            | The validators, rules and messages. Depends only on `Microsoft.Extensions.DependencyInjection.Abstractions`. |
-| `NValidation.AspNetCore` | Maps a validation failure to a 400 problem details response.                                                 |
+| Package                  | What it adds                                                           |
+|--------------------------|------------------------------------------------------------------------|
+| `NValidation`            | The validators, rules and messages, and helper methods for unit tests. |
+| `NValidation.AspNetCore` | Validation integration for ASP.NET Core⁄ applications.                 |
 
 Both target .NET 8 and .NET 10.
 
@@ -142,7 +142,7 @@ is paying.
 | Group       | Rules                                                                                                      |
 |-------------|------------------------------------------------------------------------------------------------------------|
 | Presence    | `NotNull`, `NotEmpty` (text and collections), `NotDefault` (any value type)                                |
-| Text        | `MinimumLength`, `MaximumLength`, `Length(exact)`, `Length(min, max)`, `Matches`, `NotContaining`         |
+| Text        | `MinimumLength`, `MaximumLength`, `Length(exact)`, `Length(min, max)`, `Matches`, `NotContaining`          |
 | Email       | `EmailAddress`, `EmailTopLevelDomainIn`, `EmailTopLevelDomainNotIn`                                        |
 | Comparison  | `GreaterThan`, `GreaterThanOrEqualTo`, `LessThan`, `LessThanOrEqualTo`, `Between`, `EqualTo`, `NotEqualTo` |
 | Numbers     | `MultipleOf`, `NotNaN`                                                                                     |
@@ -151,8 +151,8 @@ is paying.
 | Enums       | `IsInEnum`                                                                                                 |
 | Custom      | `Must`, `SetValidator`                                                                                     |
 
-Chain modifiers: `When`, `Unless`, `WithMessage`, `WithDisplayName`, `WithErrorCode`, `WithValidationBehavior`.
-The last of those is the local exception to a setting the validator and the registration also carry — see
+Chain modifiers: `When`, `Unless`, `WithMessage`, `WithDisplayName`, `WithErrorCode`, `WithValidationBehavior`. The last
+of those is the local exception to a setting the validator and the registration also carry — see
 [Validation behavior](#validation-behavior).
 
 `error.Code` defaults to the member path, which is what a client usually binds to. Where the client's field is not
@@ -211,8 +211,8 @@ setting is mutated rather than assigned; replacing the whole object would replac
 The defaults are chosen for the common case. Reporting every property at once is what lets a caller fix a form in one
 pass. Stopping within a chain is right because a chain's rules usually run coarse to fine: an empty string fails
 `NotEmpty` and `Length(17)` alike, and only the first of those tells the caller anything. Set `Property` to `All` for
-the chain whose rules judge separate things — a VIN is the wrong length *and* carries a letter no VIN may contain, and
-a caller wants to hear both.
+the chain whose rules judge separate things — a VIN is the wrong length *and* carries a letter no VIN may contain, and a
+caller wants to hear both.
 
 **`Class = StopAtFirstError` stops the run as soon as anything has been reported** — the properties after it are never
 looked at. It therefore also stops the chain that produced it, overriding `Property`, since a setting by that name which
@@ -272,11 +272,10 @@ this.Property(c => c.Model).NotNull();          // whether it has to be there at
 this.Property(c => c.Model.Manufacturer.Name).NotEmpty();   // judged only if it is
 ```
 
-A payload that omitted `Model` reports `Model`, not a server error. This is the same answer the rest of
-the library gives to something absent — a null nested object is skipped by `SetValidator`, a missing
-collection by its own rules, an absent value by a comparison, and the *compared* property of a
-two-property rule by the same guard — so requiring presence is always a rule of its own, next to the
-rules about the value.
+A payload that omitted `Model` reports `Model`, not a server error. This is the same answer the rest of the library
+gives to something absent — a null nested object is skipped by `SetValidator`, a missing collection by its own rules, an
+absent value by a comparison, and the *compared* property of a two-property rule by the same guard — so requiring
+presence is always a rule of its own, next to the rules about the value.
 
 The expression has to reach the property through the validator's own parameter. `x => x.Address.Street` is a path;
 `x => x.Lines[0].Street` and `x => somethingElse.Street` are not, and are refused where they are declared rather than
@@ -554,9 +553,12 @@ A runnable end-to-end example lives in [`Samples/NValidation.SampleApi`](Samples
 
 ## Testing your own rules
 
-A validator is a plain object, so a test constructs it and runs it against whatever data the case is about:
+A validator is a plain object, so a test constructs it and runs it against whatever data the case is about.
+`NValidation.Testing` ships in the same package and needs no test framework and no assertion library of its own:
 
 ```csharp
+using NValidation.Testing;
+
 [Fact]
 public async Task ValidateAsync_WithoutAName_ReportsTheName()
 {
@@ -568,63 +570,114 @@ public async Task ValidateAsync_WithoutAName_ReportsTheName()
     var result = await validator.ValidateAsync(manufacturer);
 
     // Assert
-    result.Errors.Should().BeEquivalentTo([
-        new { Code = "Name", Message = "Name is required." }]);
+    result.ShouldReport("Name", "Name is required.");
 }
 ```
 
-Assert the message as well as the code. A test which only checks the code passes when the rule reports the right
-property with the wrong message — a value that is too large reported as "must be greater than" — so the message is what
-pins down *which* rule fired. Stating the errors as one list also makes the assertion exhaustive: nothing else may be
-present, and the count is implied.
+`ShouldReport` states the **whole** expected result: nothing else may be present and the count is implied, so a repeated
+entry asks for a repeated failure. Order is ignored. A failure throws `ValidationAssertionException`, naming what was
+missing, what was unexpected, and the near miss in between:
 
-For a suite of any size it is worth wrapping that in one helper, so every test reads the same and a fragment of a
-message is as easy to express as the whole of it:
+```
+Expected the validation result to report exactly 2 errors:
+  Vin      "Vin is mandatory."
+  Mileage  (any message)
+but it reported 2 errors:
+  Vin   "Vin is required."
+  Cost  "Cost is required."
 
-```csharp
-internal sealed record ExpectedError(string Code, string Message = "*");
+Not reported:
+  Vin      "Vin is mandatory."  (an error was reported under "Vin", but its message differs)
+  Mileage  (any message)        (nothing was reported under "Mileage")
 
-internal static class ValidationAssertions
-{
-    public static void ShouldReport(this ValidationResult result, string code, string message)
-    {
-        result.ShouldReport([new ExpectedError(code, message)]);
-    }
-
-    public static void ShouldReport(this ValidationResult result, IEnumerable<ExpectedError> expected)
-    {
-        result.Errors.Should().BeEquivalentTo(expected, options => options
-            .Using<string>(context => context.Subject.Should().Match(context.Expectation))
-            .When(info => info.Path.EndsWith("Message", StringComparison.Ordinal)));
-    }
-}
+Not expected:
+  Vin   "Vin is required."
+  Cost  "Cost is required."
 ```
 
-`Match` gives the message wildcards, and `ExpectedError` defaults it to `"*"` for a test which is about the properties
-that report rather than the wording:
+Assert the message, not only the code. A test which checks the code alone passes when a rule reports the right property
+with the wrong message — a value that is too large reported as "must be greater than". The message is matched with
+wildcards, so a fragment is as easy to express as the whole of it, and `ExpectedError` defaults it to `*` for a test
+that is about which properties report rather than about the wording:
 
 ```csharp
-result.ShouldReport("Name", "Name is required.");          // code + message
-result.ShouldReport("Mileage", "*greater than*");          // code + part of the message
+result.ShouldReport("Vin", "Vin is required.");        // code + message
+result.ShouldReport("Mileage", "*greater than*");      // code + part of the message
 result.ShouldReport([
-    new("FeatureIds"),                                     // code only
-    new("Model.Manufacturer.ContactEmail", "*email address*"),
+    new("FeatureIds"),                                 // code only
+    new("Model.Manufacturer.ContactEmail", "*not a valid email address*"),
     new("ServiceHistory[0].Workshop", "Workshop is required.")]);
 ```
 
-A rule of your own is tested the same way: declare a validator whose only rule is the one under test, and take its
-parameters through the constructor where the test needs to vary them.
+The same overloads take a `ValidationException` or a `{ code: [messages] }` dictionary, which is what a test of an
+endpoint holds rather than a `ValidationResult`:
 
 ```csharp
-internal sealed class VinValidator : Validator<Car>
+exception.ShouldReport("Vin", "The VIN is required.");
+
+var errors = (IReadOnlyDictionary<string, string[]>)problemDetails.Extensions["errors"]!;
+errors.ShouldReport([
+    new("Vin", "The VIN is required."),
+    new("Mileage", "The mileage must be greater than or equal to 0.")]);
+```
+
+Success is `result.Errors.Should().BeEmpty()` in whichever assertion library you already use.
+
+### One rule at a time
+
+`TestValidator<T>` declares the rule under test in the test itself, so a reader does not have to open a second file to
+learn what is being validated:
+
+```csharp
+var validator = new TestValidator<Invoice>();
+validator.Property(i => i.Reference).NotEmpty().MaximumLength(32);
+
+var result = await validator.ValidateAsync(new Invoice());
+
+result.ShouldReport("Reference", "Reference is required.");
+```
+
+Because rules report a message *key* rather than a text, a test can assert the key instead of the wording and stay
+independent of translations. Hand the validator `MessageKeyProvider.Instance` and it answers with keys:
+
+```csharp
+var validator = new TestValidator<Invoice>(MessageKeyProvider.Instance);
+validator.Property(i => i.Reference).MinimumLength(10);
+
+var result = await validator.ValidateAsync(new Invoice { Reference = "AB" });
+
+result.ShouldReport("Reference", "MinimumLength");
+```
+
+A rule that compares against "now" takes a clock the test owns, so it does not start failing on a future Tuesday:
+
+```csharp
+var clock = new TestTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+
+var validator = new TestValidator<Invoice>();
+validator.Property(i => i.DueDate).InTheFuture(clock);
+
+var result = await validator.ValidateAsync(new Invoice { DueDate = new DateTime(2025, 12, 31) });
+
+result.ShouldReport("DueDate", "DueDate must be a date in the future.");
+```
+
+### Testing your own message provider
+
+An application which resolves messages itself owes every key a text. One assertion covers the lot, so a missing
+translation shows up in the suite rather than as a raw key in a response:
+
+```csharp
+[Fact]
+public void GetMessage_AnswersForEveryKeyOfTheCore()
 {
-    public VinValidator(int length) => this.Property(c => c.Vin).Length(length);
+    new ResourceValidationMessageProvider().ShouldResolveEveryCoreMessageKey();
 }
 ```
 
-Because rules report a message *key* rather than a text, a test can also assert the key instead of the wording, by
-validating against a provider which resolves every key to itself. That keeps the test independent of translations:
-`result.ShouldReport("Vin", "NotEmpty")`.
+It checks that each key of `ValidationMessageProviderAssertions.CoreMessageKeys()` resolves to something other than the
+key itself, and that no `{Placeholder}` is left unsubstituted. It does not require a message to name the failing
+property — that is the translation's call.
 
 ## License
 

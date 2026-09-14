@@ -598,11 +598,11 @@ namespace NValidation.Tests
         public async Task GreaterThan_ReportsGreaterThan()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.Mileage).GreaterThan(10);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Car { Mileage = 5 });
+            var result = await validator.ValidateAsync(new Car { Mileage = 5 });
 
             // Assert
             result.ShouldReport("Mileage", "GreaterThan");
@@ -612,11 +612,11 @@ namespace NValidation.Tests
         public async Task GreaterThanOrEqualTo_ReportsGreaterThanOrEqualTo()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.Mileage).GreaterThanOrEqualTo(10);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Car { Mileage = 5 });
+            var result = await validator.ValidateAsync(new Car { Mileage = 5 });
 
             // Assert
             result.ShouldReport("Mileage", "GreaterThanOrEqualTo");
@@ -626,11 +626,11 @@ namespace NValidation.Tests
         public async Task LessThan_ReportsLessThan()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.Mileage).LessThan(10);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Car { Mileage = 20 });
+            var result = await validator.ValidateAsync(new Car { Mileage = 20 });
 
             // Assert
             result.ShouldReport("Mileage", "LessThan");
@@ -640,11 +640,11 @@ namespace NValidation.Tests
         public async Task LessThanOrEqualTo_ReportsLessThanOrEqualTo()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.Mileage).LessThanOrEqualTo(10);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Car { Mileage = 20 });
+            var result = await validator.ValidateAsync(new Car { Mileage = 20 });
 
             // Assert
             result.ShouldReport("Mileage", "LessThanOrEqualTo");
@@ -654,11 +654,11 @@ namespace NValidation.Tests
         public async Task Between_ReportsBetween()
         {
             // Arrange
-            var validator = new TestValidator<CarModel>();
+            var validator = new TestValidator<CarModel>(MessageKeyProvider.Instance);
             validator.Property(m => m.SeatCount).Between(2, 5);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new CarModel { SeatCount = 9 });
+            var result = await validator.ValidateAsync(new CarModel { SeatCount = 9 });
 
             // Assert
             result.ShouldReport("SeatCount", "Between");
@@ -668,11 +668,11 @@ namespace NValidation.Tests
         public async Task EqualTo_ReportsEqualTo()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.Mileage).EqualTo(10);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Car { Mileage = 20 });
+            var result = await validator.ValidateAsync(new Car { Mileage = 20 });
 
             // Assert
             result.ShouldReport("Mileage", "EqualTo");
@@ -682,11 +682,11 @@ namespace NValidation.Tests
         public async Task NotEqualTo_ReportsNotEqualTo()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.Mileage).NotEqualTo(10);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Car { Mileage = 10 });
+            var result = await validator.ValidateAsync(new Car { Mileage = 10 });
 
             // Assert
             result.ShouldReport("Mileage", "NotEqualTo");
@@ -696,7 +696,7 @@ namespace NValidation.Tests
         public async Task GreaterThanOrEqualTo_AgainstAnotherProperty_ReportsGreaterThanOrEqualToOtherProperty()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
 
             var car = new Car
@@ -706,7 +706,7 @@ namespace NValidation.Tests
             };
 
             // Act
-            var result = await validator.ValidateForKeysAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.ShouldReport("SoldDate", "GreaterThanOrEqualToOtherProperty");
@@ -716,7 +716,7 @@ namespace NValidation.Tests
         public async Task LessThanOrEqualTo_AgainstAnotherProperty_ReportsLessThanOrEqualToOtherProperty()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.FirstRegistration).LessThanOrEqualTo(c => c.SoldDate);
 
             var car = new Car
@@ -726,7 +726,7 @@ namespace NValidation.Tests
             };
 
             // Act
-            var result = await validator.ValidateForKeysAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.ShouldReport("FirstRegistration", "LessThanOrEqualToOtherProperty");

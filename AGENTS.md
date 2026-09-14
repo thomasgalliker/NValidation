@@ -67,25 +67,35 @@
 - The naming convention for unit tests is `{ClassName}.Tests`.
 - Use xUnit as test framework.
 - Use AwesomeAssertions for asserts.
-- A `ValidationResult` is asserted with `ShouldReport`
-  (`Tests/NValidation.Tests/TestData/ValidationAssertions.cs`), which states the *whole* expected
+- A `ValidationResult` is asserted with `ShouldReport` (`NValidation/Testing/ValidationAssertions.cs`,
+  namespace `NValidation.Testing`, **shipped** with the package), which states the *whole* expected
   result: `result.ShouldReport("Vin", "Vin is required.")` for one failure, and the list form for
   several. Nothing else may be present and the count is implied, so a repeated entry asks for a
-  repeated failure; order is ignored.
+  repeated failure; order is ignored. The same overloads take a `ValidationException` or a
+  `{ code: [messages] }` dictionary — `ToErrorsDictionary()`, `ValidationException.Errors`, or the
+  `errors` member of a problem-details response.
   ```csharp
   result.ShouldReport([
       new("FeatureIds"),                                       // the wording is not the point here
       new("Model.Manufacturer.ContactEmail", "*email address*"), // a fragment
       new("ServiceHistory[0].Workshop", "Workshop is required.")]);
   ```
-  The message is matched with wildcards (`*` any run of characters, `?` one), and `ExpectedError`
-  defaults it to `"*"` — accept any message — for a test about which properties report rather than
-  about the wording. Use that default sparingly: a pinned message is what makes the test catch a
-  rule wired to the wrong key. Success is `result.Errors.Should().BeEmpty()`. A negative match
-  (`Message.Should().NotContain(...)`) has no wildcard spelling and stays on AwesomeAssertions.
+  The message is matched with wildcards (`*` any run of characters, `?` one, `\*` and `\?` for those
+  characters themselves), and `ExpectedError` defaults it to `"*"` — accept any message — for a test
+  about which properties report rather than about the wording. Use that default sparingly: a pinned
+  message is what makes the test catch a rule wired to the wrong key. Success is
+  `result.Errors.Should().BeEmpty()`. A negative match (`Message.Should().NotContain(...)`) has no
+  wildcard spelling and stays on AwesomeAssertions — `PropertyRuleBuilderExtensionsTests.Text.cs` has
+  the one site that needs it.
+- `ShouldReport` depends on no test framework and no assertion library: it throws
+  `ValidationAssertionException`, and its own matching, pairing and failure text are tested in
+  `Tests/NValidation.Tests/Testing/`. Those tests pin the failure text verbatim, because an assertion
+  whose message stops naming the difference is the one thing this cannot afford to regress.
 - The expected code and message are written as plain string literals, never as `nameof`, a shared
   constant or a local: the literal is what a reader needs to see. Renames then cost a few more
   edits, which is the trade. A theory carries them in its `[InlineData]` rows.
+- A rule that compares against "now" takes a `TestTimeProvider`
+  (`new TestTimeProvider(new DateTimeOffset(...))`), never the ambient clock.
 - Use Moq, AutoMocker to setup and verify mocks (if applicable).
 - All unit tests must follow the Arrange-Act-Assert (AAA) pattern.
 - Separate AAA sections with blank lines.
@@ -101,9 +111,13 @@
 - Include edge cases: null inputs, empty collections, boundary values, and error conditions.
 - Prioritize testing complex logic, error handling, and edge cases over trivial code.
 - The rules a test is about are declared in the test itself, on `TestValidator<T>`
-  (`Tests/NValidation.Tests/TestData/TestValidator.cs`), which re-exposes the base class's `protected`
-  `Property`: `var validator = new TestValidator<Car>(); validator.Property(c => c.Vin).NotEmpty();`.
-  Rules first, a blank line, then the payload. Do not add a validator class per test case — the reader
+  (`NValidation/Testing/TestValidator.cs`, **shipped** with the package), which re-exposes the base
+  class's `protected` `Property`:
+  `var validator = new TestValidator<Car>(); validator.Property(c => c.Vin).NotEmpty();`.
+  Rules first, a blank line, then the payload. `new TestValidator<Car>()` answers in the built-in
+  English, for a test about the message a rule renders; `new TestValidator<Car>(MessageKeyProvider.Instance)`
+  answers with the message key, for a test about *which* rule reported. The provider is chosen at
+  construction, so nothing has to be sequenced or put back. Do not add a validator class per test case — the reader
   should not have to open a second file to learn what is being validated. A named validator, declared
   `private sealed` inside the test class that needs it, is for the case where something other than the
   rule chain depends on the *type*: the container constructs it by type, or a constant or payload factory
@@ -118,7 +132,7 @@
 ## Library-specific rules
 - Every shipped rule needs at least one test, including its boundary values and its null/absent case.
 - Every shipped rule also needs a test asserting the error's `Code` and its message key, resolved
-  through `ValidateForKeysAsync`/`MessageKeyProvider`:
+  through `new TestValidator<T>(MessageKeyProvider.Instance)`:
   `result.ShouldReport("Vin", "NotEmpty")`. These live beside the rule's own tests, in
   the matching `PropertyRuleBuilderExtensionsTests.*` part. Asserting only `result.Succeeded` lets a
   rule wired to a neighbouring key pass the whole suite — a value that is too large reported as "must

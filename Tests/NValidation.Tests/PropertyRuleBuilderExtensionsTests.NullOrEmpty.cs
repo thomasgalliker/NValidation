@@ -279,11 +279,11 @@ namespace NValidation.Tests
         public async Task NotEmpty_OnText_ReportsNotEmpty()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.Vin).NotEmpty();
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Car());
+            var result = await validator.ValidateAsync(new Car());
 
             // Assert
             result.ShouldReport("Vin", "NotEmpty");
@@ -293,11 +293,11 @@ namespace NValidation.Tests
         public async Task NotEmpty_OnACollection_ReportsNotEmpty()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.FeatureIds).NotEmpty();
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Car { FeatureIds = [] });
+            var result = await validator.ValidateAsync(new Car { FeatureIds = [] });
 
             // Assert
             result.ShouldReport("FeatureIds", "NotEmpty");
@@ -307,11 +307,11 @@ namespace NValidation.Tests
         public async Task NotDefault_ReportsNotDefault_NotNotEmpty()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.FirstRegistration).NotDefault();
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Car());
+            var result = await validator.ValidateAsync(new Car());
 
             // Assert
             result.ShouldReport("FirstRegistration", "NotDefault");
@@ -321,11 +321,11 @@ namespace NValidation.Tests
         public async Task NotNull_ReportsNotNull()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.Model).NotNull();
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Car());
+            var result = await validator.ValidateAsync(new Car());
 
             // Assert
             result.ShouldReport("Model", "NotNull");

@@ -191,11 +191,11 @@ namespace NValidation.Tests
         public async Task MinimumCount_ReportsMinimumCount()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.FeatureIds).MinimumCount(3);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Car { FeatureIds = [1] });
+            var result = await validator.ValidateAsync(new Car { FeatureIds = [1] });
 
             // Assert
             result.ShouldReport("FeatureIds", "MinimumCount");
@@ -205,11 +205,11 @@ namespace NValidation.Tests
         public async Task MaximumCount_ReportsMaximumCount()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.FeatureIds).MaximumCount(1);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Car { FeatureIds = [1, 2, 3] });
+            var result = await validator.ValidateAsync(new Car { FeatureIds = [1, 2, 3] });
 
             // Assert
             result.ShouldReport("FeatureIds", "MaximumCount");
@@ -219,11 +219,11 @@ namespace NValidation.Tests
         public async Task NoDuplicates_ReportsNoDuplicates()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.FeatureIds).NoDuplicates();
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Car { FeatureIds = [1, 1] });
+            var result = await validator.ValidateAsync(new Car { FeatureIds = [1, 1] });
 
             // Assert
             result.ShouldReport("FeatureIds", "NoDuplicates");

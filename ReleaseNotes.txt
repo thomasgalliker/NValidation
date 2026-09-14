@@ -5,3 +5,14 @@
   Configurable on the registration, on a validator, and per chain with WithValidationBehavior.
   Replaces ContinueOnFailure(), which is equivalent to WithValidationBehavior(ValidationBehavior.All).
   The defaults are unchanged behaviour: every property, one message each.
+- Added NValidation.Testing: assertions over a validation result for unit tests, shipped in the same
+  package and depending on no test framework and no assertion library. result.ShouldReport("Vin",
+  "Vin is required.") states the whole expected result — nothing else may be present, the count is
+  implied, order is ignored — and the same overloads take a ValidationException or a
+  { code: [messages] } dictionary. An expected message is matched with wildcards, so a fragment is as
+  easy to express as the whole of it. A failure throws ValidationAssertionException naming what was
+  missing, what was unexpected, and the near miss in between.
+  Also TestValidator<T>, which declares the rule under test in the test itself and takes an optional
+  IValidationMessageProvider; MessageKeyProvider, for assertions independent of any translation;
+  TestTimeProvider, for the date rules; and ShouldResolveEveryCoreMessageKey, which holds an
+  application's own message provider to every key this core can report.

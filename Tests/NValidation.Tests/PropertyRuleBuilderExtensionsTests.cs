@@ -164,14 +164,14 @@ namespace NValidation.Tests
             var modelValidator = new TestValidator<CarModel>();
             modelValidator.Property(m => m.Name).NotEmpty();
 
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.Model).SetValidator(modelValidator);
 
             var car = Cars.Car();
             car.Model = new CarModel();
 
             // Act
-            var result = await validator.ValidateForKeysAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.ShouldReport("Model.Name", "NotEmpty");

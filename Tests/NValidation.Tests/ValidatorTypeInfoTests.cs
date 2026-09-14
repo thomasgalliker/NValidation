@@ -58,7 +58,7 @@ namespace NValidation.Tests
         public void GetValidatedTypes_ForAnOpenGenericValidator_ReportsNothing()
         {
             // Act
-            var validatedTypes = ValidatorTypeInfo.GetValidatedTypes(typeof(TestData.TestValidator<>));
+            var validatedTypes = ValidatorTypeInfo.GetValidatedTypes(typeof(TestValidator<>));
 
             // Assert
             validatedTypes.Should().BeEmpty();
@@ -72,7 +72,7 @@ namespace NValidation.Tests
         public void GetValidatedTypes_ForAClosedGenericValidator_ReportsWhatItValidates()
         {
             // Act
-            var validatedTypes = ValidatorTypeInfo.GetValidatedTypes(typeof(TestData.TestValidator<Car>));
+            var validatedTypes = ValidatorTypeInfo.GetValidatedTypes(typeof(TestValidator<Car>));
 
             // Assert
             validatedTypes.Should().ContainSingle().Which.Should().Be(typeof(IValidator<Car>));

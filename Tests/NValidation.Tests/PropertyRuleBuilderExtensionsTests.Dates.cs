@@ -2,11 +2,20 @@ namespace NValidation.Tests
 {
     public partial class PropertyRuleBuilderExtensionsTests
     {
+
+        /// <summary>
+        /// A fixed instant the fixtures are built around, so "in the past" and "in the future" are
+        /// unambiguous without any arithmetic in the tests.
+        /// </summary>
+        private static TestTimeProvider AtStartOf2026()
+        {
+            return new TestTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        }
         [Fact]
         public async Task InThePast_AcceptsAnEarlierDate()
         {
             // Arrange
-            var timeProvider = TestTimeProvider.AtStartOf2026();
+            var timeProvider = AtStartOf2026();
             var validator = new TestValidator<Car>();
             validator.Property(c => c.FirstRegistration).InThePast(timeProvider);
 
@@ -24,7 +33,7 @@ namespace NValidation.Tests
         public async Task InThePast_RejectsALaterDate()
         {
             // Arrange
-            var timeProvider = TestTimeProvider.AtStartOf2026();
+            var timeProvider = AtStartOf2026();
             var validator = new TestValidator<Car>();
             validator.Property(c => c.FirstRegistration).InThePast(timeProvider);
 
@@ -42,7 +51,7 @@ namespace NValidation.Tests
         public async Task InThePast_RejectsThisVeryInstant()
         {
             // Arrange
-            var timeProvider = TestTimeProvider.AtStartOf2026();
+            var timeProvider = AtStartOf2026();
             var validator = new TestValidator<Car>();
             validator.Property(c => c.FirstRegistration).InThePast(timeProvider);
 
@@ -66,7 +75,7 @@ namespace NValidation.Tests
         public async Task InThePast_JudgesAnUnspecifiedKind_AsUtc(DateTimeKind kind)
         {
             // Arrange
-            var timeProvider = TestTimeProvider.AtStartOf2026();
+            var timeProvider = AtStartOf2026();
             var validator = new TestValidator<Car>();
             validator.Property(c => c.FirstRegistration).InThePast(timeProvider);
 
@@ -88,7 +97,7 @@ namespace NValidation.Tests
         {
             // Arrange
             var validator = new TestValidator<Car>();
-            validator.Property(c => c.SoldDate).InThePast(TestTimeProvider.AtStartOf2026());
+            validator.Property(c => c.SoldDate).InThePast(AtStartOf2026());
 
             var car = Cars.Car();
             car.SoldDate = null;
@@ -104,7 +113,7 @@ namespace NValidation.Tests
         public async Task InThePast_WithAnOffset_ComparesTheInstant()
         {
             // Arrange
-            var timeProvider = TestTimeProvider.AtStartOf2026();
+            var timeProvider = AtStartOf2026();
             var validator = new TestValidator<Car>();
             validator.Property(c => c.RegisteredAt).InThePast(timeProvider);
 
@@ -125,7 +134,7 @@ namespace NValidation.Tests
         {
             // Arrange
             var validator = new TestValidator<Car>();
-            validator.Property(c => c.WarrantyEndsOn).InTheFuture(TestTimeProvider.AtStartOf2026());
+            validator.Property(c => c.WarrantyEndsOn).InTheFuture(AtStartOf2026());
 
             var car = Cars.Car();
             car.WarrantyEndsOn = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -142,7 +151,7 @@ namespace NValidation.Tests
         {
             // Arrange
             var validator = new TestValidator<Car>();
-            validator.Property(c => c.WarrantyEndsOn).InTheFuture(TestTimeProvider.AtStartOf2026());
+            validator.Property(c => c.WarrantyEndsOn).InTheFuture(AtStartOf2026());
 
             var car = Cars.Car();
             car.WarrantyEndsOn = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -159,7 +168,7 @@ namespace NValidation.Tests
         {
             // Arrange
             var validator = new TestValidator<Car>();
-            validator.Property(c => c.WarrantyEndsOn).InTheFuture(TestTimeProvider.AtStartOf2026());
+            validator.Property(c => c.WarrantyEndsOn).InTheFuture(AtStartOf2026());
 
             var car = Cars.Car();
             car.WarrantyEndsOn = null;
@@ -176,7 +185,7 @@ namespace NValidation.Tests
         {
             // Arrange
             var validator = new TestValidator<Car>();
-            validator.Property(c => c.NextServiceAt).InTheFuture(TestTimeProvider.AtStartOf2026());
+            validator.Property(c => c.NextServiceAt).InTheFuture(AtStartOf2026());
 
             var car = Cars.Car();
             car.NextServiceAt = new DateTimeOffset(2027, 3, 1, 9, 0, 0, TimeSpan.FromHours(1));
@@ -196,7 +205,7 @@ namespace NValidation.Tests
         public async Task InThePast_FollowsTheSuppliedClock()
         {
             // Arrange
-            var timeProvider = TestTimeProvider.AtStartOf2026();
+            var timeProvider = AtStartOf2026();
             var validator = new TestValidator<Car>();
             validator.Property(c => c.FirstRegistration).InThePast(timeProvider);
 
@@ -218,13 +227,13 @@ namespace NValidation.Tests
         public async Task InThePast_ReportsInThePast()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
-            validator.Property(c => c.SoldDate).InThePast(TestTimeProvider.AtStartOf2026());
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            validator.Property(c => c.SoldDate).InThePast(AtStartOf2026());
 
             var car = new Car { SoldDate = new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc) };
 
             // Act
-            var result = await validator.ValidateForKeysAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.ShouldReport("SoldDate", "InThePast");
@@ -234,13 +243,13 @@ namespace NValidation.Tests
         public async Task InTheFuture_ReportsInTheFuture()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
-            validator.Property(c => c.NextServiceAt).InTheFuture(TestTimeProvider.AtStartOf2026());
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            validator.Property(c => c.NextServiceAt).InTheFuture(AtStartOf2026());
 
             var car = new Car { NextServiceAt = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc) };
 
             // Act
-            var result = await validator.ValidateForKeysAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.ShouldReport("NextServiceAt", "InTheFuture");

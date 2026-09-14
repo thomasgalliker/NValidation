@@ -16,7 +16,7 @@ namespace NValidation.Tests
         {
             var messageKeys = new TheoryData<string>();
 
-            foreach (var messageKey in DeclaredConstants(typeof(ValidationMessageKeys)))
+            foreach (var messageKey in ValidationMessageProviderAssertions.CoreMessageKeys())
             {
                 messageKeys.Add(messageKey);
             }
@@ -37,39 +37,41 @@ namespace NValidation.Tests
             message.Should().Be("Name must not exceed 200 characters.");
         }
 
+        /// <summary>
+        /// Has a message at all, and names no placeholder a rule does not supply. Both halves are what
+        /// <see cref="ValidationMessageProviderAssertions.ShouldResolveMessageKey"/> promises any provider,
+        /// so the built-in one is held to the same bar an application's own is.
+        /// </summary>
         [Theory]
         [MemberData(nameof(MessageKeys))]
-        public void GetMessage_HasABuiltInMessage_ForEveryKeyOfTheCore(string messageKey)
+        public void GetMessage_ResolvesEveryKeyOfTheCore(string messageKey)
         {
             // Act
-            var message = DefaultValidationMessageProvider.Instance.GetMessage(messageKey, PlaceholderArguments.All());
+            var act = () => DefaultValidationMessageProvider.Instance.ShouldResolveMessageKey(messageKey);
 
             // Assert
-            message.Should().NotBe(messageKey, $"{messageKey} must have a built-in English message");
+            act.Should().NotThrow();
         }
 
+        /// <summary>
+        /// A house rule of the built-in English rather than a requirement of the seam: a message read on
+        /// its own has no labelled input next to it, while a translation shown underneath one is free to
+        /// leave the property out.
+        /// </summary>
         [Theory]
         [MemberData(nameof(MessageKeys))]
         public void GetMessage_NamesTheFailingProperty_ForEveryKeyOfTheCore(string messageKey)
         {
+            // Arrange
+            const string propertyName = "TheFailingProperty";
+
             // Act
-            var message = DefaultValidationMessageProvider.Instance.GetMessage(messageKey, PlaceholderArguments.All());
+            var message = DefaultValidationMessageProvider.Instance.GetMessage(
+                messageKey,
+                ValidationMessageProviderAssertions.CorePlaceholderArguments(propertyName));
 
             // Assert
-            message.Should().Contain(PlaceholderArguments.PropertyName, $"{messageKey} must name the failing property");
-        }
-
-        [Theory]
-        [MemberData(nameof(MessageKeys))]
-        public void GetMessage_NamesOnlyDeclaredPlaceholders_ForEveryKeyOfTheCore(string messageKey)
-        {
-            // Act
-            var message = DefaultValidationMessageProvider.Instance.GetMessage(messageKey, PlaceholderArguments.All());
-
-            // Assert
-            message.Should().NotMatchRegex(
-                PlaceholderArguments.UnresolvedPlaceholderPattern,
-                $"{messageKey} must only name placeholders declared in {nameof(ValidationMessagePlaceholders)}");
+            message.Should().Contain(propertyName, $"{messageKey} must name the failing property");
         }
 
         /// <summary>
@@ -83,14 +85,6 @@ namespace NValidation.Tests
 
             // Assert
             message.Should().Be("SomeRuleWithoutAMessage");
-        }
-
-        private static IEnumerable<string> DeclaredConstants(Type type)
-        {
-            return type
-                .GetFields()
-                .Where(field => field.IsLiteral && field.FieldType == typeof(string))
-                .Select(field => (string)field.GetRawConstantValue()!);
         }
     }
 }

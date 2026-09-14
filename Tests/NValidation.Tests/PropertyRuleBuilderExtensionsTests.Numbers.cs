@@ -222,11 +222,11 @@ namespace NValidation.Tests
         public async Task MultipleOf_ReportsMultipleOf()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.PurchasePrice).MultipleOf(0.05m);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new Car { PurchasePrice = 0.03m });
+            var result = await validator.ValidateAsync(new Car { PurchasePrice = 0.03m });
 
             // Assert
             result.ShouldReport("PurchasePrice", "MultipleOf");
@@ -236,11 +236,11 @@ namespace NValidation.Tests
         public async Task NotNaN_ReportsNotNaN_NotNotEmpty()
         {
             // Arrange
-            var validator = new TestValidator<CarModel>();
+            var validator = new TestValidator<CarModel>(MessageKeyProvider.Instance);
             validator.Property(m => m.FuelConsumption).NotNaN();
 
             // Act
-            var result = await validator.ValidateForKeysAsync(new CarModel { FuelConsumption = double.NaN });
+            var result = await validator.ValidateAsync(new CarModel { FuelConsumption = double.NaN });
 
             // Assert
             result.ShouldReport("FuelConsumption", "NotNaN");

@@ -57,7 +57,7 @@ namespace NValidation.Tests
         public async Task ForEach_ReportsTheMessageTheRuleChose()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.ServiceHistory)
                 .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
 
@@ -65,7 +65,7 @@ namespace NValidation.Tests
             car.ServiceHistory = [new ServiceRecord { Workshop = null }];
 
             // Act
-            var result = await validator.ValidateForKeysAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.ShouldReport("ServiceHistory[0].Workshop", "NotEmpty");

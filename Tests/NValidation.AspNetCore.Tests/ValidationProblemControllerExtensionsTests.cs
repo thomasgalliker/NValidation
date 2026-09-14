@@ -24,7 +24,7 @@ namespace NValidation.AspNetCore.Tests
             problemDetails.Status.Should().Be(StatusCodes.Status400BadRequest);
 
             var errors = (IReadOnlyDictionary<string, string[]>)problemDetails.Extensions["errors"]!;
-            errors["Vin"].Should().ContainSingle().Which.Should().Be("The VIN is required.");
+            errors.ShouldReport("Vin", "The VIN is required.");
         }
 
         [Fact]

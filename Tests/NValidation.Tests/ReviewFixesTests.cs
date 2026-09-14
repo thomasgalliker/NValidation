@@ -34,7 +34,7 @@ namespace NValidation.Tests
         public async Task Comparison_WithTheComparedPropertyReachable_StillReports()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.Mileage).LessThanOrEqualTo(c => c.Model!.WarrantyMileageCap);
 
             var car = Cars.Car();
@@ -42,7 +42,7 @@ namespace NValidation.Tests
             car.Mileage = 42_000;
 
             // Act
-            var result = await validator.ValidateForKeysAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.ShouldReport("Mileage", "LessThanOrEqualToOtherProperty");
@@ -52,14 +52,14 @@ namespace NValidation.Tests
         public async Task NotEqualTo_WithAnotherProperty_ReportsWhenTheyMatch()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.Mileage).NotEqualTo(c => c.WarrantyMileageLimit);
 
             var car = Cars.Car();
             car.Mileage = car.WarrantyMileageLimit;
 
             // Act
-            var result = await validator.ValidateForKeysAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.ShouldReport("Mileage", "NotEqualToOtherProperty");
@@ -108,7 +108,7 @@ namespace NValidation.Tests
         public async Task EqualTo_WithAnotherNullableProperty_ReportsWhenTheyDiffer()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
             validator.Property(c => c.SoldDate).EqualTo(c => c.WarrantyEndsOn);
 
             var car = Cars.Car();
@@ -116,7 +116,7 @@ namespace NValidation.Tests
             car.WarrantyEndsOn = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
 
             // Act
-            var result = await validator.ValidateForKeysAsync(car);
+            var result = await validator.ValidateAsync(car);
 
             // Assert
             result.ShouldReport("SoldDate", "EqualToOtherProperty");

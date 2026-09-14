@@ -67,7 +67,7 @@ namespace NValidation.AspNetCore.Tests
 
             // Assert
             var validationException = (await act.Should().ThrowAsync<ValidationException>()).Which;
-            validationException.Errors.Should().ContainKey(nameof(Car.Vin));
+            validationException.ShouldReport("Vin", "The VIN must be exactly 17 characters long.");
             actionWasRun.Should().BeFalse();
         }
 
@@ -82,7 +82,7 @@ namespace NValidation.AspNetCore.Tests
             var arguments = new Dictionary<string, object?>
             {
                 ["car"] = InvalidCar,
-                ["manufacturer"] = new Manufacturer { Name = null },
+                ["manufacturer"] = new Manufacturer { Name = null, CountryCode = "CHE" },
             };
             var context = CreateContext(nameof(TestActions.CreateWithManufacturer), arguments);
             var filter = CreateFilter();
@@ -92,7 +92,9 @@ namespace NValidation.AspNetCore.Tests
 
             // Assert
             var validationException = (await act.Should().ThrowAsync<ValidationException>()).Which;
-            validationException.Errors.Should().ContainKeys(nameof(Car.Vin), nameof(Manufacturer.Name));
+            validationException.ShouldReport([
+                new("Vin", "The VIN must be exactly 17 characters long."),
+                new("Name", "Name is required.")]);
         }
 
         /// <summary>
