@@ -175,7 +175,7 @@ namespace NValidation
         /// <inheritdoc/>
         public ValueTask<ValidationResult> ValidateAsync(T instance, CancellationToken cancellationToken = default)
         {
-            return this.ValidateAsync(instance, this.Messages, default, cancellationToken);
+            return this.ValidateAsync(instance, this.Messages, requested: null, cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -192,7 +192,9 @@ namespace NValidation
                 // The field rather than the property: a validator which was handed a provider keeps it,
                 // and one which was not must not fall through to NValidationOptions.Default here.
                 this.messages ?? options.MessageProvider,
-                new RequestedBehaviors(options.ValidationBehaviors.Class, options.ValidationBehaviors.Property),
+                // The options' own object, not a copy: using them froze it, so nothing can change
+                // it while this run reads it.
+                options.ValidationBehaviors,
                 cancellationToken);
         }
 
@@ -202,7 +204,7 @@ namespace NValidation
         /// messages know its index — does not have to mutate shared state to do it.
         /// </summary>
         internal async ValueTask<ValidationResult> ValidateAsync(
-            T instance, IValidationMessageProvider messages, RequestedBehaviors requested, CancellationToken cancellationToken)
+            T instance, IValidationMessageProvider messages, ValidationBehaviors? requested, CancellationToken cancellationToken)
         {
             var errors = new List<ValidationError>();
 
@@ -223,7 +225,7 @@ namespace NValidation
             T instance,
             List<ValidationError> errors,
             IValidationMessageProvider messages,
-            RequestedBehaviors requested,
+            ValidationBehaviors? requested,
             CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(instance);
@@ -238,7 +240,7 @@ namespace NValidation
             var defaults = NValidationOptions.DefaultInUse().ValidationBehaviors;
 
             var classBehavior = this.validationBehaviors.Class
-                ?? requested.Class
+                ?? requested?.Class
                 ?? this.registeredValidationBehaviors?.Class
                 ?? defaults.Class
                 ?? ValidationBehavior.All;
@@ -249,7 +251,7 @@ namespace NValidation
             var propertyBehavior = classBehavior == ValidationBehavior.StopAtFirstError
                 ? ValidationBehavior.StopAtFirstError
                 : this.validationBehaviors.Property
-                    ?? requested.Property
+                    ?? requested?.Property
                     ?? this.registeredValidationBehaviors?.Property
                     ?? defaults.Property
                     ?? ValidationBehavior.StopAtFirstError;
@@ -303,13 +305,13 @@ namespace NValidation
         }
 
         /// <inheritdoc/>
-        ValueTask<ValidationResult> IValidationRunAware<T>.ValidateAsync(T instance, IValidationMessageProvider messages, RequestedBehaviors requested, CancellationToken cancellationToken)
+        ValueTask<ValidationResult> IValidationRunAware<T>.ValidateAsync(T instance, IValidationMessageProvider messages, ValidationBehaviors? requested, CancellationToken cancellationToken)
         {
             return this.ValidateAsync(instance, messages, requested, cancellationToken);
         }
 
         /// <inheritdoc/>
-        ValueTask IValidationRunAware<T>.ValidateIntoAsync(T instance, List<ValidationError> errors, IValidationMessageProvider messages, RequestedBehaviors requested, CancellationToken cancellationToken)
+        ValueTask IValidationRunAware<T>.ValidateIntoAsync(T instance, List<ValidationError> errors, IValidationMessageProvider messages, ValidationBehaviors? requested, CancellationToken cancellationToken)
         {
             return this.ValidateIntoAsync(instance, errors, messages, requested, cancellationToken);
         }

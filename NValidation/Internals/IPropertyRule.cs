@@ -23,7 +23,7 @@ namespace NValidation.Internals
             IValidationMessageProvider messages,
             PropertyDisplayNames displayNames,
             ValidationBehavior propertyBehavior,
-            RequestedBehaviors requested,
+            ValidationBehaviors? requested,
             CancellationToken cancellationToken);
     }
 }

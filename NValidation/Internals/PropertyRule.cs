@@ -128,7 +128,7 @@ namespace NValidation.Internals
             IValidationMessageProvider messages,
             PropertyDisplayNames displayNames,
             ValidationBehavior propertyBehavior,
-            RequestedBehaviors requested,
+            ValidationBehaviors? requested,
             CancellationToken cancellationToken)
         {
             var context = this.CreateContext(instance, errors, messages, displayNames, requested);
@@ -176,7 +176,7 @@ namespace NValidation.Internals
             List<ValidationError> errors,
             IValidationMessageProvider messages,
             PropertyDisplayNames displayNames,
-            RequestedBehaviors requested)
+            ValidationBehaviors? requested)
         {
             if (this.Condition != null && !this.Condition(instance))
             {

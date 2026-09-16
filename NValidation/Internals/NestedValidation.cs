@@ -10,7 +10,7 @@ namespace NValidation.Internals
             IValidator<T> validator,
             T instance,
             IValidationMessageProvider messages,
-            RequestedBehaviors requested,
+            ValidationBehaviors? requested,
             CancellationToken cancellationToken)
         {
             return validator is IValidationRunAware<T> aware
@@ -27,7 +27,7 @@ namespace NValidation.Internals
             T instance,
             List<ValidationError> errors,
             IValidationMessageProvider messages,
-            RequestedBehaviors requested,
+            ValidationBehaviors? requested,
             CancellationToken cancellationToken)
         {
             if (validator is IValidationRunAware<T> aware)

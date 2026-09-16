@@ -115,7 +115,7 @@ namespace NValidation
             string propertyName,
             Action<ValidationError> report,
             IValidationMessageProvider messages,
-            RequestedBehaviors requested,
+            ValidationBehaviors? requested,
             CancellationToken cancellationToken)
         {
             var index = 0;
@@ -153,7 +153,7 @@ namespace NValidation
             Action<ValidationError> report,
             IndexedMessageProvider<TElement> messages,
             List<ValidationError> elementErrors,
-            RequestedBehaviors requested,
+            ValidationBehaviors? requested,
             CancellationToken cancellationToken)
         {
             await this.rules.ValidateIntoAsync(element, elementErrors, messages, requested, cancellationToken);
