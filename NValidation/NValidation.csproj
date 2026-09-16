@@ -40,11 +40,4 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
-  <ItemGroup>
-    <!-- The lowest version carrying everything used here (IServiceCollection, ServiceDescriptor,
-         TryAdd*, ActivatorUtilities). NuGet resolves upwards, so a .NET 10 host still gets its own
-         10.x assembly — pinning 10.x here would instead force it onto .NET 8 consumers. -->
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
-  </ItemGroup>
-  
 </Project>

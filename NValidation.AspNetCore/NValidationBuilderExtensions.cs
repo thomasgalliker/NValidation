@@ -9,7 +9,7 @@ namespace NValidation.AspNetCore
     /// The ASP.NET Core parts of the configuration, so a web host configures this library in the one
     /// place the rest of it is configured.
     /// </summary>
-    public static class NValidationOptionsExtensions
+    public static class NValidationBuilderExtensions
     {
         /// <summary>
         /// Adds <see cref="ValidationActionFilter"/> to MVC, so every controller action validates its
@@ -29,8 +29,8 @@ namespace NValidation.AspNetCore
         /// endpoints are unaffected — there is no action for a filter to run in front of — and validate
         /// by calling their validator.
         /// </remarks>
-        public static NValidationOptions AddValidationFilter(
-            this NValidationOptions options,
+        public static NValidationBuilder AddValidationFilter(
+            this NValidationBuilder options,
             Action<ValidationFilterOptions> configure)
         {
             ArgumentNullException.ThrowIfNull(configure);
@@ -41,13 +41,13 @@ namespace NValidation.AspNetCore
         /// <summary>
         /// The same, leaving <see cref="ValidationFilterOptions"/> at its defaults.
         /// </summary>
-        public static NValidationOptions AddValidationFilter(this NValidationOptions options)
+        public static NValidationBuilder AddValidationFilter(this NValidationBuilder options)
         {
             return AddValidationFilterCore(options, configure: null);
         }
 
-        private static NValidationOptions AddValidationFilterCore(
-            NValidationOptions options,
+        private static NValidationBuilder AddValidationFilterCore(
+            NValidationBuilder options,
             Action<ValidationFilterOptions>? configure)
         {
             ArgumentNullException.ThrowIfNull(options);
@@ -73,8 +73,8 @@ namespace NValidation.AspNetCore
         /// The same, binding <see cref="ValidationFilterOptions"/> from configuration so the behaviour
         /// can be changed without a rebuild.
         /// </summary>
-        public static NValidationOptions AddValidationFilter(
-            this NValidationOptions options,
+        public static NValidationBuilder AddValidationFilter(
+            this NValidationBuilder options,
             IConfiguration configuration)
         {
             ArgumentNullException.ThrowIfNull(options);

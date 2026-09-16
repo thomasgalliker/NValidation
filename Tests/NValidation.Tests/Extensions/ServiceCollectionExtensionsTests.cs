@@ -848,7 +848,7 @@ namespace NValidation.Tests.Extensions
         {
             // Arrange
             var services = new ServiceCollection();
-            NValidationOptions? kept = null;
+            NValidationBuilder? kept = null;
 
             services.AddNValidation(o =>
             {

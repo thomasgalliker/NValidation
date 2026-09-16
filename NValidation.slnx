@@ -28,4 +28,5 @@
   </Folder>
   <Project Path="NValidation.AspNetCore/NValidation.AspNetCore.csproj" />
   <Project Path="NValidation/NValidation.csproj" />
+  <Project Path="NValidation.DependencyInjection/NValidation.DependencyInjection.csproj" />
 </Solution>

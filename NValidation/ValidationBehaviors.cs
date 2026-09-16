@@ -3,7 +3,7 @@ namespace NValidation
     /// <summary>
     /// How much a validator reports, along the two axes it can be asked about: across its properties,
     /// and within one property's rule chain. Carried by <see cref="Validator{T}.ValidationBehaviors"/>
-    /// and by <see cref="NValidationOptions.ValidationBehaviors"/>, so the level a setting applies to is
+    /// and by <c>NValidationBuilder.ValidationBehaviors</c>, so the level a setting applies to is
     /// where it is written rather than a word in its name.
     /// </summary>
     /// <remarks>

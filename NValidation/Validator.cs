@@ -48,7 +48,7 @@ namespace NValidation
         /// </summary>
         /// <remarks>
         /// An axis left unset takes what the DI registration configured through
-        /// <see cref="NValidationOptions.ValidationBehaviors"/>, and failing that the built-in defaults:
+        /// <c>NValidationBuilder.ValidationBehaviors</c>, and failing that the built-in defaults:
         /// every property, one message each. Like <see cref="Messages"/>, it is read while validating
         /// rather than while the rules are declared, so where in the constructor it is written makes no
         /// difference.

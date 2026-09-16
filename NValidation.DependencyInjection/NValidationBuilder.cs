@@ -12,12 +12,12 @@ namespace NValidation
     /// </summary>
     /// <remarks>
     /// Handed to the delegate passed to
-    /// <see cref="ServiceCollectionExtensions.AddNValidation(IServiceCollection, Action{NValidationOptions})"/>,
+    /// <see cref="ServiceCollectionExtensions.AddNValidation(IServiceCollection, Action{NValidationBuilder})"/>,
     /// so everything this library needs is configured in one place. The settings are properties and the
     /// registrations are methods; nothing reaches the service collection until the delegate has run, so
     /// a setting applies to every validator however the delegate is ordered.
     /// </remarks>
-    public sealed class NValidationOptions
+    public sealed class NValidationBuilder
     {
         /// <summary>
         /// What each <c>AddValidator</c> and each scan asked for, resolved and applied once the delegate
@@ -27,7 +27,7 @@ namespace NValidation
 
         private Type? messageProvider;
 
-        internal NValidationOptions(IServiceCollection services)
+        internal NValidationBuilder(IServiceCollection services)
         {
             this.Services = services;
         }
@@ -149,7 +149,7 @@ namespace NValidation
         /// <exception cref="ArgumentException">
         /// <typeparamref name="TValidator"/> does not implement <see cref="IValidator{T}"/>.
         /// </exception>
-        public NValidationOptions AddValidator<TValidator>()
+        public NValidationBuilder AddValidator<TValidator>()
             where TValidator : class
         {
             return this.AddValidator(typeof(TValidator), lifetime: null);
@@ -159,7 +159,7 @@ namespace NValidation
         /// <remarks>
         /// For the one validator whose dependencies do not allow <see cref="ValidatorLifetime"/>.
         /// </remarks>
-        public NValidationOptions AddValidator<TValidator>(ServiceLifetime lifetime)
+        public NValidationBuilder AddValidator<TValidator>(ServiceLifetime lifetime)
             where TValidator : class
         {
             return this.AddValidator(typeof(TValidator), (ServiceLifetime?)lifetime);
@@ -169,7 +169,7 @@ namespace NValidation
         /// The same, naming the validated type as well — so the compiler checks that
         /// <typeparamref name="TValidator"/> really does validate <typeparamref name="TInstance"/>.
         /// </summary>
-        public NValidationOptions AddValidator<TInstance, TValidator>()
+        public NValidationBuilder AddValidator<TInstance, TValidator>()
             where TValidator : class, IValidator<TInstance>
         {
             return this.Add(typeof(IValidator<TInstance>), typeof(TValidator), lifetime: null, isExplicit: true);
@@ -177,7 +177,7 @@ namespace NValidation
 
         /// <inheritdoc cref="AddValidator{TInstance, TValidator}()" path="/summary"/>
         /// <inheritdoc cref="AddValidator{TValidator}(ServiceLifetime)" path="/remarks"/>
-        public NValidationOptions AddValidator<TInstance, TValidator>(ServiceLifetime lifetime)
+        public NValidationBuilder AddValidator<TInstance, TValidator>(ServiceLifetime lifetime)
             where TValidator : class, IValidator<TInstance>
         {
             return this.Add(typeof(IValidator<TInstance>), typeof(TValidator), lifetime, isExplicit: true);
@@ -187,7 +187,7 @@ namespace NValidation
         /// The form a scan uses, where the validator's type is only known at runtime.
         /// </summary>
         /// <inheritdoc cref="AddValidator{TValidator}()" path="/exception"/>
-        public NValidationOptions AddValidator(Type validatorType)
+        public NValidationBuilder AddValidator(Type validatorType)
         {
             return this.AddValidator(validatorType, lifetime: null);
         }
@@ -195,7 +195,7 @@ namespace NValidation
         /// <inheritdoc cref="AddValidator(Type)" path="/summary"/>
         /// <inheritdoc cref="AddValidator{TValidator}(ServiceLifetime)" path="/remarks"/>
         /// <inheritdoc cref="AddValidator{TValidator}()" path="/exception"/>
-        public NValidationOptions AddValidator(Type validatorType, ServiceLifetime lifetime)
+        public NValidationBuilder AddValidator(Type validatorType, ServiceLifetime lifetime)
         {
             return this.AddValidator(validatorType, (ServiceLifetime?)lifetime);
         }
@@ -208,14 +208,14 @@ namespace NValidation
         /// An explicit <c>AddValidator</c> wins over whatever a scan finds for the same type, wherever
         /// in the delegate it is written.
         /// </remarks>
-        public NValidationOptions AddValidatorsFromAssembly(params Assembly[] assemblies)
+        public NValidationBuilder AddValidatorsFromAssembly(params Assembly[] assemblies)
         {
             return this.AddValidatorsFromAssembly(lifetime: null, assemblies);
         }
 
         /// <inheritdoc cref="AddValidatorsFromAssembly(Assembly[])" path="/summary"/>
         /// <inheritdoc cref="AddValidatorsFromAssembly(Assembly[])" path="/remarks"/>
-        public NValidationOptions AddValidatorsFromAssembly(ServiceLifetime lifetime, params Assembly[] assemblies)
+        public NValidationBuilder AddValidatorsFromAssembly(ServiceLifetime lifetime, params Assembly[] assemblies)
         {
             return this.AddValidatorsFromAssembly((ServiceLifetime?)lifetime, assemblies);
         }
@@ -422,7 +422,7 @@ namespace NValidation
         /// The type is inspected now rather than at <see cref="Apply"/>, so a type that validates
         /// nothing is reported from the call that named it.
         /// </remarks>
-        private NValidationOptions AddValidator(Type validatorType, ServiceLifetime? lifetime)
+        private NValidationBuilder AddValidator(Type validatorType, ServiceLifetime? lifetime)
         {
             ArgumentNullException.ThrowIfNull(validatorType);
 
@@ -448,7 +448,7 @@ namespace NValidation
         /// delegate has run, because a payload this scan found may be named explicitly on a line the
         /// scan has not reached yet.
         /// </remarks>
-        private NValidationOptions AddValidatorsFromAssembly(ServiceLifetime? lifetime, params Assembly[] assemblies)
+        private NValidationBuilder AddValidatorsFromAssembly(ServiceLifetime? lifetime, params Assembly[] assemblies)
         {
             ArgumentNullException.ThrowIfNull(assemblies);
 
@@ -475,7 +475,7 @@ namespace NValidation
             return validatorServiceType.GetGenericArguments()[0];
         }
 
-        private NValidationOptions Add(Type validatedType, Type validatorType, ServiceLifetime? lifetime, bool isExplicit)
+        private NValidationBuilder Add(Type validatedType, Type validatorType, ServiceLifetime? lifetime, bool isExplicit)
         {
             this.registrations.Add(new Registration(validatedType, validatorType, lifetime, isExplicit));
 

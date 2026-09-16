@@ -31,7 +31,7 @@ namespace NValidation
         /// });
         /// </code>
         /// </example>
-        public static IServiceCollection AddNValidation(this IServiceCollection services, Action<NValidationOptions> configure)
+        public static IServiceCollection AddNValidation(this IServiceCollection services, Action<NValidationBuilder> configure)
         {
             ArgumentNullException.ThrowIfNull(configure);
 
@@ -46,13 +46,13 @@ namespace NValidation
             return AddNValidationCore(services, configure: null);
         }
 
-        private static IServiceCollection AddNValidationCore(IServiceCollection services, Action<NValidationOptions>? configure)
+        private static IServiceCollection AddNValidationCore(IServiceCollection services, Action<NValidationBuilder>? configure)
         {
             ArgumentNullException.ThrowIfNull(services);
 
             services.TryAddSingleton<IValidationMessageProvider, DefaultValidationMessageProvider>();
 
-            var options = new NValidationOptions(services);
+            var options = new NValidationBuilder(services);
 
             configure?.Invoke(options);
 

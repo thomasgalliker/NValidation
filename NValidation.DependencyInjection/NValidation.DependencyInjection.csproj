@@ -8,12 +8,12 @@
 
   <!--NuGet package-->
   <PropertyGroup>
-    <Product>NValidation.AspNetCore</Product>
-    <Description>ASP.NET Core integration for NValidation: maps a validation failure to an RFC7807 problem details response.</Description>
+    <Product>NValidation.DependencyInjection</Product>
+    <Description>Dependency injection integration for NValidation: registers validators with IServiceCollection and binds the registration from IConfiguration.</Description>
     <Version>1.0.0</Version>
     <Authors>Thomas Galliker</Authors>
-    <PackageId>NValidation.AspNetCore</PackageId>
-    <PackageTags>validation;validator;aspnetcore;problemdetails;rfc7807;webapi</PackageTags>
+    <PackageId>NValidation.DependencyInjection</PackageId>
+    <PackageTags>validation;validator;dependencyinjection;ioc;di;configuration</PackageTags>
     <PackageIcon>icon.png</PackageIcon>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -41,11 +41,19 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- The lowest version carrying everything used here (IServiceCollection, ServiceDescriptor,
+         TryAdd*, ActivatorUtilities). NuGet resolves upwards, so a .NET 10 host still gets its own
+         10.x assembly — pinning 10.x here would instead force it onto .NET 8 consumers. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
+
+    <!-- For the IConfiguration overloads of AddNValidation. Only the abstractions: the settings are
+         read key by key rather than through Bind(object), which is RequiresUnreferencedCode and would
+         surface as a trimming warning in an AOT consumer's build. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\NValidation.DependencyInjection\NValidation.DependencyInjection.csproj" />
+    <ProjectReference Include="..\NValidation\NValidation.csproj" />
   </ItemGroup>
 
 </Project>

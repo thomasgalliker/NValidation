@@ -10,7 +10,7 @@ namespace NValidation.AspNetCore.Tests
     /// mean every payload is validated more than once.
     /// </summary>
     [Trait(Traits.Category, Traits.UnitTests)]
-    public class NValidationOptionsExtensionsTests
+    public class NValidationBuilderExtensionsTests
     {
         [Fact]
         public void AddValidationFilter_AddsTheFilter()
