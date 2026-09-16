@@ -50,7 +50,12 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(services);
 
-            services.TryAddSingleton<IValidationMessageProvider, DefaultValidationMessageProvider>();
+            // The base layer, not a built-in English default written over the top of it: what this
+            // resolves to is whatever NValidationOptions.Default says the first time anything asks,
+            // which is the built-in provider until a host configures otherwise. Still TryAdd, so a host
+            // which registered its own provider before this call keeps it, and the Replace in
+            // NValidationBuilder.Apply still outranks both.
+            services.TryAddSingleton<IValidationMessageProvider>(_ => NValidationOptions.DefaultInUse().MessageProvider);
 
             var options = new NValidationBuilder(services);
 

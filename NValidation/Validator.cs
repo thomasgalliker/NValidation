@@ -13,7 +13,13 @@ namespace NValidation
     {
         private readonly List<IPropertyRule<T>> rules = [];
 
-        private IValidationMessageProvider messages = DefaultValidationMessageProvider.Instance;
+        /// <summary>
+        /// What this validator was handed, or <c>null</c> for one that was handed nothing and therefore
+        /// answers through <see cref="NValidationOptions.Default"/>. Held apart from the defaults rather
+        /// than seeded from them, so a default configured after this validator was constructed still
+        /// reaches it.
+        /// </summary>
+        private IValidationMessageProvider? messages;
 
         private readonly ValidationBehaviors validationBehaviors = new();
 
@@ -29,15 +35,19 @@ namespace NValidation
         /// Where the rules take their message texts from. Assigned by the DI registration
         /// (<c>AddValidator</c>) from the registered <see cref="IValidationMessageProvider"/>, so a
         /// concrete validator's constructor stays free of plumbing and only declares rules. Falls back
-        /// to the built-in English messages when the validator is constructed directly.
+        /// to <see cref="NValidationOptions.Default"/> when the validator is constructed directly, and
+        /// to the built-in English when that was never configured either.
         /// </summary>
         /// <remarks>
         /// Read while validating rather than while the rules are declared, so it can still be assigned
-        /// after the constructor has run.
+        /// after the constructor has run — and so a default configured after this validator was
+        /// constructed still reaches it. Reading this property therefore resolves the answer rather
+        /// than returning a field: it is not a stable reference across a change to
+        /// <see cref="NValidationOptions.Default"/>.
         /// </remarks>
         public IValidationMessageProvider Messages
         {
-            get => this.messages;
+            get => this.messages ?? NValidationOptions.DefaultInUse().MessageProvider;
             set => this.messages = value ?? throw new ArgumentNullException(nameof(value));
         }
 
@@ -48,7 +58,8 @@ namespace NValidation
         /// </summary>
         /// <remarks>
         /// An axis left unset takes what the DI registration configured through
-        /// <c>NValidationBuilder.ValidationBehaviors</c>, and failing that the built-in defaults:
+        /// <c>NValidationBuilder.ValidationBehaviors</c>, failing that
+        /// <see cref="NValidationOptions.Default"/>, and failing that the built-in defaults:
         /// every property, one message each. Like <see cref="Messages"/>, it is read while validating
         /// rather than while the rules are declared, so where in the constructor it is written makes no
         /// difference.
@@ -198,8 +209,13 @@ namespace NValidation
             // element's own validator is handed the same list.
             var errorCountAtStart = errors.Count;
 
+            // Read once, so both axes come from the same defaults even if something reconfigures
+            // them while this run is in flight. Reading them is also what freezes them.
+            var defaults = NValidationOptions.DefaultInUse().ValidationBehaviors;
+
             var classBehavior = this.validationBehaviors.Class
                 ?? this.ambientValidationBehaviors?.Class
+                ?? defaults.Class
                 ?? ValidationBehavior.All;
 
             // A run that stops at the first error stops inside a chain too, or the setting would not do
@@ -209,6 +225,7 @@ namespace NValidation
                 ? ValidationBehavior.StopAtFirstError
                 : this.validationBehaviors.Property
                     ?? this.ambientValidationBehaviors?.Property
+                    ?? defaults.Property
                     ?? ValidationBehavior.StopAtFirstError;
 
             // Built once and kept: a display name is stored as a Func<string> and resolved while the
