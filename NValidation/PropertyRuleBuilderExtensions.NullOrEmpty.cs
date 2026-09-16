@@ -14,7 +14,7 @@ namespace NValidation
             {
                 if (string.IsNullOrWhiteSpace(context.Value))
                 {
-                    context.AddError(ValidationMessageKeys.NotEmpty);
+                    context.AddError(ValidationErrorCodes.NotEmpty);
                 }
             });
         }
@@ -39,7 +39,7 @@ namespace NValidation
                 // box the value and the default it is compared against, on every check.
                 if (EqualityComparer<TValue>.Default.Equals(context.Value, default))
                 {
-                    context.AddError(ValidationMessageKeys.NotDefault);
+                    context.AddError(ValidationErrorCodes.NotDefault);
                 }
             });
         }
@@ -55,7 +55,7 @@ namespace NValidation
             {
                 if (context.Value is not { } value || EqualityComparer<TValue>.Default.Equals(value, default))
                 {
-                    context.AddError(ValidationMessageKeys.NotDefault);
+                    context.AddError(ValidationErrorCodes.NotDefault);
                 }
             });
         }
@@ -76,7 +76,7 @@ namespace NValidation
             {
                 if (context.Value == null || CollectionCount.IsEmpty(context.Value))
                 {
-                    context.AddError(ValidationMessageKeys.NotEmpty);
+                    context.AddError(ValidationErrorCodes.NotEmpty);
                 }
             });
         }
@@ -92,7 +92,7 @@ namespace NValidation
             {
                 if (context.Value == null)
                 {
-                    context.AddError(ValidationMessageKeys.NotNull);
+                    context.AddError(ValidationErrorCodes.NotNull);
                 }
             });
         }
@@ -108,7 +108,7 @@ namespace NValidation
             {
                 if (context.Value == null)
                 {
-                    context.AddError(ValidationMessageKeys.NotNull);
+                    context.AddError(ValidationErrorCodes.NotNull);
                 }
             });
         }

@@ -266,6 +266,197 @@ namespace NValidation.Tests.Extensions
             result.ShouldReport("First", "Name is required.");
         }
 
+        /// <summary>
+        /// An ambiguous scan is settled by naming the validator to keep, and it stays settled when that
+        /// name is written after the scan rather than before it. The scan collects what it found and
+        /// leaves the choosing until the whole delegate has run, so it cannot refuse a choice the next
+        /// line was about to make.
+        /// </summary>
+        [Fact]
+        public async Task AddValidatorsFromAssembly_WithAnExplicitRegistrationAfterIt_PassesOverThatPayload()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o => o
+                .AddValidatorsFromAssembly(AmbiguousAssembly)
+                .AddValidator<FirstAmbiguousValidator>());
+
+            var validator = Resolve<IValidator<AmbiguousPayload>>(services);
+
+            // Act
+            var result = await validator.ValidateAsync(new AmbiguousPayload());
+
+            // Assert
+            validator.Should().BeOfType<FirstAmbiguousValidator>();
+            result.ShouldReport("First", "Name is required.");
+        }
+
+        /// <summary>
+        /// The same, written the other way round. Order independence is the whole point of deferring the
+        /// registrations to <c>Apply()</c>, and overriding a scanned validator is the case that needs it
+        /// most — a host which scans an assembly and then names its own replacement has said something
+        /// unambiguous, whichever line it sits on.
+        /// </summary>
+        [Fact]
+        public void AddValidatorsFromAssembly_KeepsAnExplicitRegistration_WhateverOrderItWasWrittenIn()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o => o
+                .AddValidatorsFromAssembly(typeof(CarValidator).Assembly)
+                .AddValidator<Manufacturer, HandWrittenManufacturerValidator>());
+
+            // Act
+            var validator = Resolve<IValidator<Manufacturer>>(services);
+
+            // Assert
+            validator.Should().BeOfType<HandWrittenManufacturerValidator>();
+        }
+
+        /// <summary>
+        /// Two explicit registrations naming different validators for one payload is a contradiction the
+        /// caller has to settle, exactly as an ambiguous scan is. Keeping the first silently would make
+        /// the second line read as if it had done something.
+        /// </summary>
+        [Fact]
+        public void AddValidator_WithTwoDifferentValidatorsForOnePayload_Throws()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+
+            // Act
+            var act = () => services.AddNValidation(o => o
+                .AddValidator<FirstAmbiguousValidator>()
+                .AddValidator<SecondAmbiguousValidator>());
+
+            // Assert
+            act.Should().Throw<InvalidOperationException>()
+                .WithMessage($"*both validate '{typeof(AmbiguousPayload)}'*");
+        }
+
+        /// <summary>
+        /// Naming the same validator twice is not a contradiction, so it is not an error.
+        /// </summary>
+        [Fact]
+        public void AddValidator_WithTheSameValidatorTwice_Registers()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o => o
+                .AddValidator<FirstAmbiguousValidator>()
+                .AddValidator<FirstAmbiguousValidator>());
+
+            // Act
+            var validator = Resolve<IValidator<AmbiguousPayload>>(services);
+
+            // Assert
+            validator.Should().BeOfType<FirstAmbiguousValidator>();
+        }
+
+        /// <summary>
+        /// The whole point: a validator whose only dependencies are other validators can be shared, and
+        /// then its rules are built once for the process rather than once per request.
+        /// </summary>
+        [Fact]
+        public void PromoteSafeValidatorsToSingleton_SharesAValidatorWithNoScopedDependency()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o =>
+            {
+                o.PromoteSafeValidatorsToSingleton = true;
+                o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly);
+            });
+
+            // Act
+            var descriptor = services.Single(service => service.ServiceType == typeof(IValidator<Car>));
+
+            // Assert
+            descriptor.Lifetime.Should().Be(ServiceLifetime.Singleton);
+        }
+
+        /// <summary>
+        /// And the case the Scoped default exists for: a validator holding something scoped is left
+        /// alone, because a shared one would capture it.
+        /// </summary>
+        [Fact]
+        public void PromoteSafeValidatorsToSingleton_LeavesAValidatorWithAScopedDependencyAlone()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddScoped<MessageProviderDependency>();
+            services.AddNValidation(o =>
+            {
+                o.PromoteSafeValidatorsToSingleton = true;
+                o.AddValidator<Car, ScopedDependencyCarValidator>();
+            });
+
+            // Act
+            var descriptor = services.Single(service => service.ServiceType == typeof(IValidator<Car>));
+
+            // Assert
+            descriptor.Lifetime.Should().Be(ServiceLifetime.Scoped);
+        }
+
+        /// <summary>
+        /// A validator offering the container a choice of constructors cannot be constructed at all, and
+        /// that is settled while the application is starting rather than on the first request that needs
+        /// it — the constructor is selected once, at registration.
+        /// </summary>
+        [Fact]
+        public void AddValidator_WithAmbiguousConstructors_ThrowsAtStartup()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddScoped<MessageProviderDependency>();
+
+            // Act
+            var act = () => services.AddNValidation(o => o.AddValidator<Car, TwoConstructorCarValidator>());
+
+            // Assert
+            act.Should().Throw<InvalidOperationException>().WithMessage("*constructor*");
+        }
+
+        /// <summary>
+        /// Off unless asked for, so the shipped default is unchanged.
+        /// </summary>
+        [Fact]
+        public void PromoteSafeValidatorsToSingleton_WhenNotAskedFor_LeavesTheLifetimeAlone()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o => o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly));
+
+            // Act
+            var descriptor = services.Single(service => service.ServiceType == typeof(IValidator<Car>));
+
+            // Assert
+            descriptor.Lifetime.Should().Be(ServiceLifetime.Scoped);
+        }
+
+        /// <summary>
+        /// A promoted validator still validates, and still answers through the configured provider.
+        /// </summary>
+        [Fact]
+        public async Task PromoteSafeValidatorsToSingleton_StillValidates()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o =>
+            {
+                o.PromoteSafeValidatorsToSingleton = true;
+                o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly);
+            });
+
+            var validator = Resolve<IValidator<Car>>(services);
+
+            // Act
+            var result = await validator.ValidateAsync(new Car());
+
+            // Assert
+            result.Errors.Should().NotBeEmpty();
+        }
+
         [Fact]
         public void AddValidator_WithATypeThatIsNotAValidator_Throws()
         {
@@ -531,7 +722,7 @@ namespace NValidation.Tests.Extensions
             var result = await validator.ValidateAsync(new Manufacturer());
 
             // Assert
-            result.ShouldReport(expectedCodes.Select(code => new ExpectedError(code)));
+            result.ShouldReport(expectedCodes.Select(ExpectedError.Any));
         }
 
         /// <inheritdoc cref="ValidationBehaviors_Class_ReachesTheValidator" path="/summary"/>
@@ -556,7 +747,7 @@ namespace NValidation.Tests.Extensions
             var result = await validator.ValidateAsync(new Manufacturer { CountryCode = " " });
 
             // Assert
-            result.ShouldReport(expectedCodes.Select(code => new ExpectedError(code)));
+            result.ShouldReport(expectedCodes.Select(ExpectedError.Any));
         }
 
         /// <summary>
@@ -733,6 +924,36 @@ namespace NValidation.Tests.Extensions
             return scope.ServiceProvider.GetRequiredService<TService>();
         }
 
+        /// <summary>
+        /// Holds something registered as scoped, which is exactly what a shared validator must not do.
+        /// </summary>
+        private sealed class ScopedDependencyCarValidator : Validator<Car>
+        {
+            public ScopedDependencyCarValidator(MessageProviderDependency dependency)
+            {
+                ArgumentNullException.ThrowIfNull(dependency);
+
+                this.Property(c => c.Vin).NotEmpty();
+            }
+        }
+
+        /// <summary>
+        /// Offers the container a choice, so nothing can be concluded about what it would hold.
+        /// </summary>
+        private sealed class TwoConstructorCarValidator : Validator<Car>
+        {
+            public TwoConstructorCarValidator()
+            {
+                this.Property(c => c.Vin).NotEmpty();
+            }
+
+            public TwoConstructorCarValidator(MessageProviderDependency dependency)
+                : this()
+            {
+                ArgumentNullException.ThrowIfNull(dependency);
+            }
+        }
+
         private sealed class HandWrittenManufacturerValidator : IValidator<Manufacturer>
         {
             public ValueTask<ValidationResult> ValidateAsync(Manufacturer instance, CancellationToken cancellationToken = default)
@@ -745,7 +966,7 @@ namespace NValidation.Tests.Extensions
 
         private sealed class DependentMessageProvider(MessageProviderDependency dependency) : IValidationMessageProvider
         {
-            public string GetMessage(string messageKey, IReadOnlyDictionary<string, object?> arguments)
+            public string GetMessage(string errorCode, IReadOnlyDictionary<string, object?> arguments)
             {
                 return dependency.Message;
             }
@@ -755,7 +976,7 @@ namespace NValidation.Tests.Extensions
         {
             public const string Message = "message from the configured provider";
 
-            public string GetMessage(string messageKey, IReadOnlyDictionary<string, object?> arguments)
+            public string GetMessage(string errorCode, IReadOnlyDictionary<string, object?> arguments)
             {
                 return Message;
             }

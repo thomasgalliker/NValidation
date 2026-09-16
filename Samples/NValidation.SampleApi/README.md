@@ -75,7 +75,7 @@ the filter and runs the same validator itself:
 
 ```csharp
 public async Task<IActionResult> ValuateAsync(
-    [SkipValidation("Answers in a legacy error shape which deployed clients parse; validated explicitly below.")]
+    [SkipNValidation("Answers in a legacy error shape which deployed clients parse; validated explicitly below.")]
     CarValuation carValuation,
     CancellationToken cancellationToken)
 {
@@ -101,5 +101,5 @@ The rules stay in one place; only the shape of the answer differs.
 | `Log` | The action runs, and one warning names the action and the parameter type. |
 | `Throw` | The request fails. A payload nobody validates is a gap in the application, and this is how it stops being invisible. |
 
-`Throw` suits a development or test host. It stays quiet about anything carrying `[SkipValidation]`: that
+`Throw` suits a development or test host. It stays quiet about anything carrying `[SkipNValidation]`: that
 was a decision, not an oversight.

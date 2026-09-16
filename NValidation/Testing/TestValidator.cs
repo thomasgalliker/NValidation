@@ -13,14 +13,14 @@ namespace NValidation.Testing
     /// </summary>
     /// <remarks>
     /// Not a different kind of validator: <see cref="Property{TProperty}"/> is
-    /// <see cref="Validator{T}.Property{TProperty}"/> made reachable and nothing else, so a rule declared
+    /// <see cref="Validator{T}.Property{TProperty}(System.Linq.Expressions.Expression{System.Func{T, TProperty}})"/> made reachable and nothing else, so a rule declared
     /// here behaves exactly as the same rule declared in a validator an application ships. That is the
     /// point — what the test proves is what a caller gets.
     /// <para>
     /// Declare every rule before validating. The rules are walked as a plain list, so one appended after
     /// a run does take part in the next one — but the display names are resolved on the first run and
     /// kept, so a <c>WithDisplayName</c> written afterwards never reaches a message: it falls back to the
-    /// property's code. Arrange-then-Act never does that.
+    /// property's name. Arrange-then-Act never does that.
     /// </para>
     /// </remarks>
     /// <typeparam name="T">The type being validated.</typeparam>
@@ -35,7 +35,7 @@ namespace NValidation.Testing
 
         /// <summary>
         /// A validator answering through <paramref name="messages"/>. Pass
-        /// <see cref="MessageKeyProvider.Instance"/> for a test about <em>which</em> rule reported, which
+        /// <see cref="ErrorCodeProvider.Instance"/> for a test about <em>which</em> rule reported, which
         /// then does not depend on any wording.
         /// </summary>
         public TestValidator(IValidationMessageProvider messages)
@@ -43,7 +43,7 @@ namespace NValidation.Testing
             this.Messages = messages;
         }
 
-        /// <inheritdoc cref="Validator{T}.Property{TProperty}"/>
+        /// <inheritdoc cref="Validator{T}.Property{TProperty}(System.Linq.Expressions.Expression{System.Func{T, TProperty}})"/>
         public new PropertyRuleBuilder<T, TProperty?> Property<TProperty>(Expression<Func<T, TProperty>> expression)
         {
             return base.Property(expression);

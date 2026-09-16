@@ -6,6 +6,59 @@ namespace NValidation.Tests
     /// </summary>
     public partial class PropertyRuleBuilderExtensionsTests
     {
+        /// <summary>
+        /// A message the chain wrote is formatted by the chain and never reaches the message provider,
+        /// so the element's own arguments have to be supplied before that. Without it a wording naming
+        /// the entry renders with an empty subject and a raw <c>{CollectionIndex}</c>.
+        /// </summary>
+        [Fact]
+        public async Task ForEach_WithMessage_NamesTheElementAndItsPosition()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record.Property(r => r.Workshop)
+                    .NotEmpty()
+                    .WithMessage("{PropertyName} of entry {CollectionIndex} is missing."));
+
+            var car = Cars.Car();
+            car.ServiceHistory =
+            [
+                new ServiceRecord { Workshop = "Garage" },
+                new ServiceRecord { Workshop = null },
+            ];
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport("ServiceHistory[1].Workshop", "Workshop of entry 1 is missing.");
+        }
+
+        /// <summary>
+        /// The same for a rule declared on the element itself, which has no property to name: the
+        /// subject is the entry, exactly as it is when the provider produces the message.
+        /// </summary>
+        [Fact]
+        public async Task ForEach_WithMessage_OnTheElementItself_NamesTheEntry()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceMileages)
+                .ForEach(mileage => mileage.Element()
+                    .GreaterThanOrEqualTo(0)
+                    .WithMessage("{PropertyName} must not be negative."));
+
+            var car = Cars.Car();
+            car.ServiceMileages = [10, -1];
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport("ServiceMileages[1]", "ServiceMileages[1] must not be negative.");
+        }
+
         [Fact]
         public async Task ForEach_ReportsTheFailureUnderTheElementsPosition()
         {
@@ -57,7 +110,7 @@ namespace NValidation.Tests
         public async Task ForEach_ReportsTheMessageTheRuleChose()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.ServiceHistory)
                 .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
 
@@ -164,7 +217,7 @@ namespace NValidation.Tests
             // Arrange
             var validator = new TestValidator<Car>();
             validator.Property(c => c.ServiceHistory)
-                .WithErrorCode("history")
+                .WithPropertyName("history")
                 .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
 
             var car = Cars.Car();
@@ -203,7 +256,7 @@ namespace NValidation.Tests
 
         /// <summary>
         /// A message about one entry can name the row it is about, which is the only way the reader
-        /// learns the position without reading the error code.
+        /// learns the position without reading the property name.
         /// </summary>
         [Fact]
         public async Task ForEach_OffersTheElementsPosition_AsAMessagePlaceholder()
@@ -261,7 +314,7 @@ namespace NValidation.Tests
 
         private sealed class TemplateMessageProvider(string template) : IValidationMessageProvider
         {
-            public string GetMessage(string messageKey, IReadOnlyDictionary<string, object?> arguments)
+            public string GetMessage(string errorCode, IReadOnlyDictionary<string, object?> arguments)
             {
                 return ValidationMessageFormatter.Format(template, arguments);
             }
@@ -376,7 +429,7 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// One property of one entry, out of several entries each with several rules: the code names
+        /// One property of one entry, out of several entries each with several rules: the propertyName names
         /// exactly which value the caller has to fix.
         /// </summary>
         [Fact]
@@ -467,7 +520,7 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// Only the code changes: a message about the entry still names its position.
+        /// Only the propertyName changes: a message about the entry still names its position.
         /// </summary>
         [Fact]
         public async Task WithIndexer_LeavesTheCollectionIndexPlaceholderAlone()

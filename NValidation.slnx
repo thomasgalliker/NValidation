@@ -5,6 +5,7 @@
     <Platform Name="x86" />
   </Configurations>
   <Folder Name="/Samples/">
+    <Project Path="Samples/NValidation.ConsoleApp/NValidation.ConsoleApp.csproj" />
     <Project Path="Samples/NValidation.SampleApi/NValidation.SampleApi.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">

@@ -123,7 +123,7 @@ namespace NValidation.Tests
         public async Task IsInEnum_ReportsIsInEnum()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.Condition).IsInEnum();
 
             // Act

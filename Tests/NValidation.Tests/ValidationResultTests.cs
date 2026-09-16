@@ -1,7 +1,7 @@
 namespace NValidation.Tests
 {
     /// <summary>
-    /// The result type validators return: success or failure, and the code-grouped view of the errors
+    /// The result type validators return: success or failure, and the propertyName-grouped view of the errors
     /// which both the exception and a directly-reported failure are built from.
     /// </summary>
     [Trait(Traits.Category, Traits.UnitTests)]

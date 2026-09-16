@@ -259,7 +259,7 @@ namespace NValidation.Tests
         public async Task MinimumLength_ReportsMinimumLength()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Manufacturer>(ErrorCodeProvider.Instance);
             validator.Property(m => m.Name).MinimumLength(10);
 
             // Act
@@ -273,7 +273,7 @@ namespace NValidation.Tests
         public async Task MaximumLength_ReportsMaximumLength()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Manufacturer>(ErrorCodeProvider.Instance);
             validator.Property(m => m.Name).MaximumLength(2);
 
             // Act
@@ -287,7 +287,7 @@ namespace NValidation.Tests
         public async Task Length_ReportsLength()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Manufacturer>(ErrorCodeProvider.Instance);
             validator.Property(m => m.CountryCode).Length(3);
 
             // Act
@@ -301,7 +301,7 @@ namespace NValidation.Tests
         public async Task LengthRange_ReportsLengthBetween()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Manufacturer>(ErrorCodeProvider.Instance);
             validator.Property(m => m.Name).Length(5, 10);
 
             // Act
@@ -390,7 +390,7 @@ namespace NValidation.Tests
         public async Task EmailTopLevelDomainIn_ReportsEmailTopLevelDomain()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Manufacturer>(ErrorCodeProvider.Instance);
             validator.Property(m => m.ContactEmail).EmailTopLevelDomainIn("example");
 
             var manufacturer = Cars.Manufacturer();
@@ -407,7 +407,7 @@ namespace NValidation.Tests
         public async Task EmailTopLevelDomainNotIn_ReportsEmailTopLevelDomainNotAllowed()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Manufacturer>(ErrorCodeProvider.Instance);
             validator.Property(m => m.ContactEmail).EmailTopLevelDomainNotIn("test");
 
             var manufacturer = Cars.Manufacturer();
@@ -471,7 +471,7 @@ namespace NValidation.Tests
             var englishValidator = new TestValidator<Manufacturer>();
             englishValidator.Property(m => m.Name).NotContaining("admin");
 
-            var keyedValidator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
+            var keyedValidator = new TestValidator<Manufacturer>(ErrorCodeProvider.Instance);
             keyedValidator.Property(m => m.Name).NotContaining("admin");
 
             var manufacturer = Cars.Manufacturer();
@@ -510,7 +510,7 @@ namespace NValidation.Tests
         public async Task EmailAddress_ReportsEmailAddress()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Manufacturer>(ErrorCodeProvider.Instance);
             validator.Property(m => m.ContactEmail).EmailAddress();
 
             // Act
@@ -524,7 +524,7 @@ namespace NValidation.Tests
         public async Task Matches_ReportsMatches()
         {
             // Arrange
-            var validator = new TestValidator<Manufacturer>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Manufacturer>(ErrorCodeProvider.Instance);
             validator.Property(m => m.Website).Matches(@"^https://");
 
             // Act

@@ -20,12 +20,14 @@ namespace NValidation.Benchmark
     {
         private ServiceProvider scopedProvider = null!;
         private ServiceProvider singletonProvider = null!;
+        private ServiceProvider promotedProvider = null!;
 
         [GlobalSetup]
         public void Setup()
         {
             this.scopedProvider = BuildProvider(ServiceLifetime.Scoped);
             this.singletonProvider = BuildProvider(ServiceLifetime.Singleton);
+            this.promotedProvider = BuildProvider(ServiceLifetime.Scoped, promoteSafeValidators: true);
         }
 
         [GlobalCleanup]
@@ -33,6 +35,7 @@ namespace NValidation.Benchmark
         {
             this.scopedProvider.Dispose();
             this.singletonProvider.Dispose();
+            this.promotedProvider.Dispose();
         }
 
         /// <summary>
@@ -55,13 +58,26 @@ namespace NValidation.Benchmark
             return scope.ServiceProvider.GetRequiredService<IValidator<Car>>();
         }
 
-        private static ServiceProvider BuildProvider(ServiceLifetime lifetime)
+        /// <summary>
+        /// The scoped default, with the validators this graph can prove shareable promoted at
+        /// registration. Nothing about how the validators are written changes.
+        /// </summary>
+        [Benchmark]
+        public IValidator<Car> ScopedWithSafePromotion()
+        {
+            using var scope = this.promotedProvider.CreateScope();
+
+            return scope.ServiceProvider.GetRequiredService<IValidator<Car>>();
+        }
+
+        private static ServiceProvider BuildProvider(ServiceLifetime lifetime, bool promoteSafeValidators = false)
         {
             var services = new ServiceCollection();
 
             services.AddNValidation(o =>
             {
                 o.ValidatorLifetime = lifetime;
+                o.PromoteSafeValidatorsToSingleton = promoteSafeValidators;
                 o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly);
             });
 

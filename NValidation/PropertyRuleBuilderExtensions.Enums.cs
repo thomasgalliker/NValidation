@@ -20,7 +20,7 @@ namespace NValidation
             {
                 if (!EnumInfo<TEnum>.IsValid(context.Value))
                 {
-                    context.AddError(ValidationMessageKeys.IsInEnum);
+                    context.AddError(ValidationErrorCodes.IsInEnum);
                 }
             });
         }
@@ -37,7 +37,7 @@ namespace NValidation
             {
                 if (context.Value is { } value && !EnumInfo<TEnum>.IsValid(value))
                 {
-                    context.AddError(ValidationMessageKeys.IsInEnum);
+                    context.AddError(ValidationErrorCodes.IsInEnum);
                 }
             });
         }

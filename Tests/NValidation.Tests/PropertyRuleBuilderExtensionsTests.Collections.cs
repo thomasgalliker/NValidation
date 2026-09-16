@@ -191,7 +191,7 @@ namespace NValidation.Tests
         public async Task MinimumCount_ReportsMinimumCount()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.FeatureIds).MinimumCount(3);
 
             // Act
@@ -205,7 +205,7 @@ namespace NValidation.Tests
         public async Task MaximumCount_ReportsMaximumCount()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.FeatureIds).MaximumCount(1);
 
             // Act
@@ -219,7 +219,7 @@ namespace NValidation.Tests
         public async Task NoDuplicates_ReportsNoDuplicates()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.FeatureIds).NoDuplicates();
 
             // Act

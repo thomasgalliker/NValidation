@@ -34,7 +34,7 @@ namespace NValidation.Tests
         public async Task Comparison_WithTheComparedPropertyReachable_StillReports()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.Mileage).LessThanOrEqualTo(c => c.Model!.WarrantyMileageCap);
 
             var car = Cars.Car();
@@ -52,7 +52,7 @@ namespace NValidation.Tests
         public async Task NotEqualTo_WithAnotherProperty_ReportsWhenTheyMatch()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.Mileage).NotEqualTo(c => c.WarrantyMileageLimit);
 
             var car = Cars.Car();
@@ -108,7 +108,7 @@ namespace NValidation.Tests
         public async Task EqualTo_WithAnotherNullableProperty_ReportsWhenTheyDiffer()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.SoldDate).EqualTo(c => c.WarrantyEndsOn);
 
             var car = Cars.Car();
@@ -257,13 +257,13 @@ namespace NValidation.Tests
         }
 
         [Fact]
-        public void WithErrorCode_WithABlankCode_Throws()
+        public void WithPropertyName_WithABlankName_Throws()
         {
             // Arrange
             var validator = new TestValidator<Car>();
 
             // Act
-            var act = () => validator.Property(c => c.Vin).WithErrorCode("  ");
+            var act = () => validator.Property(c => c.Vin).WithPropertyName("  ");
 
             // Assert
             act.Should().Throw<ArgumentException>();

@@ -15,7 +15,7 @@ builder.Services.AddNValidation(o =>
     // Controllers validate their payloads without saying so: the filter resolves the validator for
     // every body- and form-bound parameter and runs it before the action.
     //
-    // Ignore | Log | Throw — what a payload with neither a validator nor [SkipValidation] means — is
+    // Ignore | Log | Throw — what a payload with neither a validator nor [SkipNValidation] means — is
     // bound from configuration so it can be changed without a rebuild; see appsettings.json.
     o.AddValidationFilter(builder.Configuration.GetSection("Validation"));
 });
@@ -23,7 +23,7 @@ builder.Services.AddNValidation(o =>
 builder.Services.AddControllers();
 
 // A ValidationException becomes a 400 problem details response, so the endpoint below never mentions
-// HTTP status codes.
+// HTTP status property names.
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ValidationExceptionHandler>();
 

@@ -12,13 +12,13 @@ namespace NValidation
         /// </summary>
         public static string GetMessage(
             this IValidationMessageProvider provider,
-            string messageKey,
+            string errorCode,
             string propertyName,
             params (string Name, object? Value)[] arguments)
         {
             ArgumentNullException.ThrowIfNull(provider);
 
-            return provider.GetMessage(messageKey, BuildArguments(propertyName, arguments));
+            return provider.GetMessage(errorCode, BuildArguments(propertyName, arguments));
         }
 
         internal static IReadOnlyDictionary<string, object?> BuildArguments(string propertyName, params (string Name, object? Value)[] arguments)

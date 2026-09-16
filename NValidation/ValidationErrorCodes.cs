@@ -1,7 +1,7 @@
 namespace NValidation
 {
     /// <summary>
-    /// The message keys of the rules shipped with this validation core. A host resolves them through
+    /// The error codes of the rules shipped with this validation core. A host resolves them through
     /// its own <see cref="IValidationMessageProvider"/>; rules never reference a resource directly, so
     /// the core carries no dependency on the application's resources.
     /// </summary>
@@ -10,8 +10,14 @@ namespace NValidation
     /// <see cref="ValidationMessagePlaceholders.PropertyName"/> plus whichever of its own arguments it has
     /// (e.g. <c>{MaxLength}</c>), and a message uses the ones it needs and ignores the rest.
     /// </remarks>
-    public static class ValidationMessageKeys
+    public static class ValidationErrorCodes
     {
+        /// <summary>
+        /// A rule the caller wrote with <c>Must</c> and did not name. Give it a code of its own with
+        /// <c>WithErrorCode</c> where a client has to tell it from another.
+        /// </summary>
+        public const string Must = "Must";
+
         public const string NotEmpty = "NotEmpty";
         public const string NotNull = "NotNull";
 
@@ -50,6 +56,23 @@ namespace NValidation
         public const string LessThan = "LessThan";
         public const string LessThanOrEqualTo = "LessThanOrEqualTo";
         public const string Between = "Between";
+
+        /// <summary>
+        /// The <c>Between</c> keys for the forms which exclude a bound. They are separate keys because
+        /// their message has to name a bound the rule refuses, and a single template cannot branch on
+        /// which one that is.
+        /// </summary>
+        public const string BetweenExclusive = "BetweenExclusive";
+
+        /// <summary>
+        /// The lower bound is excluded and the upper one included.
+        /// </summary>
+        public const string BetweenExclusiveFrom = "BetweenExclusiveFrom";
+
+        /// <summary>
+        /// The lower bound is included and the upper one excluded.
+        /// </summary>
+        public const string BetweenExclusiveTo = "BetweenExclusiveTo";
         public const string EqualTo = "EqualTo";
         public const string NotEqualTo = "NotEqualTo";
 
@@ -67,6 +90,18 @@ namespace NValidation
         public const string NotEqualToOtherProperty = "NotEqualToOtherProperty";
 
         public const string MultipleOf = "MultipleOf";
+
+        /// <summary>
+        /// A decimal carries more digits than the contract behind it holds.
+        /// </summary>
+        public const string PrecisionScale = "PrecisionScale";
+
+        /// <summary>
+        /// A value is not one of the set the rule allows. Unlike <see cref="NotContaining"/>, the
+        /// message names them: an allowlist may say what it allows, while a blocklist that reports its
+        /// own entries is one the next value works around.
+        /// </summary>
+        public const string OneOf = "OneOf";
 
         public const string InThePast = "InThePast";
         public const string InTheFuture = "InTheFuture";

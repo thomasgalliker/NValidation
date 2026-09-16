@@ -56,7 +56,7 @@ namespace NValidation.AspNetCore.Tests
         }
 
         /// <summary>
-        /// A nested payload is validated by its own validator, and its codes carry the path to it, so a
+        /// A nested payload is validated by its own validator, and its property names carry the path to it, so a
         /// form can bind each message to the input it belongs to.
         /// </summary>
         [Fact]

@@ -23,7 +23,7 @@ namespace NValidation.Testing.Internals
 
         /// <summary>
         /// Parallel to <see cref="UnmatchedExpectations"/>: <c>true</c> where an error was reported under
-        /// that code but carried a different message. That is the near miss a reader wants named, since
+        /// that property name but carried a different message. That is the near miss a reader wants named, since
         /// it separates "the wrong rule fired" from "no rule fired".
         /// </summary>
         public IReadOnlyList<bool> NearMisses { get; }

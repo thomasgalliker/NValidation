@@ -2,7 +2,7 @@ namespace NValidation.TestData
 {
     /// <summary>
     /// The root of the test domain. Reached from <see cref="CarModel"/>, so a rule chain declared on
-    /// <see cref="Car"/> can prove that nested error codes are prefixed the whole way down
+    /// <see cref="Car"/> can prove that nested error property names are prefixed the whole way down
     /// (<c>Model.Manufacturer.Name</c>).
     /// </summary>
     public class Manufacturer

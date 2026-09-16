@@ -2,7 +2,7 @@ namespace NValidation.AspNetCore
 {
     /// <summary>
     /// What <see cref="ValidationActionFilter"/> does with a payload it cannot validate: one which has
-    /// neither a registered <see cref="IValidator{T}"/> nor a <see cref="SkipValidationAttribute"/>.
+    /// neither a registered <see cref="IValidator{T}"/> nor a <see cref="SkipNValidationAttribute"/>.
     /// </summary>
     public enum MissingValidatorBehavior
     {

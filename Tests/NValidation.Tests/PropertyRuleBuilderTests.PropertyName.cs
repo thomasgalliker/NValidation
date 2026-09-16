@@ -3,11 +3,11 @@ namespace NValidation.Tests
     public partial class PropertyRuleBuilderTests
     {
         [Fact]
-        public async Task ErrorCode_ReportsTheFailureUnderTheOverride()
+        public async Task PropertyName_ReportsTheFailureUnderTheOverride()
         {
             // Arrange
             var validator = new TestValidator<Car>();
-            validator.Property(c => c.Vin).WithErrorCode("vehicleId").NotEmpty();
+            validator.Property(c => c.Vin).WithPropertyName("vehicleId").NotEmpty();
 
             // Act
             var result = await validator.ValidateAsync(new Car());
@@ -20,11 +20,11 @@ namespace NValidation.Tests
         /// The point of the override: a client field which is not shaped like the model's path.
         /// </summary>
         [Fact]
-        public async Task ErrorCode_ReplacesTheWholeMemberPath_NotOnlyItsLastSegment()
+        public async Task PropertyName_ReplacesTheWholeMemberPath_NotOnlyItsLastSegment()
         {
             // Arrange
             var validator = new TestValidator<Car>();
-            validator.Property(c => c.Model!.Name).WithErrorCode("manufacturerName").NotEmpty();
+            validator.Property(c => c.Model!.Name).WithPropertyName("manufacturerName").NotEmpty();
 
             // Act
             var result = await validator.ValidateAsync(new Car { Model = new CarModel() });
@@ -38,7 +38,7 @@ namespace NValidation.Tests
         /// the override opt-in.
         /// </summary>
         [Fact]
-        public async Task ErrorCode_WhenNotDeclared_ReportsUnderTheMemberPath()
+        public async Task PropertyName_WhenNotDeclared_ReportsUnderTheMemberPath()
         {
             // Arrange
             var validator = new TestValidator<Car>();
@@ -56,12 +56,12 @@ namespace NValidation.Tests
         /// sees.
         /// </summary>
         [Fact]
-        public async Task ErrorCode_DoesNotChangeWhatTheMessageCallsTheProperty()
+        public async Task PropertyName_DoesNotChangeWhatTheMessageCallsTheProperty()
         {
             // Arrange
             var validator = new TestValidator<Car>();
             validator.Property(c => c.Vin)
-                .WithErrorCode("vehicleId")
+                .WithPropertyName("vehicleId")
                 .WithDisplayName("Vehicle identification number")
                 .NotEmpty();
 
@@ -73,16 +73,16 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// A rule which reports per element chooses its own code, and the property-level override must
+        /// A rule which reports per element chooses its own name, and the property-level override must
         /// not overwrite it.
         /// </summary>
         [Fact]
-        public async Task ErrorCode_LeavesACodeARuleReportsUnderItself()
+        public async Task PropertyName_LeavesANameARuleReportsUnderItself()
         {
             // Arrange
             var validator = new TestValidator<Car>();
             validator.Property(c => c.FeatureIds)
-                .WithErrorCode("features")
+                .WithPropertyName("features")
                 .Add(context => context.AddError(new ValidationError("features[0]", "the first entry is wrong")));
 
             // Act
@@ -93,13 +93,13 @@ namespace NValidation.Tests
         }
 
         [Fact]
-        public void ErrorCode_WithoutACode_Throws()
+        public void PropertyName_WithoutAName_Throws()
         {
             // Arrange
             var validator = new TestValidator<Car>();
 
             // Act
-            var act = () => validator.Property(c => c.Vin).WithErrorCode(null!);
+            var act = () => validator.Property(c => c.Vin).WithPropertyName(null!);
 
             // Assert
             act.Should().Throw<ArgumentNullException>();

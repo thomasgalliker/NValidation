@@ -11,19 +11,19 @@ namespace NValidation.Testing
     /// rule wired to the wrong key still reads plausibly — which is exactly the mistake this makes
     /// visible. Assert the wording itself only where the wording is the subject of the test.
     /// </remarks>
-    public sealed class MessageKeyProvider : IValidationMessageProvider
+    public sealed class ErrorCodeProvider : IValidationMessageProvider
     {
         /// <summary>
         /// The shared instance. It holds no state, so one serves every test.
         /// </summary>
-        public static MessageKeyProvider Instance { get; } = new MessageKeyProvider();
+        public static ErrorCodeProvider Instance { get; } = new ErrorCodeProvider();
 
         /// <summary>
-        /// Returns <paramref name="messageKey"/> unchanged, ignoring <paramref name="arguments"/>.
+        /// Returns <paramref name="errorCode"/> unchanged, ignoring <paramref name="arguments"/>.
         /// </summary>
-        public string GetMessage(string messageKey, IReadOnlyDictionary<string, object?> arguments)
+        public string GetMessage(string errorCode, IReadOnlyDictionary<string, object?> arguments)
         {
-            return messageKey;
+            return errorCode;
         }
     }
 }

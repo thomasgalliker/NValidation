@@ -10,20 +10,25 @@ namespace NValidation.AspNetCore
     /// marked here is a decision, not an oversight. State a <see cref="Reason"/> wherever the next reader
     /// would otherwise have to reconstruct which decision it was; leave it out where the action says so
     /// itself.
+    /// <para>
+    /// Named for the library rather than for the act, because .NET 10's shared framework ships
+    /// <c>Microsoft.Extensions.Validation.SkipValidationAttribute</c>. A consumer importing both
+    /// namespaces could not write the shorter name at all: that is a CS0104 ambiguity, not a warning.
+    /// </para>
     /// </remarks>
     /// <example>
     /// <code>
     /// public Task&lt;IActionResult&gt; ImportAsync(
-    ///     [SkipValidation("Reports failures per row, not as a 400.")] CarImportDto carImportDto)
+    ///     [SkipNValidation("Reports failures per row, not as a 400.")] CarImportDto carImportDto)
     /// </code>
     /// </example>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method | AttributeTargets.Parameter)]
-    public sealed class SkipValidationAttribute : Attribute
+    public sealed class SkipNValidationAttribute : Attribute
     {
         /// <summary>
         /// Creates the attribute without stating a reason.
         /// </summary>
-        public SkipValidationAttribute()
+        public SkipNValidationAttribute()
         {
         }
 
@@ -32,12 +37,12 @@ namespace NValidation.AspNetCore
         /// </summary>
         /// <param name="reason">Why this payload is not validated by the filter.</param>
         /// <exception cref="ArgumentException"><paramref name="reason"/> is null, empty or whitespace.</exception>
-        public SkipValidationAttribute(string reason)
+        public SkipNValidationAttribute(string reason)
         {
             if (string.IsNullOrWhiteSpace(reason))
             {
                 throw new ArgumentException(
-                    "A stated reason must say something. Write [SkipValidation] to skip without one.", nameof(reason));
+                    "A stated reason must say something. Write [SkipNValidation] to skip without one.", nameof(reason));
             }
 
             this.Reason = reason;

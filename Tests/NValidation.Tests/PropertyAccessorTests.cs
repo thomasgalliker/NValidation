@@ -9,7 +9,7 @@ namespace NValidation.Tests
     {
         /// <summary>
         /// The property path is the same for <c>x =&gt; x.Mileage</c> and <c>x =&gt; (object)x.Mileage</c>,
-        /// because a conversion is stripped when the code is derived. The compiled accessors are not
+        /// because a conversion is stripped when the propertyName is derived. The compiled accessors are not
         /// interchangeable, so the property type has to be part of what the cache is keyed on.
         /// </summary>
         [Fact]

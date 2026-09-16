@@ -10,12 +10,17 @@ namespace NValidation
         /// <summary>
         /// The failing property, supplied for every rule. A message shown underneath an already
         /// labelled input usually reads better without it.
+        /// <para>
+        /// This carries the property's <c>WithDisplayName</c> where it declared one, so it is what a
+        /// message should call the property — not necessarily <see cref="ValidationError.PropertyName"/>,
+        /// which is what the failure is reported under.
+        /// </para>
         /// </summary>
         public const string PropertyName = "PropertyName";
 
         /// <summary>
         /// The position of the element a rule is judging, for a message about one entry of a
-        /// collection. Zero-based, matching the index its error code reports.
+        /// collection. Zero-based, matching the index its property name reports.
         /// </summary>
         public const string CollectionIndex = "CollectionIndex";
 
@@ -26,6 +31,21 @@ namespace NValidation
         public const string From = "From";
         public const string To = "To";
         public const string Step = "Step";
+
+        /// <summary>
+        /// How many digits a number may carry in total.
+        /// </summary>
+        public const string Precision = "Precision";
+
+        /// <summary>
+        /// How many of those digits may follow the decimal point.
+        /// </summary>
+        public const string Scale = "Scale";
+
+        /// <summary>
+        /// The values a rule allows, as a readable list.
+        /// </summary>
+        public const string AllowedValues = "AllowedValues";
         public const string MinCount = "MinCount";
         public const string MaxCount = "MaxCount";
 

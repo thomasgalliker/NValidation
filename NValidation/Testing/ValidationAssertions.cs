@@ -18,12 +18,12 @@ namespace NValidation.Testing
     {
         /// <summary>
         /// Asserts that the only failure is <paramref name="message"/>, reported under
-        /// <paramref name="code"/>. The message is matched with wildcards — see
+        /// <paramref name="propertyName"/>. The message is matched with wildcards — see
         /// <see cref="ExpectedError"/>.
         /// </summary>
-        public static void ShouldReport(this ValidationResult result, string code, string message)
+        public static void ShouldReport(this ValidationResult result, string propertyName, string message)
         {
-            result.ShouldReport([new ExpectedError(code, message)]);
+            result.ShouldReport([new ExpectedError(propertyName, message)]);
         }
 
         /// <summary>
@@ -41,11 +41,11 @@ namespace NValidation.Testing
 
         /// <summary>
         /// Asserts that the only failure <paramref name="exception"/> carries is
-        /// <paramref name="message"/>, reported under <paramref name="code"/>.
+        /// <paramref name="message"/>, reported under <paramref name="propertyName"/>.
         /// </summary>
-        public static void ShouldReport(this ValidationException exception, string code, string message)
+        public static void ShouldReport(this ValidationException exception, string propertyName, string message)
         {
-            exception.ShouldReport([new ExpectedError(code, message)]);
+            exception.ShouldReport([new ExpectedError(propertyName, message)]);
         }
 
         /// <summary>
@@ -63,30 +63,37 @@ namespace NValidation.Testing
 
         /// <summary>
         /// Asserts that the only failure in <paramref name="errors"/> is <paramref name="message"/>,
-        /// reported under <paramref name="code"/>.
+        /// reported under <paramref name="propertyName"/>.
         /// </summary>
         public static void ShouldReport<TMessages>(
-            this IReadOnlyDictionary<string, TMessages> errors,
-            string code,
+            this IEnumerable<KeyValuePair<string, TMessages>> errors,
+            string propertyName,
             string message)
             where TMessages : IEnumerable<string>
         {
-            errors.ShouldReport([new ExpectedError(code, message)]);
+            errors.ShouldReport([new ExpectedError(propertyName, message)]);
         }
 
         /// <summary>
-        /// Asserts that a <c>{ code: [messages] }</c> shape — <see cref="ValidationResult.ToErrorsDictionary"/>,
-        /// <see cref="ValidationException.Errors"/>, or the <c>errors</c> member of a problem-details
-        /// response — holds exactly <paramref name="expected"/>, in any order.
+        /// Asserts that a <c>{ propertyName: [messages] }</c> shape — <see cref="ValidationResult.ToErrorsDictionary"/>,
+        /// <see cref="ValidationException.Errors"/>, or the <c>errors</c> of a problem-details response —
+        /// holds exactly <paramref name="expected"/>, in any order.
         /// </summary>
         /// <remarks>
-        /// A code carrying several messages counts as several failures, so the grouping makes no
+        /// Taken as a sequence of pairs rather than as a dictionary, so it accepts every shape one of
+        /// these arrives in: <see cref="Dictionary{TKey, TValue}"/>, <see cref="IDictionary{TKey, TValue}"/>
+        /// (which is how the framework's own <c>HttpValidationProblemDetails.Errors</c> is typed) and
+        /// <see cref="IReadOnlyDictionary{TKey, TValue}"/> alike. Overloads for two of those would make
+        /// the third ambiguous.
+        /// <para>
+        /// A property carrying several messages counts as several failures, so the grouping makes no
         /// difference to what has to be expected.
+        /// </para>
         /// </remarks>
         /// <exception cref="ArgumentNullException"><paramref name="errors"/> or <paramref name="expected"/> is <c>null</c>.</exception>
         /// <exception cref="ValidationAssertionException">The errors are not what was expected.</exception>
         public static void ShouldReport<TMessages>(
-            this IReadOnlyDictionary<string, TMessages> errors,
+            this IEnumerable<KeyValuePair<string, TMessages>> errors,
             IEnumerable<ExpectedError> expected)
             where TMessages : IEnumerable<string>
         {
@@ -95,10 +102,42 @@ namespace NValidation.Testing
             Assert("validation errors", Flatten(errors), expected);
         }
 
-        private static void Assert(
-            string subject,
-            IReadOnlyList<ValidationError> actual,
-            IEnumerable<ExpectedError> expected)
+        /// <summary>
+        /// Asserts that the only failure is the one <paramref name="errorCode"/> names, reported under
+        /// <paramref name="propertyName"/> — which rule fired, without depending on any wording.
+        /// </summary>
+        /// <remarks>
+        /// The counterpart of <see cref="ShouldReport(ValidationResult, string, string)"/> for a test
+        /// about the rule rather than the message. Every rule this core ships reports its own code, so
+        /// this needs neither a second validator nor a second run.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+        /// <exception cref="ValidationAssertionException">The result is not what was expected.</exception>
+        public static void ShouldReportErrorCode(this ValidationResult result, string propertyName, string errorCode)
+        {
+            ArgumentNullException.ThrowIfNull(result);
+            ArgumentNullException.ThrowIfNull(propertyName);
+            ArgumentNullException.ThrowIfNull(errorCode);
+
+            var reported = result.Errors
+                .Select(error => $"{error.PropertyName} -> {error.ErrorCode ?? "(no code)"}")
+                .ToArray();
+
+            if (result.Errors.Count == 1 &&
+                string.Equals(result.Errors[0].PropertyName, propertyName, StringComparison.Ordinal) &&
+                string.Equals(result.Errors[0].ErrorCode, errorCode, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            throw new ValidationAssertionException(
+                $"Expected exactly one failure, \"{propertyName}\" reporting \"{errorCode}\", but the result " +
+                (reported.Length == 0
+                    ? "succeeded."
+                    : $"reported {reported.Length}:{Environment.NewLine}  " + string.Join(Environment.NewLine + "  ", reported)));
+        }
+
+        private static void Assert(string subject, IReadOnlyList<ValidationError> actual, IEnumerable<ExpectedError> expected)
         {
             ArgumentNullException.ThrowIfNull(expected);
 
@@ -121,10 +160,10 @@ namespace NValidation.Testing
         }
 
         /// <summary>
-        /// Turns a <c>{ code: [messages] }</c> shape back into the flat list of failures it was grouped
+        /// Turns a <c>{ propertyName: [messages] }</c> shape back into the flat list of failures it was grouped
         /// from, so every overload is matched the same way.
         /// </summary>
-        private static IReadOnlyList<ValidationError> Flatten<TMessages>(IReadOnlyDictionary<string, TMessages> errors)
+        private static IReadOnlyList<ValidationError> Flatten<TMessages>(IEnumerable<KeyValuePair<string, TMessages>> errors)
             where TMessages : IEnumerable<string>
         {
             return errors

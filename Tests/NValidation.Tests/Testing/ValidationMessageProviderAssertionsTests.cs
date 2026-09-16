@@ -12,16 +12,16 @@ namespace NValidation.Tests.Testing
         /// trimmed, so a key added without being listed turns the suite red here.
         /// </summary>
         [Fact]
-        public void CoreMessageKeys_ListsEveryKeyTheCoreDeclares()
+        public void CoreErrorCodes_ListsEveryCodeTheCoreDeclares()
         {
             // Act
-            var listed = ValidationMessageProviderAssertions.CoreMessageKeys();
+            var listed = ValidationMessageProviderAssertions.CoreErrorCodes();
 
             // Assert
-            listed.Should().BeEquivalentTo(DeclaredConstants(typeof(ValidationMessageKeys)));
+            listed.Should().BeEquivalentTo(DeclaredConstants(typeof(ValidationErrorCodes)));
         }
 
-        /// <inheritdoc cref="CoreMessageKeys_ListsEveryKeyTheCoreDeclares" path="/summary"/>
+        /// <inheritdoc cref="CoreErrorCodes_ListsEveryCodeTheCoreDeclares" path="/summary"/>
         [Fact]
         public void CoreMessagePlaceholders_ListsEveryPlaceholderTheCoreDeclares()
         {
@@ -44,10 +44,10 @@ namespace NValidation.Tests.Testing
         }
 
         [Fact]
-        public void ShouldResolveEveryCoreMessageKey_ForTheBuiltInProvider_Passes()
+        public void ShouldResolveEveryCoreErrorCode_ForTheBuiltInProvider_Passes()
         {
             // Act
-            var act = () => DefaultValidationMessageProvider.Instance.ShouldResolveEveryCoreMessageKey();
+            var act = () => DefaultValidationMessageProvider.Instance.ShouldResolveEveryCoreErrorCode();
 
             // Assert
             act.Should().NotThrow();
@@ -58,10 +58,10 @@ namespace NValidation.Tests.Testing
         /// reach a caller as a raw key in a response.
         /// </summary>
         [Fact]
-        public void ShouldResolveMessageKey_WhenTheProviderHasNoMessage_Fails()
+        public void ShouldResolveErrorCode_WhenTheProviderHasNoMessage_Fails()
         {
             // Act
-            var act = () => MessageKeyProvider.Instance.ShouldResolveMessageKey(ValidationMessageKeys.NotEmpty);
+            var act = () => ErrorCodeProvider.Instance.ShouldResolveErrorCode(ValidationErrorCodes.NotEmpty);
 
             // Assert
             act.Should().Throw<ValidationAssertionException>()
@@ -69,27 +69,27 @@ namespace NValidation.Tests.Testing
         }
 
         [Fact]
-        public void ShouldResolveEveryCoreMessageKey_ReportsEveryKeyThatFails_NotOnlyTheFirst()
+        public void ShouldResolveEveryCoreErrorCode_ReportsEveryCodeThatFails_NotOnlyTheFirst()
         {
             // Act
-            var act = () => MessageKeyProvider.Instance.ShouldResolveEveryCoreMessageKey();
+            var act = () => ErrorCodeProvider.Instance.ShouldResolveEveryCoreErrorCode();
 
             // Assert
             act.Should().Throw<ValidationAssertionException>()
                 .Which.Message.Should().Contain(
-                    $"{ValidationMessageProviderAssertions.CoreMessageKeys().Count} failed");
+                    $"{ValidationMessageProviderAssertions.CoreErrorCodes().Count} failed");
         }
 
         [Theory]
         [InlineData("{MaxLength} is a placeholder nothing supplied")]
         [InlineData("with a format: {Step:0.00}")]
-        public void ShouldResolveMessageKey_WhenAPlaceholderSurvives_Fails(string message)
+        public void ShouldResolveErrorCode_WhenAPlaceholderSurvives_Fails(string message)
         {
             // Arrange
             var provider = new FixedMessageProvider(message);
 
             // Act
-            var act = () => provider.ShouldResolveMessageKey("SomeKey");
+            var act = () => provider.ShouldResolveErrorCode("SomeKey");
 
             // Assert
             act.Should().Throw<ValidationAssertionException>()
@@ -105,13 +105,13 @@ namespace NValidation.Tests.Testing
         [InlineData("a brace with {two words} inside")]
         [InlineData("an unclosed { brace")]
         [InlineData("an empty {} pair")]
-        public void ShouldResolveMessageKey_WithBracesThatAreNotPlaceholders_Passes(string message)
+        public void ShouldResolveErrorCode_WithBracesThatAreNotPlaceholders_Passes(string message)
         {
             // Arrange
             var provider = new FixedMessageProvider(message);
 
             // Act
-            var act = () => provider.ShouldResolveMessageKey("SomeKey");
+            var act = () => provider.ShouldResolveErrorCode("SomeKey");
 
             // Assert
             act.Should().NotThrow();
@@ -134,7 +134,7 @@ namespace NValidation.Tests.Testing
                 this.message = message;
             }
 
-            public string GetMessage(string messageKey, IReadOnlyDictionary<string, object?> arguments)
+            public string GetMessage(string errorCode, IReadOnlyDictionary<string, object?> arguments)
             {
                 return this.message;
             }

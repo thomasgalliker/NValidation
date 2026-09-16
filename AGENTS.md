@@ -76,17 +76,18 @@
   `errors` member of a problem-details response.
   ```csharp
   result.ShouldReport([
-      new("FeatureIds"),                                       // the wording is not the point here
-      new("Model.Manufacturer.ContactEmail", "*email address*"), // a fragment
+      ExpectedError.Any("FeatureIds"),                                   // the wording is not the point here
+      ExpectedError.Matching("Model.Manufacturer.ContactEmail", "*email address*"), // a fragment
       new("ServiceHistory[0].Workshop", "Workshop is required.")]);
   ```
-  The message is matched with wildcards (`*` any run of characters, `?` one, `\*` and `\?` for those
-  characters themselves), and `ExpectedError` defaults it to `"*"` — accept any message — for a test
-  about which properties report rather than about the wording. Use that default sparingly: a pinned
-  message is what makes the test catch a rule wired to the wrong key. Success is
-  `result.Errors.Should().BeEmpty()`. A negative match (`Message.Should().NotContain(...)`) has no
-  wildcard spelling and stays on AwesomeAssertions — `PropertyRuleBuilderExtensionsTests.Text.cs` has
-  the one site that needs it.
+  The message is matched **exactly**, as `AwesomeAssertions`' `Be` does, so an expected message means
+  what it says — a `?` is a question mark, not a wildcard. The two looser forms each say so at the call
+  site: `ExpectedError.Matching(name, pattern)` takes wildcards (`*` any run, `?` one, `\*` and `\?`
+  for those characters themselves), mirroring `Match`, and `ExpectedError.Any(name)` accepts any
+  message. Reach for them sparingly: a pinned message is what makes the test catch a rule wired to the
+  wrong code. Success is `result.Errors.Should().BeEmpty()`. A negative match
+  (`Message.Should().NotContain(...)`) has no spelling here and stays on AwesomeAssertions —
+  `PropertyRuleBuilderExtensionsTests.Text.cs` has the one site that needs it.
 - `ShouldReport` depends on no test framework and no assertion library: it throws
   `ValidationAssertionException`, and its own matching, pairing and failure text are tested in
   `Tests/NValidation.Tests/Testing/`. Those tests pin the failure text verbatim, because an assertion
@@ -115,8 +116,8 @@
   class's `protected` `Property`:
   `var validator = new TestValidator<Car>(); validator.Property(c => c.Vin).NotEmpty();`.
   Rules first, a blank line, then the payload. `new TestValidator<Car>()` answers in the built-in
-  English, for a test about the message a rule renders; `new TestValidator<Car>(MessageKeyProvider.Instance)`
-  answers with the message key, for a test about *which* rule reported. The provider is chosen at
+  English, for a test about the message a rule renders; a test about *which* rule reported asserts
+  `ValidationError.ErrorCode` through `ShouldReportErrorCode` instead. The provider is chosen at
   construction, so nothing has to be sequenced or put back. Do not add a validator class per test case — the reader
   should not have to open a second file to learn what is being validated. A named validator, declared
   `private sealed` inside the test class that needs it, is for the case where something other than the
@@ -129,23 +130,48 @@
 - Tests which change the ambient culture carry `[Collection(Collections.CultureSpecific)]`, because the
   culture is process-wide.
 
+## Vocabulary
+Two words, each meaning exactly one thing, everywhere in code, tests and docs:
+- **`PropertyName`** — where a failure is: the dotted member path (`Model.Manufacturer.Name`,
+  `ServiceHistory[1].Workshop`). It is what a failure is reported under and what a client binds to.
+  `WithPropertyName` overrides it for a whole property.
+- **`ErrorCode`** — which rule failed (`NotEmpty`, `GreaterThan`), and the key its message is resolved
+  under. `WithErrorCode` overrides it for the one rule it follows.
+
+Do not reintroduce "code" for a path or "message key" for a code. `ValidationError.Code` and
+`ValidationMessageKeys` were the old names for these and are gone.
+
+## Concurrency
+- A validator may be registered as a singleton and validate many requests at once, so everything a run
+  touches must belong to that run. `Tests/NValidation.Tests/ConcurrencyTests.cs` holds one validator and
+  hammers it; each worker validates its own payload carrying its own identity, so a leak shows up as one
+  worker being told about another rather than as a vague count mismatch. It runs in its own xUnit
+  collection because it saturates the thread pool.
+- Do not use `Barrier.SignalAndWait` inside a `Parallel.ForEachAsync` body: blocking more pool threads
+  than there are cores stalls until the pool injects more, roughly one per second. Race on dedicated
+  `Thread`s instead.
+- The compiled-accessor caches live for the process, so a test that means to race a *cold* key needs a
+  payload type declared for it alone.
+
 ## Library-specific rules
 - Every shipped rule needs at least one test, including its boundary values and its null/absent case.
-- Every shipped rule also needs a test asserting the error's `Code` and its message key, resolved
-  through `new TestValidator<T>(MessageKeyProvider.Instance)`:
-  `result.ShouldReport("Vin", "NotEmpty")`. These live beside the rule's own tests, in
+- Every shipped rule also needs a test asserting the error's `PropertyName` and its `ErrorCode`, with
+  `result.ShouldReportErrorCode("Vin", "NotEmpty")` — one validator, one run, no message provider to swap.
+  (`ErrorCodeProvider` still works, and is how to assert a code *through* the message a provider
+  returns; `ShouldReportErrorCode` is the shorter route and needs no provider.)
+  These live beside the rule's own tests, in
   the matching `PropertyRuleBuilderExtensionsTests.*` part. Asserting only `result.Succeeded` lets a
   rule wired to a neighbouring key pass the whole suite — a value that is too large reported as "must
   be greater than". The bar is a mutation: changing any rule's key must turn the suite red.
 - A new key also needs its built-in English message: `DefaultValidationMessageProviderTests` walks every
-  constant on `ValidationMessageKeys` and fails for one the provider has no text for.
+  constant on `ValidationErrorCodes` and fails for one the provider has no text for.
 - `NValidation` must not reference ASP.NET Core. Anything needing `ProblemDetails`, `ControllerBase` or
   `IExceptionHandler` belongs in `NValidation.AspNetCore`.
-- Rules never reference a resource or a literal message: they report a key from `ValidationMessageKeys`,
+- Rules never reference a resource or a literal message: they report a key from `ValidationErrorCodes`,
   which the host resolves through `IValidationMessageProvider`. A new rule needs a new key plus its
   built-in English message in `DefaultValidationMessageProvider`.
 - A rule's property expression must reach the property through the lambda's own parameter. `PropertyPath`
-  refuses anything else, because the path it produces is both the error code and the key the compiled
+  refuses anything else, because the path it produces is both the reported property name and the key the compiled
   accessor and the reachability guard are cached under: two expressions sharing a path would share a
   delegate and validate the wrong value.
 - Anything absent passes rather than throws — a null nested object, a missing collection, an absent

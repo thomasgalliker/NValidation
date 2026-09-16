@@ -33,7 +33,7 @@ namespace NValidation.AspNetCore.Tests
         }
 
         /// <summary>
-        /// The error codes are the C# property names, and they must survive serialization verbatim —
+        /// The error property names are the C# property names, and they must survive serialization verbatim —
         /// a client binds its inputs to them.
         /// </summary>
         [Fact]

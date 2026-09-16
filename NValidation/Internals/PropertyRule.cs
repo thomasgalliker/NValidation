@@ -5,16 +5,16 @@ namespace NValidation.Internals
         private readonly Func<T, TProperty> accessor;
         private readonly List<RuleCheck> checks = [];
 
-        public PropertyRule(string code, Func<T, TProperty> accessor)
+        public PropertyRule(string propertyName, Func<T, TProperty> accessor)
         {
-            this.Code = code;
+            this.PropertyName = propertyName;
             this.accessor = accessor;
         }
 
-        public string Code { get; }
+        public string PropertyName { get; }
 
         /// <summary>
-        /// What messages call this property instead of its code. <c>null</c> until the chain opts in.
+        /// What messages call this property instead of its property name. <c>null</c> until the chain opts in.
         /// </summary>
         public Func<string>? DisplayName { get; set; }
 
@@ -22,7 +22,7 @@ namespace NValidation.Internals
         /// What failures of this property are reported under instead of its member path. <c>null</c>
         /// until the chain opts in.
         /// </summary>
-        public string? ErrorCode { get; set; }
+        public string? PropertyNameOverride { get; set; }
 
         /// <summary>
         /// What this chain does once one of its rules has failed, where the chain declared it for
@@ -41,10 +41,33 @@ namespace NValidation.Internals
         }
 
         /// <summary>
-        /// Gives the rule which was added last a message of its own, replacing the one its message key
+        /// The same, for a rule which has nothing to await.
+        /// </summary>
+        /// <remarks>
+        /// Kept as it was written rather than wrapped in a lambda returning a completed
+        /// <see cref="ValueTask"/>. The wrapper cost a closure and a delegate for every rule of every
+        /// validator built, and a delegate call plus a <see cref="ValueTask"/> round trip for every rule
+        /// of every validation — and almost every rule this library ships is synchronous.
+        /// </remarks>
+        public void Add(Action<RuleContext<T, TProperty>> check)
+        {
+            this.checks.Add(new RuleCheck(check));
+        }
+
+        /// <summary>
+        /// The same, for a check which runs a validator this chain composed rather than judging the
+        /// value itself.
+        /// </summary>
+        public void AddComposed(Func<RuleContext<T, TProperty>, CancellationToken, ValueTask> check)
+        {
+            this.checks.Add(new RuleCheck(check) { IsComposed = true });
+        }
+
+        /// <summary>
+        /// Gives the rule which was added last a message of its own, replacing the one its error code
         /// would have produced.
         /// </summary>
-        public void SetMessageOfLastCheck(Func<string> message)
+        public void SetMessageOfLastCheck(Func<T, TProperty, string> message)
         {
             if (this.checks.Count == 0)
             {
@@ -52,7 +75,38 @@ namespace NValidation.Internals
                     "WithMessage must follow a rule, e.g. this.Property(x => x.Name).NotEmpty().WithMessage(\"...\").");
             }
 
+            if (this.checks[^1].IsComposed)
+            {
+                throw new InvalidOperationException(
+                    "WithMessage cannot replace the messages a composed validator reported: it found " +
+                    "several things, each under its own name, and one wording cannot stand for all of " +
+                    "them. Put the wording on the rules of that validator, or write a rule of your own.");
+            }
+
             this.checks[^1].Message = message;
+        }
+
+        /// <summary>
+        /// Gives the rule which was added last an error code of its own, which is both what the failure
+        /// reports and the key its message is resolved under.
+        /// </summary>
+        public void SetErrorCodeOfLastCheck(string errorCode)
+        {
+            if (this.checks.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "WithErrorCode must follow a rule, e.g. this.Property(x => x.Name).NotEmpty().WithErrorCode(\"...\").");
+            }
+
+            if (this.checks[^1].IsComposed)
+            {
+                throw new InvalidOperationException(
+                    "WithErrorCode cannot replace the codes a composed validator reported: it found " +
+                    "several things, each under its own code. Put the code on the rules of that " +
+                    "validator, or write a rule of your own.");
+            }
+
+            this.checks[^1].ErrorCodeOverride = errorCode;
         }
 
         /// <summary>
@@ -94,9 +148,16 @@ namespace NValidation.Internals
                     return;
                 }
 
-                context.UseMessageOverride(ruleCheck.Message);
+                context.UseOverrides(ruleCheck.Message, ruleCheck.ErrorCodeOverride);
 
-                await ruleCheck.Check(context, cancellationToken);
+                if (ruleCheck.SyncCheck is { } syncCheck)
+                {
+                    syncCheck(context);
+                }
+                else
+                {
+                    await ruleCheck.Check!(context, cancellationToken);
+                }
             }
         }
 
@@ -121,7 +182,7 @@ namespace NValidation.Internals
             }
 
             return new RuleContext<T, TProperty>(
-                instance, this.accessor(instance), this.Code, this.ErrorCode, messages, displayNames, errors);
+                instance, this.accessor(instance), this.PropertyName, this.PropertyNameOverride, messages, displayNames, errors);
         }
 
         private sealed class RuleCheck
@@ -131,9 +192,31 @@ namespace NValidation.Internals
                 this.Check = check;
             }
 
-            public Func<RuleContext<T, TProperty>, CancellationToken, ValueTask> Check { get; }
+            public RuleCheck(Action<RuleContext<T, TProperty>> syncCheck)
+            {
+                this.SyncCheck = syncCheck;
+            }
 
-            public Func<string>? Message { get; set; }
+            /// <summary>
+            /// Set for a rule which has something to await; <see cref="SyncCheck"/> is set instead for
+            /// one which has not. Exactly one of the two is ever set.
+            /// </summary>
+            public Func<RuleContext<T, TProperty>, CancellationToken, ValueTask>? Check { get; }
+
+            /// <inheritdoc cref="Check"/>
+            public Action<RuleContext<T, TProperty>>? SyncCheck { get; }
+
+            public Func<T, TProperty, string>? Message { get; set; }
+
+            /// <summary>
+            /// What this rule reports instead of its own code, and resolves its message under.
+            /// </summary>
+            public string? ErrorCodeOverride { get; set; }
+
+            /// <summary>
+            /// Whether this check runs a validator the chain composed, whose failures are its own.
+            /// </summary>
+            public bool IsComposed { get; init; }
         }
     }
 }

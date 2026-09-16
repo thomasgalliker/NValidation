@@ -17,7 +17,7 @@ namespace NValidation
             {
                 if (context.Value % step != 0m)
                 {
-                    context.AddError(ValidationMessageKeys.MultipleOf, (ValidationMessagePlaceholders.Step, step));
+                    context.AddError(ValidationErrorCodes.MultipleOf, (ValidationMessagePlaceholders.Step, step));
                 }
             });
         }
@@ -34,7 +34,7 @@ namespace NValidation
             {
                 if (context.Value is { } value && value % step != 0m)
                 {
-                    context.AddError(ValidationMessageKeys.MultipleOf, (ValidationMessagePlaceholders.Step, step));
+                    context.AddError(ValidationErrorCodes.MultipleOf, (ValidationMessagePlaceholders.Step, step));
                 }
             });
         }
@@ -51,7 +51,7 @@ namespace NValidation
             {
                 if (context.Value % step != 0)
                 {
-                    context.AddError(ValidationMessageKeys.MultipleOf, (ValidationMessagePlaceholders.Step, step));
+                    context.AddError(ValidationErrorCodes.MultipleOf, (ValidationMessagePlaceholders.Step, step));
                 }
             });
         }
@@ -68,7 +68,52 @@ namespace NValidation
             {
                 if (context.Value is { } value && value % step != 0)
                 {
-                    context.AddError(ValidationMessageKeys.MultipleOf, (ValidationMessagePlaceholders.Step, step));
+                    context.AddError(ValidationErrorCodes.MultipleOf, (ValidationMessagePlaceholders.Step, step));
+                }
+            });
+        }
+
+        /// <summary>
+        /// Caps how many digits a number carries: at most <paramref name="precision"/> in total, of
+        /// which at most <paramref name="scale"/> follow the decimal point — typically the shape of the
+        /// column behind it.
+        /// </summary>
+        /// <remarks>
+        /// Trailing zeros are representation rather than value: <c>1.50m</c> and <c>1.5m</c> are the
+        /// same number, and the column accepts both. They are normalised away, so there is one
+        /// behaviour rather than a flag to choose between two.
+        /// </remarks>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="precision"/> is zero or negative, <paramref name="scale"/> is negative, or
+        /// <paramref name="scale"/> is greater than <paramref name="precision"/>.
+        /// </exception>
+        public static PropertyRuleBuilder<T, decimal> PrecisionScale<T>(this PropertyRuleBuilder<T, decimal> builder, int precision, int scale)
+        {
+            RequirePrecisionAndScale(precision, scale);
+
+            return builder.Add(context =>
+            {
+                if (Exceeds(context.Value, precision, scale))
+                {
+                    AddPrecisionScaleError(context, precision, scale);
+                }
+            });
+        }
+
+        /// <summary>
+        /// The form for a property which may be absent. A missing value passes.
+        /// </summary>
+        /// <inheritdoc cref="PrecisionScale{T}(PropertyRuleBuilder{T, decimal}, int, int)" path="/remarks"/>
+        /// <inheritdoc cref="PrecisionScale{T}(PropertyRuleBuilder{T, decimal}, int, int)" path="/exception"/>
+        public static PropertyRuleBuilder<T, decimal?> PrecisionScale<T>(this PropertyRuleBuilder<T, decimal?> builder, int precision, int scale)
+        {
+            RequirePrecisionAndScale(precision, scale);
+
+            return builder.Add(context =>
+            {
+                if (context.Value is { } value && Exceeds(value, precision, scale))
+                {
+                    AddPrecisionScaleError(context, precision, scale);
                 }
             });
         }
@@ -84,7 +129,7 @@ namespace NValidation
             {
                 if (double.IsNaN(context.Value))
                 {
-                    context.AddError(ValidationMessageKeys.NotNaN);
+                    context.AddError(ValidationErrorCodes.NotNaN);
                 }
             });
         }
@@ -96,7 +141,7 @@ namespace NValidation
             {
                 if (context.Value is { } value && double.IsNaN(value))
                 {
-                    context.AddError(ValidationMessageKeys.NotNaN);
+                    context.AddError(ValidationErrorCodes.NotNaN);
                 }
             });
         }
@@ -108,7 +153,7 @@ namespace NValidation
             {
                 if (float.IsNaN(context.Value))
                 {
-                    context.AddError(ValidationMessageKeys.NotNaN);
+                    context.AddError(ValidationErrorCodes.NotNaN);
                 }
             });
         }
@@ -120,9 +165,55 @@ namespace NValidation
             {
                 if (context.Value is { } value && float.IsNaN(value))
                 {
-                    context.AddError(ValidationMessageKeys.NotNaN);
+                    context.AddError(ValidationErrorCodes.NotNaN);
                 }
             });
+        }
+
+        /// <summary>
+        /// Whether the value needs more digits than the contract allows.
+        /// </summary>
+        private static bool Exceeds(decimal value, int precision, int scale)
+        {
+            // Dividing by one at full scale is the documented way to drop trailing zeros: 1.50m becomes
+            // 1.5m, so the rule judges the number rather than how it happened to be written.
+            var normalized = value / 1.000000000000000000000000000000000m;
+
+            var actualScale = (decimal.GetBits(normalized)[3] >> 16) & 0xFF;
+
+            return actualScale > scale || DigitsBeforeThePoint(normalized) > precision - scale;
+        }
+
+        /// <remarks>
+        /// Zero has none, so <c>0.5m</c> against <c>PrecisionScale(2, 2)</c> passes.
+        /// </remarks>
+        private static int DigitsBeforeThePoint(decimal value)
+        {
+            var whole = decimal.Truncate(Math.Abs(value));
+            var digits = 0;
+
+            while (whole >= 1m)
+            {
+                whole = decimal.Truncate(whole / 10m);
+                digits++;
+            }
+
+            return digits;
+        }
+
+        private static void AddPrecisionScaleError<T, TProperty>(RuleContext<T, TProperty> context, int precision, int scale)
+        {
+            context.AddError(
+                ValidationErrorCodes.PrecisionScale,
+                (ValidationMessagePlaceholders.Precision, precision),
+                (ValidationMessagePlaceholders.Scale, scale));
+        }
+
+        private static void RequirePrecisionAndScale(int precision, int scale)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(precision);
+            ArgumentOutOfRangeException.ThrowIfNegative(scale);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(scale, precision);
         }
 
         /// <remarks>

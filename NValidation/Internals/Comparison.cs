@@ -21,14 +21,14 @@ namespace NValidation.Internals
         /// <summary>
         /// The key for the form which compares against a fixed value.
         /// </summary>
-        public static string ValueMessageKey(ComparisonKind kind)
+        public static string ValueErrorCode(ComparisonKind kind)
         {
             return kind switch
             {
-                ComparisonKind.GreaterThan => ValidationMessageKeys.GreaterThan,
-                ComparisonKind.GreaterThanOrEqualTo => ValidationMessageKeys.GreaterThanOrEqualTo,
-                ComparisonKind.LessThan => ValidationMessageKeys.LessThan,
-                ComparisonKind.LessThanOrEqualTo => ValidationMessageKeys.LessThanOrEqualTo,
+                ComparisonKind.GreaterThan => ValidationErrorCodes.GreaterThan,
+                ComparisonKind.GreaterThanOrEqualTo => ValidationErrorCodes.GreaterThanOrEqualTo,
+                ComparisonKind.LessThan => ValidationErrorCodes.LessThan,
+                ComparisonKind.LessThanOrEqualTo => ValidationErrorCodes.LessThanOrEqualTo,
                 _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
             };
         }
@@ -37,14 +37,14 @@ namespace NValidation.Internals
         /// The key for the form which compares against another property, whose message names that
         /// property instead of a value.
         /// </summary>
-        public static string OtherPropertyMessageKey(ComparisonKind kind)
+        public static string OtherPropertyErrorCode(ComparisonKind kind)
         {
             return kind switch
             {
-                ComparisonKind.GreaterThan => ValidationMessageKeys.GreaterThanOtherProperty,
-                ComparisonKind.GreaterThanOrEqualTo => ValidationMessageKeys.GreaterThanOrEqualToOtherProperty,
-                ComparisonKind.LessThan => ValidationMessageKeys.LessThanOtherProperty,
-                ComparisonKind.LessThanOrEqualTo => ValidationMessageKeys.LessThanOrEqualToOtherProperty,
+                ComparisonKind.GreaterThan => ValidationErrorCodes.GreaterThanOtherProperty,
+                ComparisonKind.GreaterThanOrEqualTo => ValidationErrorCodes.GreaterThanOrEqualToOtherProperty,
+                ComparisonKind.LessThan => ValidationErrorCodes.LessThanOtherProperty,
+                ComparisonKind.LessThanOrEqualTo => ValidationErrorCodes.LessThanOrEqualToOtherProperty,
                 _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
             };
         }

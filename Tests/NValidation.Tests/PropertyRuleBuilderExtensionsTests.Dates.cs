@@ -227,7 +227,7 @@ namespace NValidation.Tests
         public async Task InThePast_ReportsInThePast()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.SoldDate).InThePast(AtStartOf2026());
 
             var car = new Car { SoldDate = new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc) };
@@ -243,7 +243,7 @@ namespace NValidation.Tests
         public async Task InTheFuture_ReportsInTheFuture()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.NextServiceAt).InTheFuture(AtStartOf2026());
 
             var car = new Car { NextServiceAt = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc) };

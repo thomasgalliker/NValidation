@@ -26,7 +26,7 @@ namespace NValidation.SampleApi.Controllers
         /// </summary>
         /// <remarks>
         /// The payload nests a model and a manufacturer, so a failure further down is reported under
-        /// <c>Model.Manufacturer.Name</c> — the code a form binds its message to.
+        /// <c>Model.Manufacturer.Name</c> — the propertyName a form binds its message to.
         /// </remarks>
         [HttpPost("")]
         public ActionResult<string> Create(Car car)
@@ -51,7 +51,7 @@ namespace NValidation.SampleApi.Controllers
         /// </summary>
         [HttpPost("valuations")]
         public async Task<IActionResult> ValuateAsync(
-            [SkipValidation("Answers in a legacy error shape which deployed clients parse; validated explicitly below.")]
+            [SkipNValidation("Answers in a legacy error shape which deployed clients parse; validated explicitly below.")]
             CarValuation carValuation,
             CancellationToken cancellationToken)
         {

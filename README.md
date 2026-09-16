@@ -1,4 +1,7 @@
 # NValidation
+[![Version](https://img.shields.io/nuget/v/NValidation.svg)](https://www.nuget.org/packages/NValidation)
+[![Downloads](https://img.shields.io/nuget/dt/NValidation.svg)](https://www.nuget.org/packages/NValidation)
+[![Buy Me a Coffee](https://img.shields.io/badge/support-buy%20me%20a%20coffee-FFDD00)](https://buymeacoffee.com/thomasgalliker)
 
 NValidation is a small, explicit validation library for .NET.
 
@@ -11,21 +14,51 @@ what a validator checks is what you can read in its constructor.
 - No attributes, no conventions, no reflection over your model's metadata
 - Messages resolved through an interface, so they localize with whatever the application already uses
 - Validators are plain objects: constructible, injectable, and unit-testable on their own
-- Nested objects validated by their own validator, with the error codes prefixed automatically
+- Nested objects validated by their own validator, with the error property names prefixed automatically
 - A separate `NValidation.AspNetCore` package for the RFC7807 problem details response
 
-## Packages
+## Download and Install NValidation
 
-| Package                  | What it adds                                                           |
-|--------------------------|------------------------------------------------------------------------|
-| `NValidation`            | The validators, rules and messages, and helper methods for unit tests. |
-| `NValidation.AspNetCore` | Validation integration for ASP.NET Core⁄ applications.                 |
+This library is available on NuGet: https://www.nuget.org/packages/NValidation/
+Use the following command to install NValidation using the NuGet Package Manager Console:
+
+    PM> Install-Package NValidation
+
+Or with the .NET CLI:
+
+    dotnet add package NValidation
+
+For an ASP.NET Core application, install the integration package as well:
+
+    PM> Install-Package NValidation.AspNetCore
+
+| Package | What it adds |
+|---------|--------------|
+| [`NValidation`](https://www.nuget.org/packages/NValidation/) | The validators, rules and messages, and helper methods for unit tests. |
+| [`NValidation.AspNetCore`](https://www.nuget.org/packages/NValidation.AspNetCore/) | The RFC7807 problem details response, and the MVC filter that validates a payload before the action runs. |
 
 Both target .NET 8 and .NET 10.
 
-## Quick start
+## Contents
+
+- [Basic usage of validators](#basic-usage-of-validators)
+- [Validation of objects](#validation-of-objects)
+- [Validation results](#validation-results)
+- [Built-in validators](#built-in-validators)
+- [Custom validators](#custom-validators)
+- [Overriding defaults](#overriding-defaults)
+- [Localization](#localization)
+- [Dependency injection](#dependency-injection)
+- [ASP.NET Core integration](#aspnet-core-integration)
+- [Testing your own rules](#testing-your-own-rules)
+
+## Basic usage of validators
 
 ### 1. Define a validator
+
+A validator derives from `Validator<T>` and declares its rules in its constructor. There is no
+configuration step and no registration of rules at run time: the chain you can read is the chain that
+runs.
 
 ```csharp
 using NValidation;
@@ -46,14 +79,17 @@ public sealed class CarValidator : Validator<Car>
             .GreaterThanOrEqualTo(0);
 
         this.Property(c => c.FirstRegistration)
-            .NotEmpty()
-            .WithDisplayName("Registration date");
+            .WithDisplayName("Registration date")
+            .NotDefault();
 
         this.Property(c => c.SoldDate)
             .GreaterThanOrEqualTo(c => c.FirstRegistration);
     }
 }
 ```
+
+`Property` takes an expression reaching a property through the validator's own parameter, and returns a
+chain to hang rules on. Each rule returns the chain again, so a property's rules read top to bottom.
 
 ### 2. Register it
 
@@ -65,48 +101,15 @@ services.AddNValidation(o => o
     .AddValidator<CarValidator>());
 ```
 
-Or let an assembly be scanned, which finds every `IValidator<T>` in it and resolves each one's own dependencies:
+Or let an assembly be scanned, which finds every `IValidator<T>` in it and resolves each one's own
+dependencies:
 
 ```csharp
 services.AddNValidation(o => o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly));
 ```
 
-`AddValidator<TValidator>()` reads the validated type off the validator itself. Name both
-(`AddValidator<Car, CarValidator>()`) where you would rather the compiler checked that a validator really does validate
-what you think it does.
-
-Registration uses `TryAdd`, so a validator registered explicitly beforehand wins over whatever a scan finds for the same
-type. That is also how a payload with two validators in one assembly is settled: name the one you want before scanning,
-and the scan passes over it instead of refusing to choose.
-
-#### Lifetimes
-
-Validators are **scoped** by default, because a validator may depend on something that is itself scoped — the database
-an async uniqueness rule asks — and a longer-lived validator would capture it.
-
-A validator declares its rules in its constructor and never changes afterwards, so where nothing scoped is involved,
-registering them as singletons builds those rules once for the process instead of once per request:
-
-```csharp
-services.AddNValidation(o =>
-{
-    o.ValidatorLifetime = ServiceLifetime.Singleton;
-
-    o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly)
-
-     // The one that cannot follow the default overrides it, rather than dragging the rest down.
-     .AddValidator<VinUniquenessValidator>(ServiceLifetime.Scoped);
-});
-```
-
-Nothing reaches the service collection until the delegate has run, so `ValidatorLifetime` governs every validator
-wherever in the delegate you set it.
-
-The message provider is built by the container and registered as a **singleton**: it is a lookup asked for text, it has
-to be thread-safe anyway because validators run concurrently, and being longer-lived than every validator is what lets
-validators of any lifetime be handed it. Resolve the language while the message is produced — a `Func<string>` over a
-resource — rather than in the constructor. A provider that genuinely cannot be shared goes through `o.Services` instead,
-at the cost of forcing every validator that uses it to be scoped too.
+[Dependency injection](#dependency-injection) has the rest: the overloads, the lifetimes, and what the
+container configures on a validator it built.
 
 ### 3. Validate
 
@@ -117,61 +120,267 @@ if (!result.Succeeded)
 {
     foreach (var error in result.Errors)
     {
-        Console.WriteLine($"{error.Code}: {error.Message}");
+        Console.WriteLine($"{error.PropertyName}: {error.Message}");
     }
 }
 ```
 
-`error.Code` is the C# property path — `Vin`, or `Model.Manufacturer.Name` for a nested one — so a client can bind each
-message to the input it belongs to.
-
-Alternatively, `result.ThrowIfInvalid()` raises a `ValidationException` carrying the same errors grouped by code.
-
-`ValidateAndThrowAsync` is the same thing for a caller that would rather treat a failure as an exception than as a
-result to inspect.
-
-**Validation is asynchronous, and only asynchronous.** Most rules are synchronous, but a rule may `await` whatever it
-needs — a uniqueness check against a database, a lookup against another service — and one such rule makes the whole
-chain asynchronous. A synchronous entry point would therefore be a promise the library cannot keep: it could only work
-by deciding at run time whether your rules happened to finish in time, which is exactly the kind of answer that differs
-between a cache hit and a cache miss. A caller in a synchronous method awaits the call itself, and can see the cost it
-is paying.
-
-## Rules
-
-| Group       | Rules                                                                                                      |
-|-------------|------------------------------------------------------------------------------------------------------------|
-| Presence    | `NotNull`, `NotEmpty` (text and collections), `NotDefault` (any value type)                                |
-| Text        | `MinimumLength`, `MaximumLength`, `Length(exact)`, `Length(min, max)`, `Matches`, `NotContaining`          |
-| Email       | `EmailAddress`, `EmailTopLevelDomainIn`, `EmailTopLevelDomainNotIn`                                        |
-| Comparison  | `GreaterThan`, `GreaterThanOrEqualTo`, `LessThan`, `LessThanOrEqualTo`, `Between`, `EqualTo`, `NotEqualTo` |
-| Numbers     | `MultipleOf`, `NotNaN`                                                                                     |
-| Dates       | `InThePast`, `InTheFuture`                                                                                 |
-| Collections | `MinimumCount`, `MaximumCount`, `NoDuplicates`                                                             |
-| Enums       | `IsInEnum`                                                                                                 |
-| Custom      | `Must`, `SetValidator`                                                                                     |
-
-Chain modifiers: `When`, `Unless`, `WithMessage`, `WithDisplayName`, `WithErrorCode`, `WithValidationBehavior`. The last
-of those is the local exception to a setting the validator and the registration also carry — see
-[Validation behavior](#validation-behavior).
-
-`error.Code` defaults to the member path, which is what a client usually binds to. Where the client's field is not
-shaped like the model's, override it — the message is unaffected:
+`ValidateAsync` returns a `ValueTask<ValidationResult>` and takes a `CancellationToken`, which it hands
+to every rule that asked for one:
 
 ```csharp
-this.Property(c => c.Model.Manufacturer.Name)
-    .WithErrorCode("manufacturerName")
-    .WithDisplayName("Manufacturer")
-    .NotEmpty();
-
-// reports: { "manufacturerName": ["Manufacturer is required."] }
+var result = await this.carValidator.ValidateAsync(car, cancellationToken);
 ```
+
+It never throws for a validation failure — a failure is a result, and the caller decides what it means.
+It does throw `ArgumentNullException` for a null instance, because nothing can be said about an object
+that is not there.
+
+[Validation results](#validation-results) covers what comes back, and `ValidateAndThrowAsync` for a
+caller that would rather treat a failure as an exception.
+
+### Validation is asynchronous, and only asynchronous
+
+Most rules are synchronous, but a rule may `await` whatever it needs — a uniqueness check against a
+database, a lookup against another service — and one such rule makes the whole chain asynchronous. A
+synchronous entry point would therefore be a promise the library cannot keep: it could only work by
+deciding at run time whether your rules happened to finish in time, which is exactly the kind of answer
+that differs between a cache hit and a cache miss. A caller in a synchronous method awaits the call
+itself, and can see the cost it is paying.
+
+Where every rule does finish synchronously — which is true of every rule shipped here — the returned
+`ValueTask` completes synchronously and allocates nothing to represent waiting.
+
+### Using a validator without a container
+
+A validator is a plain object. Construct it and call it:
+
+```csharp
+var validator = new ManufacturerValidator();
+
+var result = await validator.ValidateAsync(manufacturer);
+```
+
+A validator built this way answers in the built-in English and takes the built-in
+[validation behavior](#validation-behavior), because neither came from `AddNValidation` — see
+[what the container configures](#what-the-container-configures-and-what-it-does-not). Assign
+`validator.Messages` to give it a [message provider](#localization) of your own.
+
+### Validating an instance whose type is known only at run time
+
+`IValidator<T>` is the typed contract and the one to prefer. Where a caller holds a validator it looked
+up by `Type` — a pipeline dispatching on a parameter's declared type, say — the non-generic `IValidator`
+is implemented by every validator and takes an `object`:
+
+```csharp
+var validator = (IValidator)serviceProvider.GetRequiredService(validatorType);
+
+var result = await validator.ValidateAsync(payload, cancellationToken);
+```
+
+An instance of the wrong type is an `InvalidCastException`, not a validation failure.
+
+## Validation of objects
+
+A payload is rarely one flat object. A car has a model, the model has a manufacturer, and the car has a
+service history of its own. Each of those is validated by the validator that belongs to it, and the
+failures come back under one path the client can bind to.
+
+### Nested objects
+
+`SetValidator` hands a property to the validator that owns that type. Its errors are reported under the
+property they came through, prefixed the whole way down:
+
+```csharp
+public sealed class CarValidator : Validator<Car>
+{
+    public CarValidator(IValidator<CarModel> carModelValidator)
+    {
+        this.Property(c => c.Model)
+            .NotNull()
+            .SetValidator(carModelValidator);
+    }
+}
+
+// CarModelValidator reports "Name";     the car reports "Model.Name"
+// ManufacturerValidator reports "Name"; the car reports "Model.Manufacturer.Name"
+```
+
+Each validator states only what it knows. `ManufacturerValidator` has no idea it is being run under a
+car, which is what lets it be used on its own, tested on its own, and composed into a second payload
+without changing.
+
+A **null nested object is skipped** rather than reported. Whether it has to be there at all is a separate
+question, and `NotNull()` is what asks it — which is why the chain above declares both.
+
+The same applies to a chain declared *through* another object:
+
+```csharp
+this.Property(c => c.Model).NotNull();                      // whether it has to be there at all
+this.Property(c => c.Model.Manufacturer.Name).NotEmpty();    // judged only if it is
+```
+
+A payload that omitted `Model` reports `Model`, not a server error. This is the same answer the rest of
+the library gives to something absent — a null nested object is skipped by `SetValidator`, a missing
+collection by its own rules, an absent value by a comparison, and the *compared* property of a
+two-property rule by the same guard — so requiring presence is always a rule of its own, next to the
+rules about the value.
+
+The expression has to reach the property through the validator's own parameter. `x => x.Address.Street`
+is a path; `x => x.Lines[0].Street` and `x => somethingElse.Street` are not, and are refused where they
+are declared rather than silently reported under `Street`.
+
+### Conditions: When and Unless
+
+A rule chain that only applies in some states says so. `When` takes a predicate over the whole object,
+and governs **the entire chain** regardless of where in it you write it:
+
+```csharp
+// Only an electric car has a battery, so the whole chain is skipped for every other engine.
+this.Property(m => m.BatteryCapacityKwh)
+    .NotNull()
+    .GreaterThan(0m)
+    .When(m => m.EngineType == EngineType.Electric);
+```
+
+`Unless` is the same thing negated, for the wording that reads better:
+
+```csharp
+this.Property(c => c.TradeInValue)
+    .NotNull()
+    .Unless(c => c.IsListedForSale);
+```
+
+Repeated conditions are **and**-ed, so two calls mean both have to hold. Because a condition governs the
+whole chain rather than the rule it follows, a property whose rules need different conditions is
+declared as two chains:
+
+```csharp
+this.Property(c => c.SoldDate).NotNull().When(c => c.Condition == CarCondition.Used);
+this.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+```
+
+A property whose `When` did not hold reported nothing, which matters for
+[validation behavior](#validation-behavior): there is nothing for a stopping run to stop on, and the next
+property is still judged.
+
+### Collections and elements
+
+Rules about the collection and rules about its elements go on the same chain, with `ForEach` last:
+
+```csharp
+this.Property(c => c.ServiceHistory)
+    .NotEmpty()
+    .MaximumCount(50)
+    .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
+```
+
+A chain belongs to the property it started on, so rules for a second property of the same entry are a
+second statement — the element builder takes as many as the entry needs:
+
+```csharp
+this.Property(c => c.ServiceHistory)
+    .ForEach(record =>
+    {
+        record.Property(r => r.Workshop).NotEmpty().MaximumLength(100);
+        record.Property(r => r.Mileage).GreaterThanOrEqualTo(0);
+
+        // A rule may consult the rest of the entry it is judging, but not the object the collection
+        // hangs off; a rule about that belongs on the collection itself.
+        record.Property(r => r.Mileage)
+            .Must((r, mileage) => r.Cost == 0m || mileage > 0, "A paid service records its mileage.");
+    });
+```
+
+`ForEach` is a rule like any other, so a chain that has already failed does not reach it — too many
+entries is reported on its own, rather than alongside a complaint about each of them. It returns `void`,
+so it is a statement and has to be declared last.
+
+Each failure is reported under the element's position, so a caller can bind it to the row it came from:
+
+```json
+{
+  "errors": {
+    "ServiceHistory[1].Workshop": [
+      "Workshop is required."
+    ]
+  }
+}
+```
+
+Where the element already has a validator, use it:
+
+```csharp
+this.Property(c => c.ServiceHistory).ForEach(serviceRecordValidator);
+```
+
+#### The element builder
+
+Inside `ForEach` you are handed an `ElementRuleBuilder<TElement>`, whose whole surface is these six
+members:
+
+| Member | What it does |
+|--------|--------------|
+| `Property(expression)` | A rule chain on one property of the entry, exactly as on a validator |
+| `Element()` | A rule chain on the entry itself, for a collection of scalars |
+| `Where(predicate)` | Restricts which entries are judged; repeated calls are and-ed |
+| `SetValidator(validator)` | Hands each entry to a validator of its own |
+| `WithIndexer(indexer)` | Identifies an entry by something other than its position |
+| `ValidationBehaviors` | What *one entry* reports — see [validation behavior](#validation-behavior) |
+
+For a collection of scalars there is no property to name, so the element itself is the subject:
+
+```csharp
+this.Property(c => c.ServiceMileages).ForEach(mileage => mileage.Element().GreaterThanOrEqualTo(0));
+// reports: ServiceMileages[1] -> "ServiceMileages[1] must be greater than or equal to 0."
+```
+
+A rule declared on the element itself names no property, so the message names the element by the very
+name the failure is reported under. `WithDisplayName(...)` overrides that as it does anywhere else.
+
+`Where(...)` restricts which elements are judged; the ones it skips keep their position, so an index
+always points at the row the caller sent. Where a position is not what the caller matches on, identify
+each element by something of its own:
+
+```csharp
+this.Property(c => c.ServiceHistory)
+    .ForEach(record => record
+        .WithIndexer((r, _) => $"{r.Mileage} km")
+        .Property(r => r.Workshop).NotEmpty());
+
+// reports: ServiceHistory[120000 km].Workshop instead of ServiceHistory[1].Workshop
+```
+
+What `WithIndexer` returns is echoed into the reported property name, so identify an entry by something
+the caller already sent rather than by something the response should not be carrying.
+
+The element builder carries its own [validation behavior](#validation-behavior):
+`record.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError` governs what *one entry*
+reports, and every entry is still walked. It is built where it is declared rather than by the container,
+so — like a validator you construct with `new` — it takes the built-in defaults and not what
+`AddNValidation` configured. Set it on the element builder itself where an element's rules should follow
+a different policy from the defaults.
+
+A missing collection and a `null` element are skipped — whether entries have to be there at all is a
+question for the collection's own rules.
+
+Each collection rule walks the sequence once, and no further than its own question needs —
+`MaximumCount(50)` stops at the fifty-first entry. A *chain* of them asks one question each, so
+`NotEmpty().MaximumCount(50).ForEach(...)` walks it three times. That is free for a `List<T>` or an array,
+which answer `Count` without being walked at all, but a property typed `IEnumerable<T>` backed by a live
+query runs that query once per rule, and one that cannot be enumerated twice will throw. Materialize such
+a property before validating it; the library cannot do it for you without handing your own rules a
+different object than the one your model holds.
+
+Messages about an element can name its position with `{CollectionIndex}`, whichever way the rules were
+declared — an entry's own validator answers through the provider of the run it was composed into, not its
+own.
 
 ### Validation behavior
 
-How much a validator reports is one decision asked at two scales: whether a run keeps going once a property has
-reported, and whether a property's chain keeps going once one of its rules has failed. Both live under one setting, and
-the level it applies to is where you write it rather than a word in its name:
+How much a validator reports is one decision asked at two scales: whether a run keeps going once a
+property has reported, and whether a property's chain keeps going once one of its rules has failed. Both
+live under one setting, and the level it applies to is where you write it rather than a word in its name:
 
 ```csharp
 // the registration — the default for every validator resolved from the container
@@ -203,267 +412,1248 @@ this.Property(c => c.Vin)
 | `ValidationBehaviors.Class`    | `All`              | whether the run goes on to the next property |
 | `ValidationBehaviors.Property` | `StopAtFirstError` | whether a chain goes on to its next rule     |
 
-Both axes are nullable, and `null` — which is what they start as — means *inherit from the level above*. Naming one
-therefore never silently changes the other: a validator that sets `Class` leaves `Property` taking whatever the
-registration configured, and a registration that sets neither leaves both at the defaults above. That is also why the
-setting is mutated rather than assigned; replacing the whole object would replace the axis you did not mean to touch.
+Both axes are nullable, and `null` — which is what they start as — means *inherit from the level above*.
+Naming one therefore never silently changes the other: a validator that sets `Class` leaves `Property`
+taking whatever the registration configured, and a registration that sets neither leaves both at the
+defaults above. That is also why the setting is mutated rather than assigned; replacing the whole object
+would replace the axis you did not mean to touch.
 
-The defaults are chosen for the common case. Reporting every property at once is what lets a caller fix a form in one
-pass. Stopping within a chain is right because a chain's rules usually run coarse to fine: an empty string fails
-`NotEmpty` and `Length(17)` alike, and only the first of those tells the caller anything. Set `Property` to `All` for
-the chain whose rules judge separate things — a VIN is the wrong length *and* carries a letter no VIN may contain, and a
-caller wants to hear both.
+The defaults are chosen for the common case. Reporting every property at once is what lets a caller fix a
+form in one pass. Stopping within a chain is right because a chain's rules usually run coarse to fine: an
+empty string fails `NotEmpty` and `Length(17)` alike, and only the first of those tells the caller
+anything. Set `Property` to `All` for the chain whose rules judge separate things — a VIN is the wrong
+length *and* carries a letter no VIN may contain, and a caller wants to hear both.
 
-**`Class = StopAtFirstError` stops the run as soon as anything has been reported** — the properties after it are never
-looked at. It therefore also stops the chain that produced it, overriding `Property`, since a setting by that name which
-went on judging the same property would be a trap. The single exception is a chain that says otherwise through
-`WithValidationBehavior`, because it says so at the point it applies; that is how you get *everything about the first
-field that is wrong, then stop*. A property whose `When` did not hold reported nothing, so there is nothing for the run
-to stop on and the next property is still judged.
+**`Class = StopAtFirstError` stops the run as soon as anything has been reported** — the properties after
+it are never looked at. It therefore also stops the chain that produced it, overriding `Property`, since a
+setting by that name which went on judging the same property would be a trap. The single exception is a
+chain that says otherwise through `WithValidationBehavior`, because it says so at the point it applies;
+that is how you get *everything about the first field that is wrong, then stop*. A property whose `When`
+did not hold reported nothing, so there is nothing for the run to stop on and the next property is still
+judged.
 
-That usually means a single message, but do not rely on it as a cap. A run is stopped *between* rules, and one rule that
-reported several at once is not cut short: a validator merged in with `SetValidator` has already had its own say, and a
-`ForEach` reports on every entry it walked. What a composed validator found is its decision, not its composer's, so it
-is passed on whole rather than truncated.
+That usually means a single message, but do not rely on it as a cap. A run is stopped *between* rules, and
+one rule that reported several at once is not cut short: a validator merged in with `SetValidator` has
+already had its own say, and a `ForEach` reports on every entry it walked. What a composed validator found
+is its decision, not its composer's, so it is passed on whole rather than truncated.
 
-The setting is resolved while validating, not while the rules are declared, so where in a constructor you write it makes
-no difference. A validator composed into another — through `SetValidator`, or per entry through `ForEach` — decides for
-itself, and is never cut short by what its composer has already reported.
+The setting is resolved while validating, not while the rules are declared, so where in a constructor you
+write it makes no difference. A validator composed into another — through `SetValidator`, or per entry
+through `ForEach` — decides for itself, and is never cut short by what its composer has already reported.
 
-One caution for an HTTP payload: a stopping validator produces a problem details body naming a single field. That is
-often right for a machine caller, and usually wrong for a form a person is filling in.
+One caution for an HTTP payload: a stopping validator produces a problem details body naming a single
+field. That is often right for a machine caller, and usually wrong for a form a person is filling in.
 
-Coming from FluentValidation, `ClassLevelCascadeMode` maps onto `Class` and `RuleLevelCascadeMode` onto `Property`, with
-`Continue` reading as `All` and `Stop` as `StopAtFirstError`.
+### One validator, two payloads
 
-### Comparisons
-
-The comparison rules are written once, over `IComparable<T>`, so they work for every numeric type and for `DateTime`,
-`DateTimeOffset`, `TimeSpan`, `DateOnly` and `TimeOnly` alike:
-
-```csharp
-this.Property(c => c.Mileage).GreaterThanOrEqualTo(0);
-this.Property(c => c.BasePrice).Between(1m, 999m);
-this.Property(c => c.UnitsProduced).GreaterThan(1_000L);
-this.Property(c => c.ServiceInterval).LessThanOrEqualTo(TimeSpan.FromDays(365));
-```
-
-Each of them — and `EqualTo`/`NotEqualTo` with it — also compares against another property of the same object, on either
-side of which the value may be optional. A missing value has nothing to compare and passes, and so does a property
-reached through an object the payload omitted:
+A validator can serve more than one type by implementing `IValidator<T>` a second time. A base class
+closed over one `T` cannot know about the other, so such a validator re-implements the non-generic
+dispatch itself:
 
 ```csharp
-this.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
-this.Property(c => c.Mileage).LessThanOrEqualTo(c => c.Model.MileageCap);   // skipped when Model is absent
+public sealed class AddressValidator : Validator<ShippingAddress>, IValidator<BillingAddress>
+{
+    // ... the rules for the shipping address, declared as usual ...
+
+    ValueTask<ValidationResult> IValidator<BillingAddress>.ValidateAsync(
+        BillingAddress instance, CancellationToken cancellationToken)
+        => this.billingRules.ValidateAsync(instance, cancellationToken);
+
+    ValueTask<ValidationResult> IValidator.ValidateAsync(object instance, CancellationToken cancellationToken)
+        => instance switch
+        {
+            BillingAddress billing => ((IValidator<BillingAddress>)this).ValidateAsync(billing, cancellationToken),
+            ShippingAddress shipping => this.ValidateAsync(shipping, cancellationToken),
+            _ => throw new InvalidCastException(),
+        };
+}
 ```
 
-Requiring a value is a separate decision, and `NotNull()` or `NotEmpty()` is what makes it.
+Registration handles the rest: `AddValidator<AddressValidator>()` reads every closed `IValidator<T>` off
+the type and registers it under each one. Leave the dispatch out and a caller resolving it by `Type` gets
+an `InvalidCastException` naming exactly this.
+
+### What is deliberately not here
+
+Some things a reader coming from another library will look for do not exist, and the alternative is
+always an ordinary language feature:
+
+| Not here | Instead |
+|----------|---------|
+| Rule sets — naming a subset of rules to run | A validator per thing being validated, or a `When` over a property of the payload |
+| Inheritance / polymorphic validators | `Must` that dispatches, or a validator per concrete type resolved by the caller |
+| `Include`, to merge one validator's rules into another | `SetValidator` on the property, or an extension method holding the shared chain |
+| A pre-validation hook | The first rule of the chain |
+| A global static configuration object | `AddNValidation`, or the validator's own constructor |
+
+## Validation results
+
+A run answers with a `ValidationResult`. It is immutable, it is never null, and a successful one carries
+an empty list rather than a null one.
+
+| Member | Type | What it is |
+|--------|------|------------|
+| `Succeeded` | `bool` | `true` when nothing was reported |
+| `Errors` | `IReadOnlyList<ValidationError>` | Every failure, in the order the rules produced them |
+| `ThrowIfInvalid()` | `void` | Throws a `ValidationException` when it failed; does nothing when it did not |
+| `ToErrorsDictionary()` | `IReadOnlyDictionary<string, string[]>` | The messages grouped by property name |
+| `ValidationResult.Success` | `static ValidationResult` | The shared empty result |
+| `ValidationResult.FromValidationErrors(...)` | `static ValidationResult` | Builds one from errors you produced yourself — takes `params ValidationError[]` or an `IEnumerable<ValidationError>` |
+
+`ToErrorsDictionary()` is the shape a client expects and the shape the problem details response carries:
+
+```csharp
+var errors = result.ToErrorsDictionary();
+
+// { "Vin": ["Vin is required."],
+//   "Model.Manufacturer.Name": ["Name is required."] }
+```
+
+It returns an empty dictionary for a successful result rather than throwing, so a caller can hand it
+straight to whatever renders it.
+
+### What one error says
+
+A `ValidationError` answers three questions:
+
+| Member | Answers | Example |
+|--------|---------|---------|
+| `PropertyName` | where the failure is | `Vin`, `Model.Manufacturer.Name`, `ServiceHistory[1].Workshop` |
+| `ErrorCode` | which rule failed | `NotEmpty`, `GreaterThan` |
+| `Message` | what to show a reader | `Vin is required.` |
+
+`PropertyName` is the C# property path, so a client can bind each message to the input it belongs to.
+`ErrorCode` is what a client branches on, because it does not change when a translation lands — which
+matters here, since `NotEmpty`, `NotNull` and `NotDefault` all render the same English sentence.
+`Arguments` carries the values the message was rendered from (`{PropertyName}`, `{MinLength}` and so on)
+for a caller that logs a failure in parts rather than as a sentence.
+
+```csharp
+public ValidationError(string propertyName, string message);
+public ValidationError(string propertyName, string message, string? errorCode);
+public ValidationError(string propertyName, string message, string? errorCode,
+                       IReadOnlyDictionary<string, object?>? arguments);
+```
+
+`PropertyName` and `Message` are always there. `ErrorCode` is null only for an error built with the
+two-argument constructor, and `Arguments` is null for one whose message did not come from a template —
+which is the case for the `Must` overloads that carry their own text. Everything the shipped rules report
+carries all four.
+
+### Where a failure is reported
+
+The reported name is the member path of the expression the chain was declared with, and it is built the
+same way wherever the failure came from:
+
+| Declared | Reported |
+|----------|----------|
+| `this.Property(c => c.Vin)` | `Vin` |
+| `this.Property(c => c.Model.Manufacturer.Name)` | `Model.Manufacturer.Name` |
+| `SetValidator` on `Model`, which reports `Name` | `Model.Name` |
+| `ForEach` over `ServiceHistory`, whose entry reports `Workshop` | `ServiceHistory[1].Workshop` |
+| `Element()` on a collection of scalars | `ServiceMileages[1]` |
+
+A nested validator keeps its own flat names and the composer prefixes them, so the same validator reports
+`Name` on its own and `Model.Manufacturer.Name` two levels down. `WithPropertyName` overrides the whole
+path for one property — see [overriding defaults](#overriding-defaults).
+
+### Throwing instead of returning
+
+`result.ThrowIfInvalid()` raises a `ValidationException` carrying the same errors grouped by property
+name. `ValidateAndThrowAsync` is the same thing in one call, for a caller that would rather treat a
+failure as an exception than as a result to inspect:
+
+```csharp
+await this.carValidator.ValidateAndThrowAsync(car, cancellationToken);
+
+// equivalent to
+var result = await this.carValidator.ValidateAsync(car, cancellationToken);
+result.ThrowIfInvalid();
+```
+
+The exception carries the failures in a slightly different shape from `ToErrorsDictionary()`, because it
+is the shape an exception is usually re-thrown and re-wrapped in:
+
+```csharp
+public IReadOnlyDictionary<string, IReadOnlyList<string>> Errors { get; }
+```
+
+Its `Message` is every failure's message joined with a space, which is what ends up in a log line. Two
+further constructors take a message — with or without an inner exception — for an application that raises
+one itself; those carry no errors. Constructing one from an empty dictionary is refused, because an
+exception saying nothing failed is a bug at the point it is thrown rather than at the point it is caught.
+
+```csharp
+try
+{
+    await this.carValidator.ValidateAndThrowAsync(car, cancellationToken);
+}
+catch (ValidationException exception)
+{
+    foreach (var (propertyName, messages) in exception.Errors)
+    {
+        this.logger.LogWarning("{PropertyName}: {Messages}", propertyName, string.Join(" ", messages));
+    }
+}
+```
+
+In an ASP.NET Core application you rarely catch it: register the exception handler and it comes out as a
+problem details response — see [ASP.NET Core integration](#aspnet-core-integration).
+
+## Built-in validators
+
+The rules are grouped by the question they ask rather than listed alphabetically, because that is how you
+go looking for one: *is it there*, *is it the right shape*, *is it in range*, *is it one of these*.
+
+| Group | Rules |
+|-------|-------|
+| [Presence](#presence) | `NotNull`, `NotEmpty`, `NotDefault` |
+| [Text](#text) | `MinimumLength`, `MaximumLength`, `Length`, `Matches`, `NotContaining` |
+| [Email addresses](#email-addresses) | `EmailAddress`, `EmailTopLevelDomainIn`, `EmailTopLevelDomainNotIn` |
+| [Comparison](#comparison) | `GreaterThan`, `GreaterThanOrEqualTo`, `LessThan`, `LessThanOrEqualTo`, `Between`, `EqualTo`, `NotEqualTo`, `OneOf` |
+| [Numbers](#numbers) | `MultipleOf`, `NotNaN`, `PrecisionScale` |
+| [Dates](#dates) | `InThePast`, `InTheFuture` |
+| [Collections](#collections) | `MinimumCount`, `MaximumCount`, `NoDuplicates`, `ForEach` |
+| [Enums](#enums) | `IsInEnum` |
+| [Custom](#custom-validators) | `Must`, `MustAsync`, `SetValidator` |
+
+Two things hold for every rule below, and are worth reading once rather than thirty-five times:
+
+- **Anything absent passes.** A null value, a missing collection, a property reached through an object the
+  payload omitted — none of them is a failure of the rule that was asked about the *value*. Requiring
+  presence is always a rule of its own. The three presence rules are the only ones that depart from this,
+  which is what they are for.
+- **The error code is also the key the message is resolved under.** Each card names the code it reports
+  and the placeholders its message may use; [localization](#localization) is a matter of answering for
+  those codes.
+
+Every card below shows the signature, what makes it fail, an example against the same `Car` domain, and
+the code and placeholders it reports.
 
 ### Presence
 
-`NotEmpty` asks whether there is any content, which only a string or a collection can answer.
-`NotDefault` asks whether a value type was set at all — an enum's zero member, a `DateTime.MinValue`, an empty `Guid` —
-which is what arrives when nothing was chosen.
+Three rules, one English sentence between them — *"{PropertyName} is required."* They are separate rules
+because they ask genuinely different questions, and a client that has to tell them apart branches on the
+`ErrorCode` rather than on the text.
 
-A chain declared through another object is skipped when that object is not there, rather than throwing:
+**`NotNull()`** — a reference type, or a `Nullable<T>`
+
+Fails when the value is null, and asks nothing else. This is the rule that makes a nested object
+mandatory.
 
 ```csharp
-this.Property(c => c.Model).NotNull();          // whether it has to be there at all
-this.Property(c => c.Model.Manufacturer.Name).NotEmpty();   // judged only if it is
+this.Property(c => c.Model).NotNull();
+this.Property(m => m.BasePrice).NotNull();     // decimal?
 ```
 
-A payload that omitted `Model` reports `Model`, not a server error. This is the same answer the rest of the library
-gives to something absent — a null nested object is skipped by `SetValidator`, a missing collection by its own rules, an
-absent value by a comparison, and the *compared* property of a two-property rule by the same guard — so requiring
-presence is always a rule of its own, next to the rules about the value.
+Error code `NotNull` · `{PropertyName}`
 
-The expression has to reach the property through the validator's own parameter. `x => x.Address.Street` is a path;
-`x => x.Lines[0].Street` and `x => somethingElse.Street` are not, and are refused where they are declared rather than
-silently reported under `Street`.
+**`NotEmpty()`** — `string?`, or any `IEnumerable`
+
+Asks whether there is any content, which only a string or a collection can answer. **Fails on null**, and
+for a string also on one that is only whitespace.
+
+```csharp
+this.Property(c => c.Vin).NotEmpty();
+this.Property(c => c.ServiceHistory).NotEmpty();
+```
+
+Error code `NotEmpty` · `{PropertyName}`
+
+**`NotDefault()`** — any `struct`, or a `Nullable<T>` of one
+
+Asks whether a value type was set at all — an enum's zero member, a `DateTime.MinValue`, an empty `Guid`
+— which is what arrives when nothing was chosen. The nullable form fails for null as well.
+
+```csharp
+this.Property(c => c.FirstRegistration)
+    .WithDisplayName("Registration date")
+    .NotDefault();
+```
+
+Error code `NotDefault` · `{PropertyName}`
+
+A reference type has no `default` worth asking about, so `NotDefault` does not apply to one — use
+`NotNull`.
+
+### Text
+
+**`MinimumLength(int minimumLength)`** — `string?`
+
+Fails when the value is shorter than `minimumLength`. Whitespace counts; the value is not trimmed first.
+
+```csharp
+this.Property(c => c.Vin).MinimumLength(11);
+```
+
+Error code `MinimumLength` · `{PropertyName}`, `{MinLength}`
+
+**`MaximumLength(int maximumLength)`** — `string?`
+
+Fails when the value is longer than `maximumLength`.
+
+```csharp
+this.Property(m => m.Name).MaximumLength(100);
+```
+
+Error code `MaximumLength` · `{PropertyName}`, `{MaxLength}`
+
+**`Length(int length)`** — `string?`
+
+Fails when the value is not exactly `length` characters long. For a code of a fixed width — an ISO country
+code, a VIN — this says in one rule what a minimum and a maximum say in two.
+
+```csharp
+this.Property(m => m.CountryCode).Length(3);
+```
+
+Error code `Length` · `{PropertyName}`, `{Length}`
+
+**`Length(int minimumLength, int maximumLength)`** — `string?`
+
+Fails outside the range; **both bounds are inclusive**. Note that this overload reports
+**`LengthBetween`**, not `Length` — the two say different things, so they resolve different messages.
+
+```csharp
+this.Property(c => c.RegistrationPlate).Length(2, 10);
+```
+
+Error code `LengthBetween` · `{PropertyName}`, `{MinLength}`, `{MaxLength}`
+
+**`Matches(string pattern)`**, **`Matches(string pattern, RegexOptions options)`**, **`Matches(Regex regex)`**
+— `string?`
+
+Fails when the pattern does not match. A value that is null **or only whitespace** passes, so a pattern
+never doubles as a presence rule.
+
+```csharp
+this.Property(m => m.Website).Matches(@"^https?://");
+```
+
+The pattern is compiled once where the rule is declared, not once per validation, and it carries a **one
+second match timeout**. A pattern that times out counts as *not matching* — a hostile value gets a
+validation failure rather than an unhandled exception on the request thread.
+
+Error code `Matches` · `{PropertyName}`, and `{Pattern}` — which the built-in English does not use, on the
+grounds that a regular expression is not an explanation, but which your own provider can pick up.
+
+**`NotContaining(params string[] values)`**,
+**`NotContaining(StringComparison comparison, params string[] values)`** — `string?`
+
+Fails when the value contains any of the terms. The general form for text a field will not carry, wherever
+it comes from:
+
+```csharp
+this.Property(m => m.Name).NotContaining("prototype", "internal");
+```
+
+It compares without regard to case by default, and the message names none of the terms — a blocklist that
+reports its own entries is one the next value works around. Pass a `StringComparison` first where the
+comparison should be exact.
+
+Error code `NotContaining` · `{PropertyName}`
 
 ### Email addresses
 
-`EmailAddress` parses the value with `System.Net.Mail.MailAddress` rather than matching it against a pattern. The
-address forms that are legal are far broader than a hand-written pattern allows — a quoted local part, an IP literal, an
-internationalized domain — which is why FluentValidation deprecated its own RFC 5322 regex; a parser also cannot be made
-to backtrack by a hostile value.
+**`EmailAddress()`** — `string?`
+
+`EmailAddress` parses the value with `System.Net.Mail.MailAddress` rather than matching it against a
+pattern. The address forms that are legal are far broader than a hand-written pattern allows — a quoted
+local part, an IP literal, an internationalized domain — and a pattern wide enough to admit them is one
+nobody can read, let alone review. A parser also cannot be made to backtrack by a hostile value.
 
 The value has to be the address **alone**. `MailAddress` parses the header forms too, so `Foo <a@b.com>`,
-`a@b.com, c@d.com` and a value with surrounding whitespace all parse — and each is something other than the single
-address the field asked for. They are rejected.
+`a@b.com, c@d.com` and a value with surrounding whitespace all parse — and each is something other than
+the single address the field asked for. They are rejected.
+
+```csharp
+this.Property(m => m.ContactEmail).EmailAddress();
+```
+
+Error code `EmailAddress` · `{PropertyName}`
 
 Which domains you accept is a separate decision, and a separate rule:
 
 ```csharp
-this.Property(u => u.Email)
+this.Property(m => m.ContactEmail)
     .NotEmpty()
     .EmailAddress()
     .EmailTopLevelDomainNotIn("test", "invalid", "example");
 ```
 
-`NotContaining` is the general form for text a field will not carry, wherever it comes from:
+**`EmailTopLevelDomainIn(params string[] topLevelDomains)`** — `string?`
+
+Fails when the address's top-level domain is not one of those listed. Entries are compared without regard
+to case and a leading dot is optional, so `.ch` and `ch` mean the same thing. An address whose host has no
+dot at all, or is an IP literal, has no top-level domain and therefore fails this rule.
+
+Error code **`EmailTopLevelDomain`** · `{PropertyName}`, `{TopLevelDomains}`
+
+**`EmailTopLevelDomainNotIn(params string[] topLevelDomains)`** — `string?`
+
+The blocklist counterpart. An address with no top-level domain has nothing on the list and passes; pair it
+with `EmailAddress()` where that matters.
+
+Error code **`EmailTopLevelDomainNotAllowed`** · `{PropertyName}`, `{TopLevelDomain}` — the one that
+matched, singular.
+
+A value that is not a bare address is left to `EmailAddress` to report, so both domain rules pass it
+rather than reporting the same value twice.
+
+### Comparison
+
+The comparison rules are written once, over `IComparable<T>`, so they work for every numeric type and for
+`DateTime`, `DateTimeOffset`, `TimeSpan`, `DateOnly` and `TimeOnly` alike:
 
 ```csharp
-this.Property(u => u.DisplayName).NotContaining("admin", "support");
+this.Property(c => c.Mileage).GreaterThanOrEqualTo(0);
+this.Property(m => m.BasePrice).Between(1m, 999_999m);
+this.Property(m => m.UnitsProduced).GreaterThan(1_000L);
+this.Property(c => c.ServiceInterval).LessThanOrEqualTo(TimeSpan.FromDays(365));
 ```
 
-It compares without regard to case, and the message names none of the terms — a blocklist that reports its own entries
-is one the next value works around.
+They are constrained to `struct, IComparable<T>`, which is to say they order values, not text. Two strings
+are compared with `EqualTo`/`NotEqualTo` below; ordering them is a `Must`.
+
+**`GreaterThan(value)`**, **`GreaterThanOrEqualTo(value)`**, **`LessThan(value)`**, **`LessThanOrEqualTo(value)`**
+
+Each fails when the comparison does not hold. Each has six overloads: the property may be `TValue` or
+`TValue?`, and the thing compared against may be a constant or another property, itself of either
+nullability.
+
+| Rule | Against a value | Against another property |
+|------|-----------------|--------------------------|
+| `GreaterThan` | `GreaterThan` | `GreaterThanOtherProperty` |
+| `GreaterThanOrEqualTo` | `GreaterThanOrEqualTo` | `GreaterThanOrEqualToOtherProperty` |
+| `LessThan` | `LessThan` | `LessThanOtherProperty` |
+| `LessThanOrEqualTo` | `LessThanOrEqualTo` | `LessThanOrEqualToOtherProperty` |
+
+`{PropertyName}` and `{OtherValue}` for the value forms; `{PropertyName}` and `{OtherPropertyName}` for
+the other-property forms.
+
+Each of them — and `EqualTo`/`NotEqualTo` with it — compares against another property of the same object,
+on either side of which the value may be optional. A missing value has nothing to compare and passes, and
+so does a property reached through an object the payload omitted:
+
+```csharp
+this.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+this.Property(c => c.Mileage).LessThanOrEqualTo(c => c.Model.WarrantyMileageCap);   // skipped when Model is absent
+```
+
+Requiring a value is a separate decision, and `NotNull()` or `NotEmpty()` is what makes it.
+
+The failure is always reported under the property the chain was declared for, never under the one it was
+compared against. `{OtherPropertyName}` renders the *other* property's display name when it declared one,
+which is what makes a cross-property message readable:
+
+```csharp
+this.Property(c => c.FirstRegistration).WithDisplayName("Registration date").NotDefault();
+this.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+
+// reports: SoldDate -> "SoldDate must be greater than or equal to Registration date."
+```
+
+**`Between(TValue from, TValue to)`**, **`Between(from, to, bool inclusive)`**,
+**`Between(from, to, bool inclusiveFrom, bool inclusiveTo)`**
+
+Fails outside the range. With no bool, **both bounds are inclusive**. Which bounds are included changes
+which code is reported, because a message naming a range it has just refused would be worse than useless:
+
+| `inclusiveFrom` | `inclusiveTo` | Error code | Default English |
+|---|---|---|---|
+| `true` | `true` | `Between` | *{PropertyName} must be between {From} and {To}.* |
+| `false` | `false` | `BetweenExclusive` | *{PropertyName} must be greater than {From} and less than {To}.* |
+| `false` | `true` | `BetweenExclusiveFrom` | *{PropertyName} must be greater than {From} and at most {To}.* |
+| `true` | `false` | `BetweenExclusiveTo` | *{PropertyName} must be at least {From} and less than {To}.* |
+
+```csharp
+this.Property(m => m.SeatCount).Between(1, 9);                       // 1 and 9 both allowed
+this.Property(m => m.FuelConsumption).Between(0d, 50d, inclusive: false);
+```
+
+`{PropertyName}`, `{From}`, `{To}` in all four cases. A `from` greater than `to` throws where the rule is
+declared rather than failing every value at run time.
+
+**`EqualTo(value)`** and **`NotEqualTo(value)`** — a `struct` implementing `IEquatable<T>`, or a `string?`
+
+These are the only comparison rules that take text, and they take a `StringComparison` with it —
+`Ordinal` by default:
+
+```csharp
+this.Property(m => m.CountryCode).EqualTo("CHE");
+this.Property(c => c.RegistrationPlate)
+    .NotEqualTo(c => c.PreviousRegistrationPlate, StringComparison.OrdinalIgnoreCase);
+```
+
+A null string passes both, so `NotEqualTo("X")` does not fire on a value that is not there.
+
+| Rule | Against a value | Against another property |
+|------|-----------------|--------------------------|
+| `EqualTo` | `EqualTo` | `EqualToOtherProperty` |
+| `NotEqualTo` | `NotEqualTo` | `NotEqualToOtherProperty` |
+
+**`OneOf(params TValue[] values)`** — any value type, `string`, and their nullable forms
+
+Fails when the value is not one of the values named. The closed-set rule: an enum a client may send a
+number for, a currency the endpoint settles in, a status the contract froze.
+
+```csharp
+this.Property(c => c.Condition).OneOf(CarCondition.New, CarCondition.Used);
+this.Property(c => c.Currency).OneOf(StringComparison.OrdinalIgnoreCase, "CHF", "EUR");
+```
+
+Error code `OneOf` · `{PropertyName}`, `{AllowedValues}`
+
+The message names the allowed values, unlike `NotContaining`, which names none of the ones it refuses:
+an allowlist may say what it allows, while a blocklist that reports its own entries is one the next
+value is written around. Naming no values at all throws where the rule is declared.
+
+### Numbers
+
+**`MultipleOf(decimal step)`**, **`MultipleOf(int step)`** — `decimal`, `decimal?`, `int`, `int?`
+
+Fails when the value is not a whole multiple of `step`. The remainder is exact — there is no epsilon — so
+this is a rule about `decimal` and `int`, and deliberately not about `double`.
+
+```csharp
+this.Property(c => c.ServiceIntervalKm).MultipleOf(1_000);
+this.Property(c => c.PurchasePrice).MultipleOf(0.05m);
+```
+
+Error code `MultipleOf` · `{PropertyName}`, `{Step}`
+
+A step of zero or less throws where the rule is declared. `{Step}` takes a format specifier like any other
+placeholder, so a provider can write `{Step:0.00}`.
+
+**`PrecisionScale(int precision, int scale)`** — `decimal`, `decimal?`
+
+Fails when the number carries more digits than the contract behind it holds: at most `precision` in
+total, of which at most `scale` follow the decimal point. Typically the shape of the column it lands in.
+
+```csharp
+this.Property(c => c.PurchasePrice).PrecisionScale(9, 2);   // up to 9,999,999.99
+```
+
+Error code `PrecisionScale` · `{PropertyName}`, `{Precision}`, `{Scale}`
+
+Trailing zeros are representation rather than value, so `1.50m` and `1.5m` are judged the same: there is
+one behaviour rather than a flag to pick between two. A precision of zero or less, a negative scale, or
+a scale larger than the precision all throw where the rule is declared.
+
+**`NotNaN()`** — `double`, `double?`, `float`, `float?`
+
+Fails for `NaN`, which is what a figure that was never measured deserializes as. Infinities pass; a bound
+on those is a comparison rule.
+
+```csharp
+this.Property(m => m.FuelConsumption).NotNaN();
+```
+
+Error code `NotNaN` · `{PropertyName}`
 
 ### Dates
 
-`InThePast` and `InTheFuture` compare in UTC, and each has an overload taking a `TimeProvider`, so a test can decide
-what "now" is:
+**`InThePast()`**, **`InThePast(TimeProvider timeProvider)`**,
+**`InTheFuture()`**, **`InTheFuture(TimeProvider timeProvider)`**
+— `DateTime`, `DateTime?`, `DateTimeOffset`, `DateTimeOffset?`
+
+`InThePast` and `InTheFuture` compare in UTC, and each has an overload taking a `TimeProvider`, so a test
+can decide what "now" is:
 
 ```csharp
 this.Property(m => m.FoundedDate).InThePast(this.timeProvider);
+this.Property(c => c.NextServiceAt).InTheFuture();
 ```
 
-A `DateTime` of kind `Unspecified` — what a date deserialized without an offset carries — is read as UTC rather than as
-local time, so the same payload gets the same verdict whatever time zone the host runs in. Use `DateTimeOffset` where
-the input genuinely carries one.
+Both are **strict**: a value equal to "now" fails either of them. A `DateTime` of kind `Unspecified` —
+what a date deserialized without an offset carries — is read as UTC rather than as local time, so the same
+payload gets the same verdict whatever time zone the host runs in. Use `DateTimeOffset` where the input
+genuinely carries one.
 
-Your own rules are extension methods on `PropertyRuleBuilder<T, TProperty>`, so they chain exactly like the shipped
-ones:
+Error codes `InThePast` and `InTheFuture` · `{PropertyName}`
+
+### Collections
+
+**`MinimumCount(int minimumCount)`** and **`MaximumCount(int maximumCount)`** — any `IEnumerable`
+
+Fail when the sequence holds too few or too many entries. Each walks the sequence no further than its own
+question needs, so `MaximumCount(20)` stops at the twenty-first entry rather than counting the lot.
 
 ```csharp
-public static PropertyRuleBuilder<T, string?> Vin<T>(this PropertyRuleBuilder<T, string?> builder)
+this.Property(c => c.ServiceHistory).MaximumCount(20);
+this.Property(c => c.FeatureIds).MinimumCount(1);
+```
+
+Error codes `MinimumCount` and `MaximumCount` · `{PropertyName}` with `{MinCount}` / `{MaxCount}`
+
+**`NoDuplicates()`** — any `IEnumerable`
+
+Fails when two entries are equal. Equality is the entries' own — which means a value type is boxed on the
+way in, and a reference type without an `Equals` of its own compares by identity. There is no comparer
+overload: a rule about equality that is not the type's own equality is a `Must` over a typed `HashSet<T>`,
+where the reader can see which equality was meant.
+
+```csharp
+this.Property(c => c.FeatureIds).NoDuplicates();
+```
+
+Error code `NoDuplicates` · `{PropertyName}`
+
+**`ForEach(Action<ElementRuleBuilder<TElement>> declareRules)`** and **`ForEach(IValidator<TElement> validator)`**
+
+Judges each entry, reporting under its position. It returns `void`, so it terminates the chain and is
+declared last. See [collections and elements](#collections-and-elements) for the element builder and for
+what an entry's failures are reported under.
+
+### Enums
+
+**`IsInEnum()`** — any `enum`, or a `Nullable<T>` of one
+
+Fails for a value the enum does not declare, which is what an out-of-range integer deserializes into:
+
+```csharp
+this.Property(m => m.EngineType).IsInEnum();
+this.Property(c => c.IntakeCondition).IsInEnum();     // CarCondition?
+```
+
+Error code `IsInEnum` · `{PropertyName}`
+
+A `[Flags]` enum accepts any combination of the bits it declares, and fails for a value carrying a bit it
+does not. Zero is a *valid* member whenever the enum declares one, so an enum whose zero means "nothing
+chosen" pairs this with `NotDefault()`.
+
+### Error codes and their messages
+
+Every code the core can report, the English the built-in provider answers with, and the placeholders that
+message is rendered from. This is also the checklist a provider of your own has to answer for — and
+`ShouldResolveEveryCoreErrorCode` is how a test holds it to that, so the table does not have to be copied
+anywhere.
+
+| Error code | Default English message | Placeholders |
+|------------|-------------------------|--------------|
+| `Must` | {PropertyName} is not valid. | `{PropertyName}` |
+| `NotEmpty` | {PropertyName} is required. | `{PropertyName}` |
+| `NotNull` | {PropertyName} is required. | `{PropertyName}` |
+| `NotDefault` | {PropertyName} is required. | `{PropertyName}` |
+| `NotNaN` | {PropertyName} must be a number. | `{PropertyName}` |
+| `MinimumLength` | {PropertyName} must be at least {MinLength} characters long. | `{PropertyName}`, `{MinLength}` |
+| `MaximumLength` | {PropertyName} must not exceed {MaxLength} characters. | `{PropertyName}`, `{MaxLength}` |
+| `Length` | {PropertyName} must be exactly {Length} characters long. | `{PropertyName}`, `{Length}` |
+| `LengthBetween` | {PropertyName} must be between {MinLength} and {MaxLength} characters long. | `{PropertyName}`, `{MinLength}`, `{MaxLength}` |
+| `Matches` | {PropertyName} has an invalid format. | `{PropertyName}`, `{Pattern}` |
+| `EmailAddress` | {PropertyName} is not a valid email address. | `{PropertyName}` |
+| `EmailTopLevelDomain` | {PropertyName} must use one of the following top-level domains: {TopLevelDomains}. | `{PropertyName}`, `{TopLevelDomains}` |
+| `EmailTopLevelDomainNotAllowed` | {PropertyName} must not use the top-level domain {TopLevelDomain}. | `{PropertyName}`, `{TopLevelDomain}` |
+| `NotContaining` | {PropertyName} contains text that is not allowed. | `{PropertyName}` |
+| `GreaterThan` | {PropertyName} must be greater than {OtherValue}. | `{PropertyName}`, `{OtherValue}` |
+| `GreaterThanOrEqualTo` | {PropertyName} must be greater than or equal to {OtherValue}. | `{PropertyName}`, `{OtherValue}` |
+| `LessThan` | {PropertyName} must be less than {OtherValue}. | `{PropertyName}`, `{OtherValue}` |
+| `LessThanOrEqualTo` | {PropertyName} must be less than or equal to {OtherValue}. | `{PropertyName}`, `{OtherValue}` |
+| `Between` | {PropertyName} must be between {From} and {To}. | `{PropertyName}`, `{From}`, `{To}` |
+| `BetweenExclusive` | {PropertyName} must be greater than {From} and less than {To}. | `{PropertyName}`, `{From}`, `{To}` |
+| `BetweenExclusiveFrom` | {PropertyName} must be greater than {From} and at most {To}. | `{PropertyName}`, `{From}`, `{To}` |
+| `BetweenExclusiveTo` | {PropertyName} must be at least {From} and less than {To}. | `{PropertyName}`, `{From}`, `{To}` |
+| `EqualTo` | {PropertyName} must be {OtherValue}. | `{PropertyName}`, `{OtherValue}` |
+| `NotEqualTo` | {PropertyName} must not be {OtherValue}. | `{PropertyName}`, `{OtherValue}` |
+| `GreaterThanOtherProperty` | {PropertyName} must be greater than {OtherPropertyName}. | `{PropertyName}`, `{OtherPropertyName}` |
+| `GreaterThanOrEqualToOtherProperty` | {PropertyName} must be greater than or equal to {OtherPropertyName}. | `{PropertyName}`, `{OtherPropertyName}` |
+| `LessThanOtherProperty` | {PropertyName} must be less than {OtherPropertyName}. | `{PropertyName}`, `{OtherPropertyName}` |
+| `LessThanOrEqualToOtherProperty` | {PropertyName} must be less than or equal to {OtherPropertyName}. | `{PropertyName}`, `{OtherPropertyName}` |
+| `EqualToOtherProperty` | {PropertyName} must match {OtherPropertyName}. | `{PropertyName}`, `{OtherPropertyName}` |
+| `NotEqualToOtherProperty` | {PropertyName} must not match {OtherPropertyName}. | `{PropertyName}`, `{OtherPropertyName}` |
+| `MultipleOf` | {PropertyName} must be a multiple of {Step}. | `{PropertyName}`, `{Step}` |
+| `InThePast` | {PropertyName} must be a date in the past. | `{PropertyName}` |
+| `InTheFuture` | {PropertyName} must be a date in the future. | `{PropertyName}` |
+| `IsInEnum` | {PropertyName} has an invalid value. | `{PropertyName}` |
+| `MinimumCount` | {PropertyName} must contain at least {MinCount} entries. | `{PropertyName}`, `{MinCount}` |
+| `MaximumCount` | {PropertyName} must not contain more than {MaxCount} entries. | `{PropertyName}`, `{MaxCount}` |
+| `NoDuplicates` | {PropertyName} must not contain duplicate entries. | `{PropertyName}` |
+
+Each of these is a constant on `ValidationErrorCodes`, so a provider keys off `ValidationErrorCodes.NotEmpty`
+rather than off the string.
+
+Two placeholders are supplied to a message without any built-in text using them, and are there for a
+provider of your own: **`{Pattern}`**, the regular expression a `Matches` rule was declared with, and
+**`{CollectionIndex}`**, the zero-based position of the entry under judgement inside any `ForEach`. A
+message that names `{CollectionIndex}` gets it whichever way the element's rules were declared, including
+from a validator composed in with `ForEach(validator)`.
+
+## Custom validators
+
+Most of what an application validates is not a length or a range but a rule of its own. There are three
+ways to write one, and which to reach for depends on how often you will write it:
+
+| | For |
+|---|---|
+| `Must` | A rule this one property has, written where it is used |
+| An extension method over `PropertyRuleBuilder` | A rule several properties or several validators share |
+| `Add` / `AddAsync` | The body of either, when it has more to say than a `bool` |
+
+### A one-off rule: `Must`
+
+`Must` takes a predicate. The value alone, or the whole object and the value where the rule is about both:
+
+```csharp
+this.Property(c => c.Vin)
+    .Must(vin => vin is null || vin.Length == 17);
+
+this.Property(c => c.ServiceHistory)
+    .Must((car, history) => history is null || history.All(r => r.Mileage <= car.Mileage));
+```
+
+**The predicate is handed the value as it is, including null** — there is no implicit guard, because a
+rule that silently passed everything absent would be indistinguishable from one that was never reached.
+`vin is null ||` is the idiom, and it is what makes the rule agree with every shipped one: presence is a
+separate rule.
+
+Without a message it reports the code `Must`, whose built-in English is *"{PropertyName} is not valid."*
+That is rarely what you want to show, so name it:
+
+```csharp
+this.Property(c => c.RegistrationPlate)
+    .Must(plate => plate is null || plate.StartsWith("CH"))
+    .WithErrorCode("SwissPlate");   // the provider resolves "SwissPlate"
+```
+
+Naming a rule with `WithErrorCode` is what makes it localize like a shipped one, because the code is also
+the key the host's message provider is asked for. A client can branch on `SwissPlate` too, which it could
+not do on a sentence.
+
+Where the wording is genuinely a one-off, the overloads taking a message say it inline — and that message
+is used **exactly as given**, with no placeholders substituted and no provider consulted:
+
+```csharp
+this.Property(c => c.Vin)
+    .Must(vin => vin is null || vin.Trim().Length == 17, "The VIN must be exactly 17 characters long.");
+```
+
+Where the wording should name placeholders, put it on `WithMessage`, which *is* substituted:
+
+```csharp
+this.Property(c => c.Vin)
+    .Must(vin => vin is null || vin.Length == 17)
+    .WithMessage("{PropertyName} must be exactly 17 characters long.");
+```
+
+A `Func<string>` overload of both is re-evaluated at validation time rather than at declaration time,
+which is what a message read off a resource needs.
+
+### A reusable rule: an extension method
+
+A rule two validators share is an extension method on `PropertyRuleBuilder<T, TProperty>`, so it chains
+exactly like a shipped one:
+
+```csharp
+public static class VinRules
 {
-    return builder.Add(context =>
+    public static PropertyRuleBuilder<T, string?> Vin<T>(this PropertyRuleBuilder<T, string?> builder)
     {
-        if (context.Value is { Length: not 17 })
+        return builder.Add(context =>
         {
-            context.AddError(new ValidationError(context.Code, "The VIN must be exactly 17 characters long."));
-        }
-    });
+            if (context.Value is { Length: not 17 })
+            {
+                context.AddError("Vin", ("Length", 17));
+            }
+        });
+    }
 }
 ```
 
-## Collections
+```csharp
+this.Property(c => c.Vin).NotEmpty().Vin();
+```
 
-Rules about the collection and rules about its elements go on the same chain, with `ForEach` last:
+`Add` takes the rule's body and returns the chain, so `WithMessage`, `WithErrorCode` and the rest apply to
+it as they do to any rule.
+
+Note what the body reports: a **code and its arguments**, not a sentence. `"Vin"` is resolved through the
+message provider exactly as `NotEmpty` is, so the rule is localizable the day someone needs it, and
+`("Length", 17)` is available to the template as `{Length}`. Give the built-in English a home by
+[decorating the default provider](#localization); until you do, the code renders as itself, which is
+legible enough to ship a first version on.
+
+The literal form is still there for a rule whose wording will never be translated:
 
 ```csharp
-this.Property(c => c.ServiceHistory)
+context.AddError(new ValidationError(context.PropertyName, "The VIN must be exactly 17 characters long."));
+```
+
+### A rule that has to await something
+
+`MustAsync` is the short form, handed the value and the `CancellationToken` of the run:
+
+```csharp
+this.Property(c => c.Vin)
     .NotEmpty()
-    .MaximumCount(50)
-    .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
+    .MustAsync((vin, cancellationToken) => vinRegistry.IsFreeAsync(vin, cancellationToken))
+    .WithErrorCode("VinAlreadyRegistered");
 ```
 
-A chain belongs to the property it started on, so rules for a second property of the same entry are a second statement —
-the element builder is a validator, and takes as many as the entry needs:
+It reports `Must` unless the chain names it, exactly as the synchronous `Must` does — and naming it is
+what makes it localizable, because the code is also the key the provider resolves. Only the
+`ValueTask<bool>` shape ships: an overload taking a `Task<bool>` would make every `async` lambda
+ambiguous between the two.
+
+`AddAsync` is the seam underneath it, for a rule that reports something other than a single failure. It
+is handed the same context plus the `CancellationToken` of the run:
 
 ```csharp
-this.Property(c => c.ServiceHistory)
-    .ForEach(record =>
-    {
-        record.Property(r => r.Workshop).NotEmpty().MaximumLength(100);
-        record.Property(r => r.Mileage).GreaterThanOrEqualTo(0);
-
-        // A rule may consult the rest of the entry it is judging, but not the object the collection
-        // hangs off; a rule about that belongs on the collection itself.
-        record.Property(r => r.Mileage)
-            .Must((r, mileage) => r.Cost == 0m || mileage > 0, "A paid service records its mileage.");
-    });
-```
-
-`ForEach` is a rule like any other, so a chain that has already failed does not reach it — too many entries is reported
-on its own, rather than alongside a complaint about each of them. It returns nothing, so declare it last.
-
-The element builder is a validator, so it carries its own [validation behavior](#validation-behavior):
-`record.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError` governs what *one entry* reports, and every
-entry is still walked.
-
-It is built where it is declared rather than by the container, so — like a validator you construct with `new` — it takes
-the built-in defaults and not what `AddNValidation` configured. Set it on the element builder itself where an element's
-rules should follow a different policy from the defaults.
-
-Each failure is reported under the element's position, so a caller can bind it to the row it came from:
-
-```json
+public sealed class CarValidator : Validator<Car>
 {
-  "errors": {
-    "ServiceHistory[1].Workshop": [
-      "Workshop is required."
-    ]
-  }
+    public CarValidator(IVinRegistry vinRegistry)
+    {
+        this.Property(c => c.Vin)
+            .NotEmpty()
+            .AddAsync(async (context, cancellationToken) =>
+            {
+                if (context.Value is not { } vin)
+                {
+                    return;
+                }
+
+                if (await vinRegistry.ExistsAsync(vin, cancellationToken))
+                {
+                    context.AddError("VinAlreadyRegistered", ("Vin", vin));
+                }
+            });
+    }
 }
 ```
 
-For a collection of scalars there is no property to name, so the element itself is the subject:
+This is the rule that makes the whole library asynchronous, and the reason there is no synchronous entry
+point — see [validation is asynchronous](#validation-is-asynchronous-and-only-asynchronous).
+
+Two things worth knowing about a rule like this. It runs only if the chain got that far, so putting it
+after `NotEmpty()` is what keeps it from asking the database about an empty string. And it runs on every
+validation, so a rule that talks to a database belongs on a validator whose lifetime matches the thing it
+talks to — see [lifetimes](#lifetimes).
+
+### A rule that needs a service
+
+A rule reads whatever its validator was constructed with. There is nothing on the context to resolve
+services from: the validator is the injection point, which is what makes its dependencies visible in its
+signature and its rules testable with a substitute.
 
 ```csharp
-this.Property(c => c.ServiceMileages).ForEach(mileage => mileage.Element().GreaterThanOrEqualTo(0));
-// reports: ServiceMileages[1] -> "ServiceMileages[1] must be greater than or equal to 0."
+public sealed class ManufacturerValidator : Validator<Manufacturer>
+{
+    public ManufacturerValidator(TimeProvider timeProvider, ICountryCodes countryCodes)
+    {
+        this.Property(m => m.FoundedDate)
+            .InThePast(timeProvider);
+
+        this.Property(m => m.CountryCode)
+            .NotEmpty()
+            .Must(code => code is null || countryCodes.IsKnown(code))
+            .WithErrorCode("UnknownCountryCode");
+    }
+}
 ```
 
-A rule declared on the element itself names no property, so the message names the element by the very code the failure
-is reported under. `WithDisplayName(...)` overrides that as it does anywhere else.
+Registration resolves those dependencies for you — `AddValidator<ManufacturerValidator>()` and the scan
+both construct it through the container.
 
-Where the element already has a validator, use it:
+### `RuleContext`
+
+What the body of a custom rule is handed:
+
+| Member | What it is |
+|--------|------------|
+| `Value` | The value of the property this chain was declared for |
+| `Instance` | The whole object being validated, for a rule about more than one property |
+| `PropertyName` | What a failure of this property is reported under |
+| `DisplayName` | What a message calls it — the `WithDisplayName` name, or the property name |
+| `HasFailed` | `true` once a rule in this chain has failed |
+| `Messages` | The message provider, for a rule building a `ValidationError` itself |
+| `AddError(errorCode, params (string Name, object? Value)[])` | Reports a failure, resolving the message from the code and the arguments |
+| `AddError(ValidationError)` | Reports a failure the rule composed itself — used by rules reporting per element |
+| `GetDisplayName(propertyName)` | What a message should call *another* property, for a rule comparing two |
+
+`AddError(errorCode, ...)` seeds `{PropertyName}` from the property's display name before your arguments,
+so a template never has to be told the name of the thing it is about. Your arguments may override it if
+they genuinely need to.
+
+## Overriding defaults
+
+Four things about a failure can be named, and they are four different things. It is worth reading them
+side by side once:
 
 ```csharp
-this.Property(c => c.ServiceHistory).ForEach(serviceRecordValidator);
+this.Property(c => c.Model.Manufacturer.Name)
+    .WithDisplayName("Manufacturer")        // what the message calls it
+    .WithPropertyName("manufacturerName")   // what the client binds to
+    .NotEmpty().WithErrorCode("REQUIRED");  // what the client branches on
+
+// reports: { "manufacturerName": ["REQUIRED"] }, with ErrorCode "REQUIRED"
 ```
 
-`Where(...)` on the element builder restricts which elements are judged; the ones it skips keep their position, so an
-index always points at the row the caller sent. Where a position is not what the caller matches on, identify each
-element by something of its own:
+The message reads `REQUIRED` because the code is also the key the message is resolved under, and the
+built-in provider has no text for `REQUIRED`. Give your own provider one and the wording is yours. A raw
+code showing up in a response is the reminder that a key still needs a text.
+
+| | Applies to | Changes |
+|---|---|---|
+| `WithDisplayName(name)` | the whole property, wherever in the chain it is written | `{PropertyName}` in every message of that property |
+| `WithPropertyName(name)` | the whole property | `ValidationError.PropertyName` — what the failure is reported under |
+| `WithErrorCode(code)` | the one rule it follows | `ValidationError.ErrorCode`, and the key the message is resolved under |
+| `WithMessage(message)` | the one rule it follows | the text, substituted against the rule's arguments |
+
+Because `WithErrorCode` and `WithMessage` bind to the rule before them, each rule of a chain can carry its
+own:
 
 ```csharp
-this.Property(c => c.ServiceHistory)
-    .ForEach(record => record
-        .WithIndexer((r, _) => r.InvoiceNumber)
-        .Property(r => r.Workshop).NotEmpty());
-
-// reports: ServiceHistory[INV-9912].Workshop
+this.Property(c => c.Vin)
+    .NotEmpty().WithMessage("A VIN is required to list a car.")
+    .Length(17).WithMessage("A VIN is {Length} characters long.");
 ```
 
-A missing collection and a `null` element are skipped — whether entries have to be there at all is a question for the
-collection's own rules.
+`WithDisplayName` and `WithMessage` also come in `Func<string>` forms, re-evaluated at validation time so
+a value read off a resource follows the request's culture rather than the process's startup culture.
+`WithMessage` additionally has `Func<T, string>` and `Func<T, TProperty, string>` overloads, for a wording
+that depends on what was actually sent.
 
-Each collection rule walks the sequence once, and no further than its own question needs — `MaximumCount(50)` stops at
-the fifty-first entry. A *chain* of them asks one question each, so `NotEmpty().MaximumCount(50).ForEach(...)` walks it
-three times. That is free for a `List<T>` or an array, which answer `Count` without being walked at all, but a property
-typed `IEnumerable<T>` backed by a live query runs that query once per rule, and one that cannot be enumerated twice
-will throw. Materialize such a property before validating it; the library cannot do it for you without handing your own
-rules a different object than the one your model holds.
+### The override ladder
 
-Messages about an element can name its position with `{CollectionIndex}`, whichever way the rules were declared — an
-entry's own validator answers through the provider of the run it was composed into, not its own.
+Settings that exist at more than one level are resolved from the most specific one that names them:
 
-## Messages and localization
+| Default | Out of the box | Overridden at |
+|---|---|---|
+| Message text | the built-in English | your `IValidationMessageProvider`, or `WithMessage` for one rule |
+| Display name | the property's member path | `WithDisplayName`, per property |
+| Reported property name | the property's member path | `WithPropertyName`, per property |
+| `ValidationBehaviors.Class` | `All` | `AddNValidation` → the validator → (`WithValidationBehavior` on a chain) |
+| `ValidationBehaviors.Property` | `StopAtFirstError` | the same ladder |
+| Validator lifetime | `ServiceLifetime.Scoped` | `o.ValidatorLifetime`, or per registration |
+| Element index | the zero-based position | `WithIndexer`, per `ForEach` |
+| Missing-validator behavior | `Ignore` | `AddValidationFilter` |
 
-Rules report a message *key*, never a text. The key is resolved through `IValidationMessageProvider`, so the application
-decides where the wording comes from and in which language:
+There is no global static configuration object to reach for: everything is either on the registration or
+on the validator that cares.
+
+### Display names are member paths, not prose
+
+The default display name of a property is its member path, verbatim — `CountryCode` displays as
+`CountryCode`, and `Model.Manufacturer.Name` as `Model.Manufacturer.Name`. There is no PascalCase
+splitting and no `[Display]` or `[DisplayName]` support — a library that guessed at prose would be wrong
+in every language but one. A name meant for a person is one you write:
+
+```csharp
+this.Property(c => c.FirstRegistration).WithDisplayName("Registration date");
+```
+
+That name is what `{PropertyName}` renders to, including in the message of *another* property that
+compares against this one through `{OtherPropertyName}`. Which is why declaring it once, on the property
+it belongs to, is enough:
+
+```csharp
+// reports: SoldDate -> "SoldDate must be greater than or equal to Registration date."
+this.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+```
+
+Attributes are absent on purpose: a display name is a presentation decision, and a model shared with a
+client or a database has no business carrying one.
+
+### Placeholders
+
+A message is a template with named placeholders. Fifteen names exist, each a constant on
+`ValidationMessagePlaceholders`, and a message uses only the ones it needs:
+
+| Placeholder | Carries | Supplied by |
+|---|---|---|
+| `{PropertyName}` | the property's display name | every rule |
+| `{CollectionIndex}` | the entry's zero-based position | every rule inside a `ForEach` |
+| `{MinLength}` / `{MaxLength}` / `{Length}` | a character count | the text length rules |
+| `{Pattern}` | the regular expression | `Matches` |
+| `{From}` / `{To}` | the bounds | `Between` |
+| `{Step}` | the step | `MultipleOf` |
+| `{MinCount}` / `{MaxCount}` | an entry count | the collection count rules |
+| `{TopLevelDomains}` / `{TopLevelDomain}` | the allowed list / the offending one | the email domain rules |
+| `{OtherValue}` | the value compared against | the comparison rules |
+| `{OtherPropertyName}` | the display name of the property compared against | the cross-property comparison rules |
+
+A placeholder takes a .NET format specifier after a colon — `{Step:0.00}`, `{To:yyyy-MM-dd}` — and values
+are rendered in `CultureInfo.CurrentCulture`, so a number or a date follows the culture of the request
+rather than the culture of the host.
+
+A translation is free to leave any of them out, including the property name — which is what you want for a
+message shown underneath an already labelled input.
+
+The formatter is deliberately forgiving, because a bad template must not turn a bad request into a server
+error:
+
+- A placeholder the rule did not supply is **left in the text as written**. `{Mileage}` in a `NotEmpty`
+  message renders as `{Mileage}`, which is visible in a test and harmless in production.
+- A format specifier the value cannot honour — `{PropertyName:0.00}` — falls back to rendering the value
+  plainly rather than throwing.
+
+### Where an override is refused
+
+`WithMessage` and `WithErrorCode` bind to the rule they follow, so they need one, and it has to be a rule
+that produced the failure itself. Following `SetValidator` or `ForEach` they throw where they are
+declared:
+
+```csharp
+this.Property(c => c.Model)
+    .SetValidator(carModelValidator)
+    .WithMessage("The model is wrong.");     // InvalidOperationException
+```
+
+What a composed validator reported is its own decision — a message replacing every failure a nested
+validator found would be the loss of everything it said. Say it on the nested validator's own rules
+instead.
+
+## Localization
+
+Rules report an *error code*, never a text. The code is resolved through `IValidationMessageProvider`, so
+the application decides where the wording comes from and in which language:
+
+```csharp
+public interface IValidationMessageProvider
+{
+    string GetMessage(string errorCode, IReadOnlyDictionary<string, object?> arguments);
+}
+```
+
+That is the whole seam. A failure travels as *code + arguments* from the rule that found it to the
+provider that words it, and nothing in between has an opinion about language.
+
+### A provider over resources
+
+The usual shape: a map from code to a resource lookup, delegating anything it does not own to the built-in
+English so a new rule is never a blank message.
 
 ```csharp
 public sealed class ResourceValidationMessageProvider : IValidationMessageProvider
 {
     private static readonly Dictionary<string, Func<string>> Messages = new(StringComparer.Ordinal)
     {
-        [ValidationMessageKeys.NotEmpty] = () => Strings.ValidationMessage_Required,
-        [ValidationMessageKeys.MaximumLength] = () => Strings.ValidationMessage_MaxLength,
+        [ValidationErrorCodes.NotEmpty] = () => Strings.ValidationMessage_Required,
+        [ValidationErrorCodes.MaximumLength] = () => Strings.ValidationMessage_MaxLength,
     };
 
-    public string GetMessage(string messageKey, IReadOnlyDictionary<string, object?> arguments)
+    public string GetMessage(string errorCode, IReadOnlyDictionary<string, object?> arguments)
     {
-        return Messages.TryGetValue(messageKey, out var message)
+        return Messages.TryGetValue(errorCode, out var message)
             ? ValidationMessageFormatter.Format(message(), arguments)
-            : DefaultValidationMessageProvider.Instance.GetMessage(messageKey, arguments);
+            : DefaultValidationMessageProvider.Instance.GetMessage(errorCode, arguments);
     }
 }
 ```
+
+Two details make this work under a server:
+
+- **The resource is read inside the `Func<string>`, not into the dictionary.** The map is built once for
+  the process; the text has to be fetched while the message is produced, because that is the only moment
+  the request's culture is current. A provider that caches strings in its constructor serves every request
+  in whichever language the first one happened to use.
+- **`ValidationMessageFormatter.Format` does the substitution.** Your resource is a template like the
+  built-in ones — `{PropertyName} must not exceed {MaxLength} characters.` — and the arguments passed in
+  are exactly what the rule supplied. See [placeholders](#placeholders) for what is available.
+
+Your own codes go in the same map. A rule named with `WithErrorCode("SwissPlate")` is looked up under
+`"SwissPlate"` like any other, which is what makes a custom rule localize like a shipped one.
+
+### Registering it
 
 ```csharp
 services.AddNValidation(o => o.MessageProvider = typeof(ResourceValidationMessageProvider));
 ```
 
-Messages use named placeholders — `{PropertyName}`, `{MaxLength}`, `{OtherValue}`, `{Step:0.00}` — and a message uses
-only the ones it needs. A translation is free to leave the property name out, which is what you want for a message shown
-underneath an already labelled input. Without a provider the built-in English messages are used.
+The provider is built by the container and registered as a **singleton**: it is a lookup asked for text,
+it has to be thread-safe anyway because validators run concurrently, and being longer-lived than every
+validator is what lets validators of any lifetime be handed it. Resolve the language while the message is
+produced — a `Func<string>` over a resource — rather than in the constructor. A provider that genuinely
+cannot be shared goes through `o.Services` instead, at the cost of forcing every validator that uses it to
+be scoped too.
 
-## ASP.NET Core
+Registering `IValidationMessageProvider` on the service collection yourself, before `AddNValidation`, works
+as well and wins — the default English is only added if nothing else claimed the service.
+
+A validator constructed with `new` was never handed anything, so it answers in English until you say
+otherwise:
+
+```csharp
+var validator = new ManufacturerValidator { Messages = new ResourceValidationMessageProvider() };
+```
+
+Without a provider the built-in English messages are used, so the library is usable before any of this is
+set up.
+
+### Holding a provider to every code
+
+An application which resolves messages itself owes every code a text. One assertion covers the lot, so a
+missing translation shows up in the suite rather than as a raw code in a response:
+
+```csharp
+[Fact]
+public void GetMessage_AnswersForEveryCodeOfTheCore()
+{
+    new ResourceValidationMessageProvider().ShouldResolveEveryCoreErrorCode();
+}
+```
+
+It checks that each code of `ValidationMessageProviderAssertions.CoreErrorCodes()` resolves to something
+other than the code itself, and that no `{Placeholder}` is left unsubstituted. It does not require a
+message to name the failing property — that is the translation's call. Because the provider above falls
+back to the built-in English, this passes from the first day and starts being informative the day someone
+removes the fallback.
+
+To check one code — a code of your own, which the core knows nothing about — there is
+`provider.ShouldResolveErrorCode("SwissPlate")`.
+
+## Dependency injection
+
+### AddNValidation
+
+Everything this library needs is configured in one delegate:
+
+```csharp
+services.AddNValidation(o =>
+{
+    o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly);
+});
+```
+
+There is an overload taking no delegate, for an application that registers its validators itself and only
+wants the message provider in place:
+
+```csharp
+services.AddNValidation();
+```
+
+Nothing reaches the service collection until the delegate has finished, so the order of the calls inside
+it never decides anything.
+
+### Registering validators
+
+```csharp
+services.AddNValidation(o => o
+    .AddValidator<CarModelValidator>()
+    .AddValidator<CarValidator>());
+```
+
+| Overload | For |
+|----------|-----|
+| `AddValidator<TValidator>()` | The common case — the validated type is read off the validator |
+| `AddValidator<TInstance, TValidator>()` | Naming both, where you would rather the compiler checked that a validator really does validate what you think it does |
+| `AddValidator(Type validatorType)` | A type decided at run time |
+| `AddValidatorsFromAssembly(params Assembly[])` | Every `IValidator<T>` in an assembly, each with its own dependencies resolved |
+
+Each of them also has an overload taking a `ServiceLifetime`, for the one registration that cannot follow
+the default.
+
+Registration is order-independent: a validator named explicitly with `AddValidator` wins over whatever a
+scan finds for the same type, whether it is named before the scan or after it. That is also how a payload
+with two validators in one assembly is settled: name the one you want, and the scan passes over it instead
+of refusing to choose. Two explicit registrations naming different validators for one payload is a
+contradiction, and is refused.
+
+A validator serving more than one payload is registered under each of them, so
+`AddValidator<AddressValidator>()` resolves for both `IValidator<ShippingAddress>` and
+`IValidator<BillingAddress>`.
+
+### Lifetimes
+
+Validators are **scoped** by default, because a validator may depend on something that is itself scoped —
+the database an async uniqueness rule asks — and a longer-lived validator would capture it.
+
+A validator declares its rules in its constructor and never changes afterwards, so where nothing scoped is
+involved, registering them as singletons builds those rules once for the process instead of once per
+request:
+
+```csharp
+services.AddNValidation(o =>
+{
+    o.ValidatorLifetime = ServiceLifetime.Singleton;
+
+    o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly)
+
+     // The one that cannot follow the default overrides it, rather than dragging the rest down.
+     .AddValidator<VinUniquenessValidator>(ServiceLifetime.Scoped);
+});
+```
+
+Nothing reaches the service collection until the delegate has run, so `ValidatorLifetime` governs every
+validator wherever in the delegate you set it.
+
+#### Letting the registration decide
+
+Choosing globally means choosing for the validator that cannot follow. `PromoteSafeValidatorsToSingleton`
+decides per validator instead, at registration:
+
+```csharp
+services.AddNValidation(o =>
+{
+    o.PromoteSafeValidatorsToSingleton = true;
+    o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly);
+});
+```
+
+A validator is promoted only when every constructor parameter resolves to something already registered as
+a singleton, or to another validator that itself qualifies. One that takes a scoped `DbContext` is left
+scoped. The decision is made once, from the service collection, and never depends on what a request does.
+
+It is worth turning on. Building a four-validator graph costs far more than using it:
+
+| Registration | Resolving the graph |
+|--------------|---------------------|
+| Scoped | 8,489 ns, 24,200 B |
+| Scoped, with safe promotion | 21.8 ns, 128 B |
+| Singleton | 23.6 ns, 128 B |
+
+Measured on an Apple M4 Pro, .NET 10, with `ValidatorResolutionBenchmark`. Validating the same payload
+costs about 830 ns, so on the scoped default roughly nine tenths of what this library costs a request is
+rebuilding rules that never change.
+
+### Injecting services into a validator
+
+A validator is constructed by the container, so it takes what it needs in its constructor and its rules
+close over it:
+
+```csharp
+public sealed class CarValidator : Validator<Car>
+{
+    public CarValidator(IValidator<CarModel> carModelValidator, IVinRegistry vinRegistry, TimeProvider timeProvider)
+    {
+        this.Property(c => c.Model).NotNull().SetValidator(carModelValidator);
+
+        this.Property(c => c.FirstRegistration).InThePast(timeProvider);
+
+        this.Property(c => c.Vin)
+            .NotEmpty()
+            .AddAsync(async (context, ct) =>
+            {
+                if (context.Value is { } vin && await vinRegistry.ExistsAsync(vin, ct))
+                {
+                    context.AddError("VinAlreadyRegistered", ("Vin", vin));
+                }
+            });
+    }
+}
+```
+
+A nested validator is injected the same way, as `IValidator<CarModel>` — the interface, so the composition
+is a dependency like any other and a test can substitute it.
+
+### What the container configures, and what it does not
+
+A validator the container built is handed two things a validator you constructed yourself is not:
+
+- its `Messages` — the registered `IValidationMessageProvider`;
+- the ambient [validation behavior](#validation-behavior) configured on `AddNValidation`.
+
+So `new CarValidator(...)` answers in the built-in English and takes the built-in behaviour defaults, and
+so does the element builder inside a `ForEach`, which is built where it is declared. That is usually what
+a unit test wants. Where it is not, assign `validator.Messages`, and mutate the axes of
+`validator.ValidationBehaviors`.
+
+`o.Services` is the service collection itself, for an integration that needs to register something of its
+own alongside — which is how `AddValidationFilter` in the ASP.NET Core package is built.
+
+## ASP.NET Core integration
+
+`NValidation.AspNetCore` turns a validation failure into the response an HTTP client expects, and can run
+the validators for you.
 
 ```csharp
 services.AddProblemDetails();
@@ -486,10 +1676,21 @@ A `ValidationException` then comes out as a 400 with the failures under a top-le
 }
 ```
 
-To return a failure instead of throwing:
+The body is a `HttpValidationProblemDetails` — the framework's own type, so it serializes under a
+source-generated serializer and an ahead-of-time published host. The library sets the status and the
+errors, and clears the title. `type`, `detail` and the trace identifier are left to the host's problem
+details pipeline, so a validation failure looks exactly like every other problem response the application
+produces, including whatever a `CustomizeProblemDetails` callback adds. Property names are written
+verbatim, dots and indexes included, because they are what the client binds to.
+
+An application which already has its own exception-to-problem-details handler should read
+`ValidationException.Errors` there rather than registering `ValidationExceptionHandler`, so every error
+response keeps going through one place.
+
+### Returning a failure instead of throwing
 
 ```csharp
-var result = await this.carValidator.ValidateAsync(car);
+var result = await this.carValidator.ValidateAsync(car, cancellationToken);
 
 if (!result.Succeeded)
 {
@@ -497,19 +1698,30 @@ if (!result.Succeeded)
 }
 ```
 
-An application which already has its own exception-to-problem-details handler should read
-`ValidationException.Errors` there rather than registering `ValidationExceptionHandler`, so every error response keeps
-going through one place.
+`ValidationProblem(result)` is an extension on `ControllerBase`. Outside a controller — a minimal API
+handler, a middleware — `result.ToProblemDetails()` gives you the same body to do what you like with.
+Both refuse a *successful* result: a 400 that names no failure is a bug worth hearing about at the point
+it is written.
 
 ### Validating a controller's payload automatically
 
-`ValidationActionFilter` validates an action's payload before the action runs. For every parameter bound from the
-request body or form, it resolves the validator registered for that parameter's declared type and runs it; a type with
-no registered validator is left alone.
+`ValidationActionFilter` validates an action's payload before the action runs. For every parameter bound
+from the request body or form, it resolves the validator registered for that parameter's declared type and
+runs it; a type with no registered validator is left alone.
 
 ```csharp
-services.AddControllers(o => o.Filters.Add<ValidationActionFilter>());
+services.AddNValidation(o =>
+{
+    o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly);
+    o.AddValidationFilter();
+});
 ```
+
+`AddValidationFilter` lives in `NValidation.AspNetCore` and is opt-in: this is an MVC filter, and an
+application built on minimal APIs validates by calling its validator in the handler. Registering the
+filter directly — `services.AddControllers(o => o.Filters.Add<ValidationActionFilter>())` — does the same
+thing; they are alternatives rather than steps, and registering it both ways is de-duplicated rather than
+running the validators twice.
 
 The action is then free of validation code:
 
@@ -521,21 +1733,23 @@ public ActionResult<string> Create(Car car)
 }
 ```
 
-Failures of every payload of the request are collected into one `ValidationException`, so the response reports all of
-them at once. Route and query values are not payloads and are never validated.
+Failures of every payload of the request are collected into one `ValidationException`, so the response
+reports all of them at once. Route and query values are not payloads and are never validated, and a
+parameter that bound to null is skipped — an absent body is a binding concern, not a validation one.
 
 An endpoint which reports failures in its own shape opts out, and validates itself:
 
 ```csharp
 public async Task<IActionResult> ValuateAsync(
-    [SkipValidation("Answers in a legacy error shape which deployed clients parse.")] CarValuation carValuation)
+    [SkipNValidation("Answers in a legacy error shape which deployed clients parse.")] CarValuation carValuation)
 ```
 
-The reason is optional — plain `[SkipValidation]` excludes just as well — but it is what tells the next reader that the
-gap was a decision. The attribute goes on a parameter, an action or a whole controller.
+The reason is optional — plain `[SkipNValidation]` excludes just as well — but it is what tells the next
+reader that the gap was a decision. The attribute goes on a parameter, an action or a whole controller.
 
 `MissingValidatorBehavior` decides what happens to a payload which has neither a validator nor
-`[SkipValidation]` — `Ignore` (the default), `Log`, or `Throw` to make the gap impossible to miss on a development host:
+`[SkipNValidation]` — `Ignore` (the default), `Log`, or `Throw` to make the gap impossible to miss on a
+development host:
 
 ```csharp
 services.AddNValidation(o =>
@@ -545,16 +1759,70 @@ services.AddNValidation(o =>
 });
 ```
 
-`AddValidationFilter` lives in `NValidation.AspNetCore` and is opt-in: this is an MVC filter, and an application built
-on minimal APIs validates by calling its validator in the handler. Pass an
-`IConfiguration` section instead of a delegate to bind the behaviour from configuration.
+Pass an `IConfiguration` section instead of a delegate to bind the behaviour from configuration, which is
+what lets a development host say `Throw` and production say `Log` without a rebuild:
 
-A runnable end-to-end example lives in [`Samples/NValidation.SampleApi`](Samples/NValidation.SampleApi).
+```csharp
+o.AddValidationFilter(builder.Configuration.GetSection("Validation"));
+```
+
+```json
+{
+  "Validation": {
+    "MissingValidatorBehavior": "Log"
+  }
+}
+```
+
+`Log` warns once per action parameter rather than once per request, so an unvalidated endpoint is visible
+in the log without flooding it.
+
+### Minimal APIs
+
+There is no filter for minimal APIs, and no endpoint filter to add: a handler takes the validator it needs
+and calls it. Both shapes are one line.
+
+```csharp
+// The throwing path: validate, and let the exception handler turn a failure into the response.
+app.MapPost("/cars", async (Car car, IValidator<Car> validator, CancellationToken cancellationToken) =>
+{
+    await validator.ValidateAndThrowAsync(car, cancellationToken);
+
+    return Results.Ok(new { car.Vin });
+});
+
+// The returning path, for an endpoint that would rather decide for itself what a failure means.
+app.MapPost("/cars/checked", async (Car car, IValidator<Car> validator, CancellationToken cancellationToken) =>
+{
+    var result = await validator.ValidateAsync(car, cancellationToken);
+
+    return result.Succeeded
+        ? Results.Ok(new { car.Vin })
+        : Results.Problem(result.ToProblemDetails());
+});
+```
+
+### What the package contains
+
+| Type | What it is for |
+|------|----------------|
+| `ValidationExceptionHandler` | An `IExceptionHandler` turning a `ValidationException` into a 400 problem details response |
+| `ValidationActionFilter` | An MVC filter validating every body- and form-bound parameter before the action runs |
+| `AddValidationFilter(...)` | Registers that filter from inside `AddNValidation` — with a delegate, an `IConfiguration` section, or neither |
+| `ValidationFilterOptions` | What the filter is configured with: `MissingValidatorBehavior` |
+| `MissingValidatorBehavior` | `Ignore`, `Log` or `Throw` for a payload with no validator |
+| `SkipNValidationAttribute` | `[SkipNValidation]` on a parameter, an action or a controller |
+| `ToProblemDetails()` | The problem details body for a `ValidationResult` or a `ValidationException` |
+| `ValidationProblem(result)` | The `ControllerBase` shortcut for returning one |
+
+A runnable end-to-end example lives in
+[`Samples/NValidation.SampleApi`](https://github.com/thomasgalliker/NValidation/tree/develop/Samples/NValidation.SampleApi).
 
 ## Testing your own rules
 
-A validator is a plain object, so a test constructs it and runs it against whatever data the case is about.
-`NValidation.Testing` ships in the same package and needs no test framework and no assertion library of its own:
+A validator is a plain object, so a test constructs it and runs it against whatever data the case is
+about. `NValidation.Testing` ships in the same package and needs no test framework and no assertion
+library of its own:
 
 ```csharp
 using NValidation.Testing;
@@ -574,9 +1842,10 @@ public async Task ValidateAsync_WithoutAName_ReportsTheName()
 }
 ```
 
-`ShouldReport` states the **whole** expected result: nothing else may be present and the count is implied, so a repeated
-entry asks for a repeated failure. Order is ignored. A failure throws `ValidationAssertionException`, naming what was
-missing, what was unexpected, and the near miss in between:
+`ShouldReport` states the **whole** expected result: nothing else may be present and the count is implied,
+so a repeated entry asks for a repeated failure. Order is ignored. A failure throws
+`ValidationAssertionException`, naming what was missing, what was unexpected, and the near miss in
+between:
 
 ```
 Expected the validation result to report exactly 2 errors:
@@ -595,28 +1864,32 @@ Not expected:
   Cost  "Cost is required."
 ```
 
-Assert the message, not only the code. A test which checks the code alone passes when a rule reports the right property
-with the wrong message — a value that is too large reported as "must be greater than". The message is matched with
-wildcards, so a fragment is as easy to express as the whole of it, and `ExpectedError` defaults it to `*` for a test
-that is about which properties report rather than about the wording:
+Assert the message, not only the property name. A test which checks the property name alone passes when a
+rule reports the right property with the wrong message — a value that is too large reported as "must be
+greater than".
+
+The message is matched **exactly**, the way `Be` does in an assertion library, so an expected message
+means what it says. The two looser forms are named, so a weaker assertion is visible at the call site:
 
 ```csharp
-result.ShouldReport("Vin", "Vin is required.");        // code + message
-result.ShouldReport("Mileage", "*greater than*");      // code + part of the message
+result.ShouldReport("Vin", "Vin is required.");                         // exact
 result.ShouldReport([
-    new("FeatureIds"),                                 // code only
-    new("Model.Manufacturer.ContactEmail", "*not a valid email address*"),
+    ExpectedError.Matching("Mileage", "*greater than*"),                // a fragment
+    ExpectedError.Any("FeatureIds"),                                    // any message
     new("ServiceHistory[0].Workshop", "Workshop is required.")]);
 ```
 
-The same overloads take a `ValidationException` or a `{ code: [messages] }` dictionary, which is what a test of an
-endpoint holds rather than a `ValidationResult`:
+`Matching` takes `*` for any run of characters and `?` for exactly one, with `\*` and `\?` for those
+characters themselves. Use it and `Any` sparingly: a pinned message is what catches a rule wired to the
+wrong error code.
+
+The same overloads take a `ValidationException` or a `{ propertyName: [messages] }` dictionary, which is
+what a test of an endpoint holds rather than a `ValidationResult`:
 
 ```csharp
 exception.ShouldReport("Vin", "The VIN is required.");
 
-var errors = (IReadOnlyDictionary<string, string[]>)problemDetails.Extensions["errors"]!;
-errors.ShouldReport([
+problemDetails.Errors.ShouldReport([
     new("Vin", "The VIN is required."),
     new("Mileage", "The mileage must be greater than or equal to 0.")]);
 ```
@@ -625,8 +1898,8 @@ Success is `result.Errors.Should().BeEmpty()` in whichever assertion library you
 
 ### One rule at a time
 
-`TestValidator<T>` declares the rule under test in the test itself, so a reader does not have to open a second file to
-learn what is being validated:
+`TestValidator<T>` declares the rule under test in the test itself, so a reader does not have to open a
+second file to learn what is being validated:
 
 ```csharp
 var validator = new TestValidator<Invoice>();
@@ -637,19 +1910,26 @@ var result = await validator.ValidateAsync(new Invoice());
 result.ShouldReport("Reference", "Reference is required.");
 ```
 
-Because rules report a message *key* rather than a text, a test can assert the key instead of the wording and stay
-independent of translations. Hand the validator `MessageKeyProvider.Instance` and it answers with keys:
+Declare every rule before validating: a display name is resolved on the first run and kept.
+
+Because every rule reports an `ErrorCode`, a test can assert *which* rule fired rather than its wording,
+and stay independent of translations. One validator, one run, no message provider to swap:
 
 ```csharp
-var validator = new TestValidator<Invoice>(MessageKeyProvider.Instance);
+var validator = new TestValidator<Invoice>();
 validator.Property(i => i.Reference).MinimumLength(10);
 
 var result = await validator.ValidateAsync(new Invoice { Reference = "AB" });
 
-result.ShouldReport("Reference", "MinimumLength");
+result.ShouldReportErrorCode("Reference", "MinimumLength");
 ```
 
-A rule that compares against "now" takes a clock the test owns, so it does not start failing on a future Tuesday:
+`TestValidator<T>` also takes a message provider, for a test about what a provider of your own words a
+rule as. `ErrorCodeProvider.Instance` is the one that answers every code with itself, which is how to
+assert a code *through* a message where something in the way only exposes the text.
+
+A rule that compares against "now" takes a clock the test owns, so it does not start failing on a future
+Tuesday:
 
 ```csharp
 var clock = new TestTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
@@ -662,22 +1942,31 @@ var result = await validator.ValidateAsync(new Invoice { DueDate = new DateTime(
 result.ShouldReport("DueDate", "DueDate must be a date in the future.");
 ```
 
+`TestTimeProvider.Advance(...)` moves it, for a test about something that happens on either side of a
+boundary.
+
 ### Testing your own message provider
 
-An application which resolves messages itself owes every key a text. One assertion covers the lot, so a missing
-translation shows up in the suite rather than as a raw key in a response:
+An application which resolves messages itself owes every code a text. One assertion covers the lot, so a
+missing translation shows up in the suite rather than as a raw code in a response:
 
 ```csharp
 [Fact]
 public void GetMessage_AnswersForEveryKeyOfTheCore()
 {
-    new ResourceValidationMessageProvider().ShouldResolveEveryCoreMessageKey();
+    new ResourceValidationMessageProvider().ShouldResolveEveryCoreErrorCode();
 }
 ```
 
-It checks that each key of `ValidationMessageProviderAssertions.CoreMessageKeys()` resolves to something other than the
-key itself, and that no `{Placeholder}` is left unsubstituted. It does not require a message to name the failing
-property — that is the translation's call.
+It checks that each code of `ValidationMessageProviderAssertions.CoreErrorCodes()` resolves to something
+other than the code itself, and that no `{Placeholder}` is left unsubstituted. It does not require a
+message to name the failing property — that is the translation's call.
+
+## Thank You
+
+Thanks to everyone who has contributed to this project.
+
+If you find a bug or want to propose a feature, feel free to open an issue on GitHub.
 
 ## License
 

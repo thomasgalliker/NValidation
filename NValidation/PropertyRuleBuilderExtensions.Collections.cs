@@ -19,7 +19,7 @@ namespace NValidation
             {
                 if (context.Value != null && !CollectionCount.HasAtLeast(context.Value, minimumCount))
                 {
-                    context.AddError(ValidationMessageKeys.MinimumCount, (ValidationMessagePlaceholders.MinCount, minimumCount));
+                    context.AddError(ValidationErrorCodes.MinimumCount, (ValidationMessagePlaceholders.MinCount, minimumCount));
                 }
             });
         }
@@ -37,7 +37,7 @@ namespace NValidation
             {
                 if (context.Value != null && !CollectionCount.HasAtMost(context.Value, maximumCount))
                 {
-                    context.AddError(ValidationMessageKeys.MaximumCount, (ValidationMessagePlaceholders.MaxCount, maximumCount));
+                    context.AddError(ValidationErrorCodes.MaximumCount, (ValidationMessagePlaceholders.MaxCount, maximumCount));
                 }
             });
         }
@@ -48,12 +48,15 @@ namespace NValidation
         /// </summary>
         /// <remarks>
         /// Entries are compared by their own <see cref="object.Equals(object)"/>. Where a collection
-        /// needs a comparison of its own — case-insensitive codes, or entries matched on one field —
+        /// needs a comparison of its own — case-insensitive property names, or entries matched on one field —
         /// write it as a <c>Must(...)</c>, which sees the property at its declared type.
         /// <para>
         /// Declared for any <see cref="IEnumerable"/>, so it works whatever the property is typed as.
         /// The element type is therefore not known here, and a collection of value types has each entry
-        /// boxed on the way into the set. Reaching the entries at their own type would mean inferring it
+        /// boxed on the way into the set. A typed overload cannot fix that:
+        /// <see cref="PropertyRuleBuilder{T, TProperty}"/> is a struct and so invariant, so a chain for
+        /// an <c>ICollection&lt;int&gt;</c> — which is how a collection is usually declared — would not
+        /// bind to one taking an <c>IEnumerable&lt;int&gt;</c>. Reaching the entries at their own type would mean inferring it
         /// from the property, which C# cannot do from a constraint — so the rule that works everywhere
         /// is the one that ships, and a hot path over a large collection of value types is a
         /// <c>Must(...)</c> with a <see cref="HashSet{T}"/> of that type.
@@ -66,7 +69,7 @@ namespace NValidation
             {
                 if (context.Value != null && HasDuplicates(context.Value))
                 {
-                    context.AddError(ValidationMessageKeys.NoDuplicates);
+                    context.AddError(ValidationErrorCodes.NoDuplicates);
                 }
             });
         }

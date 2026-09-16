@@ -32,8 +32,7 @@ namespace NValidation.AspNetCore.Tests
             var problemDetails = validationResult.ToProblemDetails();
 
             // Assert
-            var errors = problemDetails.Extensions["errors"].Should().BeAssignableTo<IReadOnlyDictionary<string, string[]>>().Subject;
-            errors.ShouldReport([
+            problemDetails.Errors.ShouldReport([
                 new("Vin", "The VIN is required."),
                 new("Mileage", "The mileage must be greater than or equal to 0.")]);
         }
@@ -53,8 +52,7 @@ namespace NValidation.AspNetCore.Tests
             var problemDetails = validationResult.ToProblemDetails();
 
             // Assert
-            var errors = (IReadOnlyDictionary<string, string[]>)problemDetails.Extensions["errors"]!;
-            errors.ShouldReport([
+            problemDetails.Errors.ShouldReport([
                 new("Vin", "The VIN is required."),
                 new("Vin", "The VIN must be exactly 17 characters long.")]);
         }
@@ -100,8 +98,7 @@ namespace NValidation.AspNetCore.Tests
 
             // Assert
             problemDetails.Status.Should().Be(StatusCodes.Status400BadRequest);
-            var errors = (IReadOnlyDictionary<string, IReadOnlyList<string>>)problemDetails.Extensions["errors"]!;
-            errors.ShouldReport("Vin", "The VIN is required.");
+            problemDetails.Errors.ShouldReport("Vin", "The VIN is required.");
         }
     }
 }

@@ -18,12 +18,12 @@ namespace NValidation.Internals
         /// <summary>
         /// The key for the form which compares against a fixed value.
         /// </summary>
-        public static string ValueMessageKey(EqualityKind kind)
+        public static string ValueErrorCode(EqualityKind kind)
         {
             return kind switch
             {
-                EqualityKind.EqualTo => ValidationMessageKeys.EqualTo,
-                EqualityKind.NotEqualTo => ValidationMessageKeys.NotEqualTo,
+                EqualityKind.EqualTo => ValidationErrorCodes.EqualTo,
+                EqualityKind.NotEqualTo => ValidationErrorCodes.NotEqualTo,
                 _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
             };
         }
@@ -32,12 +32,12 @@ namespace NValidation.Internals
         /// The key for the form which compares against another property, whose message names that
         /// property instead of a value.
         /// </summary>
-        public static string OtherPropertyMessageKey(EqualityKind kind)
+        public static string OtherPropertyErrorCode(EqualityKind kind)
         {
             return kind switch
             {
-                EqualityKind.EqualTo => ValidationMessageKeys.EqualToOtherProperty,
-                EqualityKind.NotEqualTo => ValidationMessageKeys.NotEqualToOtherProperty,
+                EqualityKind.EqualTo => ValidationErrorCodes.EqualToOtherProperty,
+                EqualityKind.NotEqualTo => ValidationErrorCodes.NotEqualToOtherProperty,
                 _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
             };
         }

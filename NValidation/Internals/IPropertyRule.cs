@@ -2,7 +2,7 @@ namespace NValidation.Internals
 {
     internal interface IPropertyRule<in T>
     {
-        string Code { get; }
+        string PropertyName { get; }
 
         /// <summary>
         /// <c>null</c> unless the property opted into a display name.

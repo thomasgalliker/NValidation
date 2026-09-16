@@ -1,7 +1,7 @@
 namespace NValidation
 {
     /// <summary>
-    /// Thrown when validation fails. Carries the failures grouped by <see cref="ValidationError.Code"/>, so
+    /// Thrown when validation fails. Carries the failures grouped by <see cref="ValidationError.PropertyName"/>, so
     /// a host can render them without re-inspecting the <see cref="ValidationResult"/> they came from.
     /// </summary>
     public class ValidationException : Exception
@@ -24,7 +24,7 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Carries the failures of <paramref name="validationResult"/>, grouped by code.
+        /// Carries the failures of <paramref name="validationResult"/>, grouped by property name.
         /// </summary>
         public ValidationException(ValidationResult validationResult)
             : this(RequireValidationResult(validationResult).ToErrorsDictionary())
@@ -48,7 +48,7 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The validation failures, keyed by <see cref="ValidationError.Code"/>, each mapping to one or
+        /// The validation failures, keyed by <see cref="ValidationError.PropertyName"/>, each mapping to one or
         /// more messages. Empty when the exception was created from a message alone.
         /// </summary>
         /// <remarks>

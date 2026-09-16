@@ -21,7 +21,7 @@ namespace NValidation
         /// What the registration configured, kept apart from what this validator declared for itself so
         /// the validator's word wins whichever was written first.
         /// </summary>
-        private ValidationBehaviors ambientValidationBehaviors = new();
+        private ValidationBehaviors? ambientValidationBehaviors;
 
         private PropertyDisplayNames? displayNames;
 
@@ -62,7 +62,7 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Starts a rule chain for the given property. The error code is taken from the expression's
+        /// Starts a rule chain for the given property. The property name is taken from the expression's
         /// member path, so <c>x => x.Name</c> reports as <c>Name</c> and <c>x => x.Address.Street</c>
         /// as <c>Address.Street</c>.
         /// </summary>
@@ -78,12 +78,12 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(expression);
 
-            var code = PropertyPath.From(expression);
-            var rule = new PropertyRule<T, TProperty?>(code, PropertyAccessor.For(code, expression));
+            var propertyName = PropertyPath.From(expression);
+            var rule = new PropertyRule<T, TProperty?>(propertyName, PropertyAccessor.For(propertyName, expression));
 
             // Added before any condition the chain declares, so it is the first thing asked and the
             // property is never read through something that is not there.
-            var isReachable = ReachabilityGuard.For(code, expression);
+            var isReachable = ReachabilityGuard.For(propertyName, expression);
 
             if (isReachable != null)
             {
@@ -93,6 +93,59 @@ namespace NValidation
             this.rules.Add(rule);
 
             return new PropertyRuleBuilder<T, TProperty?>(rule);
+        }
+
+        /// <summary>
+        /// The same, naming the property and reading it directly instead of through an expression:
+        /// <code>this.Property("Vin", static c => c.Vin).NotEmpty();</code>
+        /// </summary>
+        /// <remarks>
+        /// An escape hatch for a validator on a hot path, not the spelling most code should use. The
+        /// expression form is read once to produce three things — the property name, a compiled accessor
+        /// and a guard against dereferencing something absent — and building it costs an expression tree
+        /// per construction plus the reflection behind <c>Expression.Property</c>, which together are the
+        /// larger part of what constructing a validator costs.
+        /// <para>
+        /// What it gives up: the name is written by hand, so renaming the property will not change what
+        /// the failure is reported under, and nothing checks that the two agree. Use it for a property
+        /// of the validated object itself; a path through another object needs the overload taking a
+        /// reachability predicate, or the expression form, which works it out.
+        /// </para>
+        /// </remarks>
+        /// <exception cref="ArgumentException"><paramref name="propertyName"/> is empty or whitespace.</exception>
+        protected PropertyRuleBuilder<T, TProperty> Property<TProperty>(string propertyName, Func<T, TProperty> accessor)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(propertyName);
+            ArgumentNullException.ThrowIfNull(accessor);
+
+            var rule = new PropertyRule<T, TProperty>(propertyName, accessor);
+
+            this.rules.Add(rule);
+
+            return new PropertyRuleBuilder<T, TProperty>(rule);
+        }
+
+        /// <summary>
+        /// The same, for a property reached through something the payload may have omitted:
+        /// <code>this.Property("Model.Name", static c => c.Model!.Name, static c => c.Model != null).NotEmpty();</code>
+        /// </summary>
+        /// <remarks>
+        /// <paramref name="isReachable"/> is what the expression form works out for itself. Without it
+        /// the accessor would dereference whatever is missing and turn a bad request into a server
+        /// error, which is the one thing this library is careful never to do. A chain whose predicate
+        /// says no is skipped, exactly as a chain declared through an absent object is.
+        /// </remarks>
+        /// <inheritdoc cref="Property{TProperty}(string, Func{T, TProperty})" path="/exception"/>
+        protected PropertyRuleBuilder<T, TProperty> Property<TProperty>(
+            string propertyName,
+            Func<T, TProperty> accessor,
+            Func<T, bool> isReachable)
+        {
+            ArgumentNullException.ThrowIfNull(isReachable);
+
+            var builder = this.Property(propertyName, accessor);
+
+            return builder.When(isReachable);
         }
 
         /// <summary>
@@ -146,7 +199,7 @@ namespace NValidation
             var errorCountAtStart = errors.Count;
 
             var classBehavior = this.validationBehaviors.Class
-                ?? this.ambientValidationBehaviors.Class
+                ?? this.ambientValidationBehaviors?.Class
                 ?? ValidationBehavior.All;
 
             // A run that stops at the first error stops inside a chain too, or the setting would not do
@@ -155,7 +208,7 @@ namespace NValidation
             var propertyBehavior = classBehavior == ValidationBehavior.StopAtFirstError
                 ? ValidationBehavior.StopAtFirstError
                 : this.validationBehaviors.Property
-                    ?? this.ambientValidationBehaviors.Property
+                    ?? this.ambientValidationBehaviors?.Property
                     ?? ValidationBehavior.StopAtFirstError;
 
             // Built once and kept: a display name is stored as a Func<string> and resolved while the
@@ -174,6 +227,36 @@ namespace NValidation
 
                 await rule.ValidateAsync(instance, errors, messages, displayNames, propertyBehavior, cancellationToken);
             }
+        }
+
+        /// <inheritdoc/>
+        /// <remarks>
+        /// Implemented here rather than left to the default implementation on <see cref="IValidator{T}"/>.
+        /// A validator which serves a second payload — by implementing <see cref="IValidator{T}"/> for it
+        /// by hand, which <see cref="Internals.ValidatorTypeInfo"/> and the registration both support —
+        /// would otherwise inherit two of those defaults, neither more specific than the other, and the
+        /// type would not compile at all (CS8705). Declaring it on the base class settles the ambiguity
+        /// for the common case.
+        /// <para>
+        /// Such a validator is the one that has to say what it means: it re-implements this member itself
+        /// and dispatches on the instance's type, because a base class closed over one
+        /// <typeparamref name="T"/> cannot know about the other.
+        /// </para>
+        /// </remarks>
+        ValueTask<ValidationResult> IValidator.ValidateAsync(object instance, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(instance);
+
+            if (instance is not T typed)
+            {
+                throw new InvalidCastException(
+                    $"{this.GetType()} validates {typeof(T)}, so it cannot validate an instance of " +
+                    $"{instance.GetType()}. A validator which serves more than one payload implements " +
+                    $"{nameof(IValidator)}.{nameof(IValidator.ValidateAsync)} itself and dispatches on the " +
+                    "instance's type.");
+            }
+
+            return this.ValidateAsync(typed, cancellationToken);
         }
 
         /// <inheritdoc/>

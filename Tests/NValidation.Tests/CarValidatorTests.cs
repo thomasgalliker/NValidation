@@ -4,7 +4,7 @@ namespace NValidation.Tests
     /// Whole-payload scenarios for <see cref="CarValidator"/>, the validator the sample API exposes.
     /// The rest of the suite takes one rule at a time; these take a car the way a client sends one —
     /// several things wrong at once, across a nested object and a collection — and assert the complete
-    /// set of codes a caller would have to act on.
+    /// set of property names a caller would have to act on.
     /// </summary>
     /// <remarks>
     /// Resolved from a container configured like the sample's, so the dependency chain each scenario
@@ -83,7 +83,7 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// A nested validator keeps its own flat codes and the parent prefixes them, so the path a
+        /// A nested validator keeps its own flat property names and the parent prefixes them, so the path a
         /// failure reports is the path into the payload — however deep it was declared.
         /// </summary>
         [Fact]

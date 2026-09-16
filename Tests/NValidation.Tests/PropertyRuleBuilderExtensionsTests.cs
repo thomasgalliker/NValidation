@@ -12,6 +12,99 @@ namespace NValidation.Tests
     [Trait(Traits.Category, Traits.UnitTests)]
     public partial class PropertyRuleBuilderExtensionsTests
     {
+        /// <summary>
+        /// The reason the library is asynchronous at all: a rule that asks something it has to wait for.
+        /// </summary>
+        [Theory]
+        [InlineData("WVWZZZ1JZXW000001", true)]
+        [InlineData("TAKEN", false)]
+        public async Task MustAsync_AwaitsThePredicate(string vin, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).MustAsync(async (value, cancellationToken) =>
+            {
+                await Task.Yield();
+                return value != "TAKEN";
+            });
+
+            var car = Cars.Car();
+            car.Vin = vin;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Fact]
+        public async Task MustAsync_CanConsultTheRestOfTheObject()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).MustAsync(async (car, vin, cancellationToken) =>
+            {
+                await Task.Yield();
+                return car.Mileage == 0 || vin != null;
+            });
+
+            var car = Cars.Car();
+            car.Vin = null;
+            car.Mileage = 1;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReportErrorCode("Vin", "Must");
+        }
+
+        /// <summary>
+        /// It reports the same code the synchronous form does, so it is named and worded the same way.
+        /// </summary>
+        [Fact]
+        public async Task MustAsync_IsNamedByWithErrorCode()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin)
+                .MustAsync((value, cancellationToken) => ValueTask.FromResult(false))
+                .WithErrorCode("VinAlreadyRegistered");
+
+            // Act
+            var result = await validator.ValidateAsync(Cars.Car());
+
+            // Assert
+            result.ShouldReportErrorCode("Vin", "VinAlreadyRegistered");
+        }
+
+        /// <summary>
+        /// The token the caller passed to <c>ValidateAsync</c> reaches the rule, so a slow lookup can be
+        /// abandoned with the request.
+        /// </summary>
+        [Fact]
+        public async Task MustAsync_IsHandedTheCallersCancellationToken()
+        {
+            // Arrange
+            using var cancellation = new CancellationTokenSource();
+
+            var seen = CancellationToken.None;
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).MustAsync((value, cancellationToken) =>
+            {
+                seen = cancellationToken;
+                return ValueTask.FromResult(true);
+            });
+
+            // Act
+            await validator.ValidateAsync(Cars.Car(), cancellation.Token);
+
+            // Assert
+            seen.Should().Be(cancellation.Token);
+        }
+
         private const string VinMustBeSeventeenCharactersMessage = "The VIN must be exactly 17 characters long.";
 
         [Fact]
@@ -129,7 +222,7 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// The nested validator keeps its own flat codes; the parent is what prefixes them with the
+        /// The nested validator keeps its own flat property names; the parent is what prefixes them with the
         /// property the nested object sits on.
         /// </summary>
         [Fact]
@@ -164,7 +257,7 @@ namespace NValidation.Tests
             var modelValidator = new TestValidator<CarModel>();
             modelValidator.Property(m => m.Name).NotEmpty();
 
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.Model).SetValidator(modelValidator);
 
             var car = Cars.Car();

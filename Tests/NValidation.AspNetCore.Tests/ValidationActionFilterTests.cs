@@ -251,7 +251,7 @@ namespace NValidation.AspNetCore.Tests
 
             // Assert
             var exception = (await act.Should().ThrowAsync<InvalidOperationException>()).Which;
-            exception.Message.Should().Contain(nameof(CarImport)).And.Contain("[SkipValidation]");
+            exception.Message.Should().Contain(nameof(CarImport)).And.Contain("[SkipNValidation]");
         }
 
         /// <summary>

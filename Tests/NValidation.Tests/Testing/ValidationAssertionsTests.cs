@@ -7,10 +7,119 @@ namespace NValidation.Tests.Testing
     [Trait(Traits.Category, Traits.UnitTests)]
     public class ValidationAssertionsTests
     {
-        private static ValidationResult Result(params (string Code, string Message)[] errors)
+        /// <summary>
+        /// Every shape a <c>{ propertyName: [messages] }</c> map arrives in has to be assertable. Two
+        /// overloads, one on <c>IDictionary</c> and one on <c>IReadOnlyDictionary</c>, would make a
+        /// plain <c>Dictionary</c> — which implements both — an ambiguous call that does not compile.
+        /// </summary>
+        [Fact]
+        public void ShouldReport_AcceptsAConcreteDictionary()
+        {
+            // Arrange
+            var errors = new Dictionary<string, string[]> { ["Vin"] = ["Vin is required."] };
+
+            // Act
+            var act = () => errors.ShouldReport("Vin", "Vin is required.");
+
+            // Assert
+            act.Should().NotThrow();
+        }
+
+        [Fact]
+        public void ShouldReport_AcceptsAReadOnlyDictionary()
+        {
+            // Arrange
+            IReadOnlyDictionary<string, string[]> errors =
+                new Dictionary<string, string[]> { ["Vin"] = ["Vin is required."] };
+
+            // Act
+            var act = () => errors.ShouldReport("Vin", "Vin is required.");
+
+            // Assert
+            act.Should().NotThrow();
+        }
+
+        [Fact]
+        public void ShouldReport_AcceptsAMutableDictionaryInterface()
+        {
+            // Arrange
+            IDictionary<string, string[]> errors =
+                new Dictionary<string, string[]> { ["Vin"] = ["Vin is required."] };
+
+            // Act
+            var act = () => errors.ShouldReport("Vin", "Vin is required.");
+
+            // Assert
+            act.Should().NotThrow();
+        }
+
+        /// <summary>
+        /// The reason an expected message is compared exactly rather than as a pattern: a question mark
+        /// is ordinary in user-facing copy, and as a wildcard it would match any character at all — so
+        /// this assertion would have passed against a message it never got.
+        /// </summary>
+        [Fact]
+        public void ShouldReport_WithAQuestionMarkInTheExpectedMessage_MatchesItLiterally()
+        {
+            // Arrange
+            var result = Result(("Vin", "Is the VIN correct!"));
+
+            // Act
+            var act = () => result.ShouldReport("Vin", "Is the VIN correct?");
+
+            // Assert
+            act.Should().Throw<ValidationAssertionException>();
+        }
+
+        [Fact]
+        public void ShouldReport_WithAQuestionMarkInTheActualMessage_Matches()
+        {
+            // Arrange
+            var result = Result(("Vin", "Is the VIN correct?"));
+
+            // Act
+            var act = () => result.ShouldReport("Vin", "Is the VIN correct?");
+
+            // Assert
+            act.Should().NotThrow();
+        }
+
+        /// <summary>
+        /// The same characters still mean what they always did where a pattern is asked for by name.
+        /// </summary>
+        [Fact]
+        public void ShouldReport_Matching_TreatsTheExpectationAsAPattern()
+        {
+            // Arrange
+            var result = Result(("Mileage", "Mileage must be greater than or equal to 0."));
+
+            // Act
+            var act = () => result.ShouldReport([ExpectedError.Matching("Mileage", "*greater than*")]);
+
+            // Assert
+            act.Should().NotThrow();
+        }
+
+        /// <summary>
+        /// An asterisk in an expected message is now a literal asterisk, not "anything".
+        /// </summary>
+        [Fact]
+        public void ShouldReport_WithAnAsteriskInTheExpectedMessage_MatchesItLiterally()
+        {
+            // Arrange
+            var result = Result(("Vin", "The VIN is required."));
+
+            // Act
+            var act = () => result.ShouldReport("Vin", "The VIN *");
+
+            // Assert
+            act.Should().Throw<ValidationAssertionException>();
+        }
+
+        private static ValidationResult Result(params (string PropertyName, string Message)[] errors)
         {
             return ValidationResult.FromValidationErrors(
-                errors.Select(error => new ValidationError(error.Code, error.Message)).ToArray());
+                errors.Select(error => new ValidationError(error.PropertyName, error.Message)).ToArray());
         }
 
         [Fact]
@@ -33,7 +142,7 @@ namespace NValidation.Tests.Testing
             var result = Result(("Mileage", "Mileage must be greater than or equal to 0."));
 
             // Act
-            var act = () => result.ShouldReport("Mileage", "*greater than*");
+            var act = () => result.ShouldReport([ExpectedError.Matching("Mileage", "*greater than*")]);
 
             // Assert
             act.Should().NotThrow();
@@ -46,7 +155,7 @@ namespace NValidation.Tests.Testing
             var result = Result(("Vin", "Vin is required."));
 
             // Act
-            var act = () => result.ShouldReport([new ExpectedError("Vin")]);
+            var act = () => result.ShouldReport([ExpectedError.Any("Vin")]);
 
             // Assert
             act.Should().NotThrow();
@@ -125,7 +234,7 @@ namespace NValidation.Tests.Testing
         }
 
         /// <summary>
-        /// The count is part of what is expected, so the same code twice asks for two failures.
+        /// The count is part of what is expected, so the same name twice asks for two failures.
         /// </summary>
         [Fact]
         public void ShouldReport_CountsARepeatedCodeTwice()
@@ -170,7 +279,7 @@ namespace NValidation.Tests.Testing
             var result = Result(("Vin", "Vin is required."), ("Vin", "Vin must not exceed 3 characters."));
 
             // Act
-            var act = () => result.ShouldReport([new("Vin"), new("Vin", "*not exceed*")]);
+            var act = () => result.ShouldReport([ExpectedError.Any("Vin"), ExpectedError.Matching("Vin", "*not exceed*")]);
 
             // Assert
             act.Should().NotThrow();
@@ -228,7 +337,7 @@ namespace NValidation.Tests.Testing
             var result = Result(("Vin", "Vin is required."), ("Cost", "Cost is required."));
 
             // Act
-            var act = () => result.ShouldReport([new("Vin", "Vin is mandatory."), new("Mileage")]);
+            var act = () => result.ShouldReport([new("Vin", "Vin is mandatory."), ExpectedError.Any("Mileage")]);
 
             // Assert
             act.Should().Throw<ValidationAssertionException>()

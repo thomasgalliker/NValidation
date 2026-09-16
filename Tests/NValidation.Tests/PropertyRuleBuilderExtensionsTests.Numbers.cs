@@ -3,6 +3,106 @@ namespace NValidation.Tests
     public partial class PropertyRuleBuilderExtensionsTests
     {
         [Theory]
+        [InlineData(123.45, true)]    // exactly the shape allowed
+        [InlineData(0.5, true)]       // no digits before the point at all
+        [InlineData(123.456, false)]  // one digit too many after the point
+        [InlineData(1234.5, false)]   // one digit too many before it
+        [InlineData(0, true)]
+        [InlineData(-123.45, true)]   // the sign is not a digit
+        public async Task PrecisionScale_JudgesDigitsBeforeAndAfterThePoint(double purchasePrice, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.PurchasePrice).PrecisionScale(5, 2);
+
+            var car = Cars.Car();
+            car.PurchasePrice = (decimal)purchasePrice;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        /// <summary>
+        /// Trailing zeros are representation, not value: the column behind the property accepts both
+        /// spellings of the same number, so the rule judges the number.
+        /// </summary>
+        [Fact]
+        public async Task PrecisionScale_IgnoresTrailingZeros()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.PurchasePrice).PrecisionScale(3, 1);
+
+            var car = Cars.Car();
+            car.PurchasePrice = 1.50m;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Errors.Should().BeEmpty();
+        }
+
+        [Theory]
+        [InlineData(null, true)] // absent is left to NotNull
+        [InlineData(1.234, false)]
+        [InlineData(1.23, true)]
+        public async Task PrecisionScale_WithANullableProperty_JudgesOnlyAValueThatIsThere(double? tradeInValue, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.TradeInValue).PrecisionScale(5, 2);
+
+            var car = Cars.Car();
+            car.TradeInValue = (decimal?)tradeInValue;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Fact]
+        public async Task PrecisionScale_ReportsTheRuleAndNamesTheShape()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.PurchasePrice).PrecisionScale(5, 2);
+
+            var car = Cars.Car();
+            car.PurchasePrice = 123.456m;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReportErrorCode("PurchasePrice", "PrecisionScale");
+            result.Errors.Single().Message.Should().Be(
+                "PurchasePrice must not have more than 5 digits in total, with at most 2 after the decimal point.");
+        }
+
+        [Theory]
+        [InlineData(0, 2)]   // a precision of nothing
+        [InlineData(-1, 0)]
+        [InlineData(2, -1)]  // a negative scale
+        [InlineData(2, 3)]   // more decimals than digits
+        public void PrecisionScale_WithAnImpossibleShape_ThrowsWhereTheRuleIsDeclared(int precision, int scale)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
+            // Act
+            var act = () => validator.Property(c => c.PurchasePrice).PrecisionScale(precision, scale);
+
+            // Assert
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        [Theory]
         [InlineData(25.00, true)]
         [InlineData(25.05, true)]
         [InlineData(25.03, false)]
@@ -222,7 +322,7 @@ namespace NValidation.Tests
         public async Task MultipleOf_ReportsMultipleOf()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.PurchasePrice).MultipleOf(0.05m);
 
             // Act
@@ -236,7 +336,7 @@ namespace NValidation.Tests
         public async Task NotNaN_ReportsNotNaN_NotNotEmpty()
         {
             // Arrange
-            var validator = new TestValidator<CarModel>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<CarModel>(ErrorCodeProvider.Instance);
             validator.Property(m => m.FuelConsumption).NotNaN();
 
             // Act

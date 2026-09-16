@@ -46,7 +46,7 @@ namespace NValidation.Testing.Internals
                 var expectation = expected[expectationIndex];
 
                 unmatchedExpectations.Add(expectation);
-                nearMisses.Add(actual.Any(error => string.Equals(error.Code, expectation.Code, StringComparison.Ordinal)));
+                nearMisses.Add(actual.Any(error => string.Equals(error.PropertyName, expectation.PropertyName, StringComparison.Ordinal)));
             }
 
             var unmatchedErrors = new List<ValidationError>();
@@ -99,12 +99,21 @@ namespace NValidation.Testing.Internals
 
         /// <summary>
         /// <c>true</c> when <paramref name="error"/> is one the <paramref name="expectation"/> asked for:
-        /// the same code, and a message the expectation's pattern matches.
+        /// the same property name, and a message the expectation's pattern matches.
         /// </summary>
         private static bool Satisfies(ExpectedError expectation, ValidationError error)
         {
-            return string.Equals(expectation.Code, error.Code, StringComparison.Ordinal)
-                && WildcardPattern.IsMatch(expectation.Message, error.Message);
+            if (!string.Equals(expectation.PropertyName, error.PropertyName, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            return expectation.Match switch
+            {
+                ExpectedMessage.Any => true,
+                ExpectedMessage.Pattern => WildcardPattern.IsMatch(expectation.Message!, error.Message),
+                _ => string.Equals(expectation.Message, error.Message, StringComparison.Ordinal),
+            };
         }
     }
 }

@@ -14,7 +14,7 @@ namespace NValidation.AspNetCore
     /// body or form, the validator registered for that parameter's declared type is resolved and run. A
     /// parameter whose type has no registered validator is left alone — see
     /// <see cref="ValidationFilterOptions.MissingValidatorBehavior"/> — and one marked with
-    /// <see cref="SkipValidationAttribute"/> is skipped outright.
+    /// <see cref="SkipNValidationAttribute"/> is skipped outright.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -38,18 +38,6 @@ namespace NValidation.AspNetCore
     /// </remarks>
     public sealed partial class ValidationActionFilter : IAsyncActionFilter
     {
-        /// <summary>
-        /// Closed <see cref="IValidator{T}"/> types by the parameter type they validate. The set of action
-        /// parameters is fixed once the application model is built, so this settles after warm-up.
-        /// </summary>
-        /// <remarks>
-        /// <see cref="Type.MakeGenericType"/> is the one piece of reflection this filter cannot avoid: the
-        /// service to resolve is only known from a parameter's runtime <see cref="Type"/>. An application
-        /// published ahead-of-time therefore has to keep the closed validator types it registers, which it
-        /// does anyway by registering them.
-        /// </remarks>
-        private static readonly ConcurrentDictionary<Type, Type> ValidatorServiceTypes = new();
-
         /// <summary>
         /// What has already been worked out about an action, by the action it was worked out for.
         /// </summary>
@@ -121,9 +109,10 @@ namespace NValidation.AspNetCore
                 return null;
             }
 
-            var validatorServiceType = ValidatorServiceTypes.GetOrAdd(
-                parameter.ParameterType,
-                static parameterType => typeof(IValidator<>).MakeGenericType(parameterType));
+            var validatorServiceType = Actions.GetOrCreateValue(context.ActionDescriptor).ValidatorServiceTypes.GetOrAdd(
+                parameter.Name,
+                static (_, parameterType) => typeof(IValidator<>).MakeGenericType(parameterType),
+                parameter.ParameterType);
 
             if (context.HttpContext.RequestServices.GetService(validatorServiceType) is not IValidator validator)
             {
@@ -181,7 +170,7 @@ namespace NValidation.AspNetCore
             // inherit is ignored for a ParameterInfo — the CLR does not walk base-method parameters —
             // so saying false is the honest form of what actually happens.
             if (parameter is ControllerParameterDescriptor controllerParameter &&
-                controllerParameter.ParameterInfo.IsDefined(typeof(SkipValidationAttribute), inherit: false))
+                controllerParameter.ParameterInfo.IsDefined(typeof(SkipNValidationAttribute), inherit: false))
             {
                 return true;
             }
@@ -189,7 +178,7 @@ namespace NValidation.AspNetCore
             // Carries the action's and the controller's attributes both, so either level excludes.
             foreach (var metadata in context.ActionDescriptor.EndpointMetadata)
             {
-                if (metadata is SkipValidationAttribute)
+                if (metadata is SkipNValidationAttribute)
                 {
                     return true;
                 }
@@ -215,7 +204,7 @@ namespace NValidation.AspNetCore
                         $"No validator is registered for parameter '{parameter.Name}' of type " +
                         $"'{parameter.ParameterType}' on action '{context.ActionDescriptor.DisplayName}'. " +
                         $"Register an IValidator<{parameter.ParameterType.Name}>, or mark the parameter with " +
-                        $"[SkipValidation] to record that it is deliberately not validated.");
+                        $"[SkipNValidation] to record that it is deliberately not validated.");
 
                 case MissingValidatorBehavior.Ignore:
                 default:
@@ -248,6 +237,17 @@ namespace NValidation.AspNetCore
             /// bury the warning in its own repetitions.
             /// </summary>
             public ConcurrentDictionary<string, byte> ReportedMissingValidators { get; } = new(StringComparer.Ordinal);
+
+            /// <summary>
+            /// The closed <see cref="IValidator{T}"/> to resolve for each parameter.
+            /// </summary>
+            /// <remarks>
+            /// <see cref="Type.MakeGenericType"/> is the one piece of reflection this filter cannot
+            /// avoid: the service to resolve is only known from a parameter's runtime <see cref="Type"/>.
+            /// Held here rather than in a process-static keyed by that type, so the entry dies with the
+            /// action descriptor instead of rooting the parameter's assembly for the life of the process.
+            /// </remarks>
+            public ConcurrentDictionary<string, Type> ValidatorServiceTypes { get; } = new(StringComparer.Ordinal);
         }
     }
 }

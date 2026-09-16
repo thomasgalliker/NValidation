@@ -63,15 +63,15 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Groups <see cref="Errors"/> by <see cref="ValidationError.Code"/> into a
-        /// <c>{ code: [messages] }</c> shape, so each property carries every message it collected. Shared
+        /// Groups <see cref="Errors"/> by <see cref="ValidationError.PropertyName"/> into a
+        /// <c>{ propertyName: [messages] }</c> shape, so each property carries every message it collected. Shared
         /// by <see cref="ValidationException"/> and by callers that report a validation failure directly
         /// instead of throwing.
         /// </summary>
         public IReadOnlyDictionary<string, string[]> ToErrorsDictionary()
         {
             return this.Errors
-                .GroupBy(error => error.Code)
+                .GroupBy(error => error.PropertyName)
                 .ToDictionary(
                     group => group.Key,
                     group => group.Select(error => error.Message).ToArray(),

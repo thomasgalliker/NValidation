@@ -7,7 +7,7 @@ namespace NValidation.AspNetCore
     {
         /// <summary>
         /// What to do with a body- or form-bound parameter that has neither a registered
-        /// <see cref="IValidator{T}"/> nor a <see cref="SkipValidationAttribute"/>. Defaults to
+        /// <see cref="IValidator{T}"/> nor a <see cref="SkipNValidationAttribute"/>. Defaults to
         /// <see cref="MissingValidatorBehavior.Ignore"/>.
         /// </summary>
         public MissingValidatorBehavior MissingValidatorBehavior { get; set; } = MissingValidatorBehavior.Ignore;

@@ -3,7 +3,7 @@ namespace NValidation
     public static partial class PropertyRuleBuilderExtensions
     {
         /// <summary>
-        /// Requires the date to lie strictly before now. A missing value passes; use <c>NotEmpty()</c>
+        /// Requires the date to lie strictly before now. A missing value passes; use <c>NotDefault()</c>
         /// to require one.
         /// </summary>
         /// <remarks>
@@ -24,7 +24,7 @@ namespace NValidation
             {
                 if (AsUtc(context.Value) >= UtcNow(timeProvider))
                 {
-                    context.AddError(ValidationMessageKeys.InThePast);
+                    context.AddError(ValidationErrorCodes.InThePast);
                 }
             });
         }
@@ -38,7 +38,7 @@ namespace NValidation
             {
                 if (context.Value is { } value && AsUtc(value) >= UtcNow(timeProvider))
                 {
-                    context.AddError(ValidationMessageKeys.InThePast);
+                    context.AddError(ValidationErrorCodes.InThePast);
                 }
             });
         }
@@ -55,7 +55,7 @@ namespace NValidation
             {
                 if (context.Value.UtcDateTime >= UtcNow(timeProvider))
                 {
-                    context.AddError(ValidationMessageKeys.InThePast);
+                    context.AddError(ValidationErrorCodes.InThePast);
                 }
             });
         }
@@ -69,13 +69,13 @@ namespace NValidation
             {
                 if (context.Value is { } value && value.UtcDateTime >= UtcNow(timeProvider))
                 {
-                    context.AddError(ValidationMessageKeys.InThePast);
+                    context.AddError(ValidationErrorCodes.InThePast);
                 }
             });
         }
 
         /// <summary>
-        /// Requires the date to lie strictly after now. A missing value passes; use <c>NotEmpty()</c>
+        /// Requires the date to lie strictly after now. A missing value passes; use <c>NotDefault()</c>
         /// to require one.
         /// </summary>
         /// <inheritdoc cref="InThePast{T}(PropertyRuleBuilder{T, DateTime}, TimeProvider)" path="/remarks"/>
@@ -87,7 +87,7 @@ namespace NValidation
             {
                 if (AsUtc(context.Value) <= UtcNow(timeProvider))
                 {
-                    context.AddError(ValidationMessageKeys.InTheFuture);
+                    context.AddError(ValidationErrorCodes.InTheFuture);
                 }
             });
         }
@@ -101,7 +101,7 @@ namespace NValidation
             {
                 if (context.Value is { } value && AsUtc(value) <= UtcNow(timeProvider))
                 {
-                    context.AddError(ValidationMessageKeys.InTheFuture);
+                    context.AddError(ValidationErrorCodes.InTheFuture);
                 }
             });
         }
@@ -115,7 +115,7 @@ namespace NValidation
             {
                 if (context.Value.UtcDateTime <= UtcNow(timeProvider))
                 {
-                    context.AddError(ValidationMessageKeys.InTheFuture);
+                    context.AddError(ValidationErrorCodes.InTheFuture);
                 }
             });
         }
@@ -129,7 +129,7 @@ namespace NValidation
             {
                 if (context.Value is { } value && value.UtcDateTime <= UtcNow(timeProvider))
                 {
-                    context.AddError(ValidationMessageKeys.InTheFuture);
+                    context.AddError(ValidationErrorCodes.InTheFuture);
                 }
             });
         }

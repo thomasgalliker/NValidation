@@ -22,20 +22,20 @@ namespace NValidation.AspNetCore.Tests.TestData
         {
         }
 
-        public void CreateSkippedParameter([SkipValidation("Validated by the action itself.")] Car car)
+        public void CreateSkippedParameter([SkipNValidation("Validated by the action itself.")] Car car)
         {
         }
 
-        [SkipValidation("Validated by the action itself.")]
+        [SkipNValidation("Validated by the action itself.")]
         public void CreateSkippedAction(Car car)
         {
         }
 
-        public void CreateSkippedParameterWithoutAReason([SkipValidation] Car car)
+        public void CreateSkippedParameterWithoutAReason([SkipNValidation] Car car)
         {
         }
 
-        public void ImportSkippedParameter([SkipValidation("Reports failures per row, not as a 400.")] CarImport carImport)
+        public void ImportSkippedParameter([SkipNValidation("Reports failures per row, not as a 400.")] CarImport carImport)
         {
         }
     }

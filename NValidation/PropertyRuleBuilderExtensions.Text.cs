@@ -30,7 +30,7 @@ namespace NValidation
             {
                 if (context.Value != null && context.Value.Length < minimumLength)
                 {
-                    context.AddError(ValidationMessageKeys.MinimumLength, (ValidationMessagePlaceholders.MinLength, minimumLength));
+                    context.AddError(ValidationErrorCodes.MinimumLength, (ValidationMessagePlaceholders.MinLength, minimumLength));
                 }
             });
         }
@@ -48,7 +48,7 @@ namespace NValidation
             {
                 if (context.Value != null && context.Value.Length > maximumLength)
                 {
-                    context.AddError(ValidationMessageKeys.MaximumLength, (ValidationMessagePlaceholders.MaxLength, maximumLength));
+                    context.AddError(ValidationErrorCodes.MaximumLength, (ValidationMessagePlaceholders.MaxLength, maximumLength));
                 }
             });
         }
@@ -66,7 +66,7 @@ namespace NValidation
             {
                 if (context.Value != null && context.Value.Length != length)
                 {
-                    context.AddError(ValidationMessageKeys.Length, (ValidationMessagePlaceholders.Length, length));
+                    context.AddError(ValidationErrorCodes.Length, (ValidationMessagePlaceholders.Length, length));
                 }
             });
         }
@@ -95,7 +95,7 @@ namespace NValidation
                 if (context.Value != null && (context.Value.Length < minimumLength || context.Value.Length > maximumLength))
                 {
                     context.AddError(
-                        ValidationMessageKeys.LengthBetween,
+                        ValidationErrorCodes.LengthBetween,
                         (ValidationMessagePlaceholders.MinLength, minimumLength),
                         (ValidationMessagePlaceholders.MaxLength, maximumLength));
                 }
@@ -140,7 +140,7 @@ namespace NValidation
 
                 if (!matched)
                 {
-                    context.AddError(ValidationMessageKeys.Matches, (ValidationMessagePlaceholders.Pattern, regex.ToString()));
+                    context.AddError(ValidationErrorCodes.Matches, (ValidationMessagePlaceholders.Pattern, regex.ToString()));
                 }
             });
         }
@@ -173,8 +173,9 @@ namespace NValidation
         /// <remarks>
         /// Parsed by <see cref="MailAddress"/> rather than matched against a pattern. The address forms
         /// that are legal are far broader than a hand-written pattern allows — a quoted local part, an
-        /// IP literal, an internationalized domain — and FluentValidation deprecated its own RFC 5322
-        /// regex for the same reason. A parser also cannot be made to backtrack by a hostile value.
+        /// IP literal, an internationalized domain — and a pattern wide enough to admit them is one
+        /// nobody can read, let alone review. A parser also cannot be made to backtrack by a hostile
+        /// value.
         /// <para>
         /// The value has to be the address <em>alone</em>. <see cref="MailAddress"/> parses the header
         /// forms too, so <c>Foo &lt;a@b.com&gt;</c>, <c>a@b.com, c@d.com</c> and a value with
@@ -189,7 +190,7 @@ namespace NValidation
             {
                 if (!string.IsNullOrWhiteSpace(context.Value) && !TryGetBareAddress(context.Value, out _))
                 {
-                    context.AddError(ValidationMessageKeys.EmailAddress);
+                    context.AddError(ValidationErrorCodes.EmailAddress);
                 }
             });
         }
@@ -220,7 +221,7 @@ namespace NValidation
                 if (TopLevelDomainOf(address) is not { } topLevelDomain || !allowed.Contains(topLevelDomain))
                 {
                     context.AddError(
-                        ValidationMessageKeys.EmailTopLevelDomain,
+                        ValidationErrorCodes.EmailTopLevelDomain,
                         (ValidationMessagePlaceholders.TopLevelDomains, string.Join(", ", allowed)));
                 }
             });
@@ -246,7 +247,7 @@ namespace NValidation
                 if (TopLevelDomainOf(address) is { } topLevelDomain && refused.Contains(topLevelDomain))
                 {
                     context.AddError(
-                        ValidationMessageKeys.EmailTopLevelDomainNotAllowed,
+                        ValidationErrorCodes.EmailTopLevelDomainNotAllowed,
                         (ValidationMessagePlaceholders.TopLevelDomain, topLevelDomain));
                 }
             });
@@ -290,7 +291,7 @@ namespace NValidation
                 {
                     if (value.Contains(refusedValue, comparison))
                     {
-                        context.AddError(ValidationMessageKeys.NotContaining);
+                        context.AddError(ValidationErrorCodes.NotContaining);
                         return;
                     }
                 }

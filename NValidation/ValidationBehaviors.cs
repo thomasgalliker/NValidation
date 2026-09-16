@@ -12,12 +12,6 @@ namespace NValidation
     /// configured, and a registration that names neither leaves both at the built-in defaults. That is
     /// why this is mutated rather than assigned: replacing the whole object would also replace the axis
     /// the caller did not mean to touch.
-    /// <para>
-    /// A validator written against FluentValidation maps its <c>ClassLevelCascadeMode</c> onto
-    /// <see cref="Class"/> and its <c>RuleLevelCascadeMode</c> onto <see cref="Property"/>, with
-    /// <c>Continue</c> reading as <see cref="ValidationBehavior.All"/> and <c>Stop</c> as
-    /// <see cref="ValidationBehavior.StopAtFirstError"/>.
-    /// </para>
     /// </remarks>
     public sealed class ValidationBehaviors
     {

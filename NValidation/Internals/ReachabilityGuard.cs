@@ -18,21 +18,34 @@ namespace NValidation.Internals
     /// </remarks>
     internal static class ReachabilityGuard
     {
-        private static readonly ConcurrentDictionary<(Type Owner, Type Property, string Path), Delegate?> Guards = new();
-
         /// <summary>
         /// A predicate that is <c>false</c> when something on the way to the property is <c>null</c>, or
         /// <c>null</c> where the path dereferences nothing and so can always be read.
         /// </summary>
-        public static Func<T, bool>? For<T, TProperty>(string path, Expression<Func<T, TProperty>> expression)
+        public static Func<T, bool>? For<T, TProperty>(string propertyName, Expression<Func<T, TProperty>> expression)
         {
-            return (Func<T, bool>?)Guards.GetOrAdd(
-                (typeof(T), typeof(TProperty), path),
+            return Guards<T, TProperty>.ByPropertyName.GetOrAdd(
+                propertyName,
                 static (_, state) => Build(state),
                 expression);
         }
 
-        private static Delegate? Build<T, TProperty>(Expression<Func<T, TProperty>> expression)
+        /// <inheritdoc cref="PropertyAccessor" path="/remarks"/>
+        /// <summary>
+        /// The guards of one owner-and-property-type pair, keyed by the property name alone. A
+        /// <c>null</c> entry is an answer, not a miss: it records that the path dereferences nothing.
+        /// </summary>
+        /// <remarks>
+        /// Held per closed generic rather than under a <see cref="Type"/> key, so a validator declared
+        /// for a type from a collectible <c>AssemblyLoadContext</c> does not root that context forever.
+        /// </remarks>
+        private static class Guards<T, TProperty>
+        {
+            public static readonly ConcurrentDictionary<string, Func<T, bool>?> ByPropertyName =
+                new(StringComparer.Ordinal);
+        }
+
+        private static Func<T, bool>? Build<T, TProperty>(Expression<Func<T, TProperty>> expression)
         {
             var body = expression.Body;
 

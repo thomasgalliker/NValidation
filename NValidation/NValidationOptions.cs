@@ -20,16 +20,10 @@ namespace NValidation
     public sealed class NValidationOptions
     {
         /// <summary>
-        /// Constructor selection is reflection, and the answer is the same every time; a validator
-        /// resolved per scope would otherwise pay for it on every request.
+        /// What each <c>AddValidator</c> and each scan asked for, resolved and applied once the delegate
+        /// has run. A <c>null</c> lifetime means "whatever <see cref="ValidatorLifetime"/> ends up being".
         /// </summary>
-        private static readonly ConcurrentDictionary<Type, ObjectFactory> Factories = new();
-
-        /// <summary>
-        /// What each <c>AddValidator</c> asked for, applied once the delegate has run. A <c>null</c>
-        /// lifetime means "whatever <see cref="ValidatorLifetime"/> ends up being".
-        /// </summary>
-        private readonly List<(Type ValidatedType, Type ValidatorType, ServiceLifetime? Lifetime)> registrations = [];
+        private readonly List<Registration> registrations = [];
 
         private Type? messageProvider;
 
@@ -42,7 +36,7 @@ namespace NValidation
         /// The collection being configured, for a registration this type has no method for — and what an
         /// integration package extends to add its own configuration here.
         /// </summary>
-        public IServiceCollection Services { get; }
+        internal IServiceCollection Services { get; }
 
         /// <summary>
         /// The lifetime validators are registered with unless one is named on the call itself.
@@ -59,6 +53,31 @@ namespace NValidation
         /// still names its own lifetime on its own call.
         /// </remarks>
         public ServiceLifetime ValidatorLifetime { get; set; } = ServiceLifetime.Scoped;
+
+        /// <summary>
+        /// Registers a validator as a singleton where that is provably safe, whatever
+        /// <see cref="ValidatorLifetime"/> says. Off by default.
+        /// </summary>
+        /// <remarks>
+        /// A validator declares its rules in its constructor and never changes afterwards, so rebuilding
+        /// them per scope is pure waste — measurably the largest cost this library imposes on a request,
+        /// an order of magnitude more than validating. The reason the default is nevertheless
+        /// <see cref="ServiceLifetime.Scoped"/> is that a validator may depend on something that is
+        /// itself scoped, and a singleton holding one of those is a bug that surfaces under load rather
+        /// than at startup.
+        /// <para>
+        /// This settles that case by case instead of globally: at registration, a validator is promoted
+        /// only when every constructor parameter resolves to something already registered as a singleton,
+        /// or to another validator which itself qualifies. One that takes a scoped dependency is left
+        /// exactly where it was. The decision is made once, from the service collection, and never
+        /// depends on what a request happens to do.
+        /// </para>
+        /// <para>
+        /// A validator with more than one public constructor is never promoted: which one is used is
+        /// then a choice this cannot make on the container's behalf.
+        /// </para>
+        /// </remarks>
+        public bool PromoteSafeValidatorsToSingleton { get; set; }
 
         /// <summary>
         /// How much every registered validator reports, unless it says otherwise for itself: across its
@@ -153,7 +172,7 @@ namespace NValidation
         public NValidationOptions AddValidator<TInstance, TValidator>()
             where TValidator : class, IValidator<TInstance>
         {
-            return this.Add(typeof(IValidator<TInstance>), typeof(TValidator), lifetime: null);
+            return this.Add(typeof(IValidator<TInstance>), typeof(TValidator), lifetime: null, isExplicit: true);
         }
 
         /// <inheritdoc cref="AddValidator{TInstance, TValidator}()" path="/summary"/>
@@ -161,7 +180,7 @@ namespace NValidation
         public NValidationOptions AddValidator<TInstance, TValidator>(ServiceLifetime lifetime)
             where TValidator : class, IValidator<TInstance>
         {
-            return this.Add(typeof(IValidator<TInstance>), typeof(TValidator), lifetime);
+            return this.Add(typeof(IValidator<TInstance>), typeof(TValidator), lifetime, isExplicit: true);
         }
 
         /// <summary>
@@ -186,8 +205,8 @@ namespace NValidation
         /// <see cref="IValidator{T}"/> and can be constructed.
         /// </summary>
         /// <remarks>
-        /// Registrations use <c>TryAdd</c>, so a validator registered explicitly beforehand wins over
-        /// whatever a scan finds for the same type.
+        /// An explicit <c>AddValidator</c> wins over whatever a scan finds for the same type, wherever
+        /// in the delegate it is written.
         /// </remarks>
         public NValidationOptions AddValidatorsFromAssembly(params Assembly[] assemblies)
         {
@@ -224,23 +243,166 @@ namespace NValidation
                     typeof(IValidationMessageProvider), this.messageProvider, ServiceLifetime.Singleton));
             }
 
-            foreach (var (validatedType, validatorType, lifetime) in this.registrations)
+            // Resolved in full before anything is written, so a contradiction rejects the whole
+            // configuration rather than leaving half of it registered.
+            // Constructor selection is reflection and the answer never changes, so it is done once
+            // here and captured. Held by the descriptors rather than in a process-static keyed by
+            // Type: a static would root the validator's assembly for the life of the process, which a
+            // host loading plugins into a collectible AssemblyLoadContext cannot afford. One entry per
+            // validator type, so a validator serving two payloads is still only inspected once.
+            var factories = new Dictionary<Type, ObjectFactory>();
+
+            var registrations = this.Resolve().ToArray();
+
+            // Which validator serves which payload, so a validator depending on another can be reasoned
+            // about before either of them reaches the container.
+            var validatorsByService = registrations.ToDictionary(
+                registration => registration.ValidatedType,
+                registration => registration.ValidatorType);
+
+            foreach (var (validatedType, validatorType, lifetime) in registrations)
             {
-                // TryAdd, in the order they were asked for: an explicit registration wins over whatever
-                // a later scan finds for the same type.
+                if (!factories.TryGetValue(validatorType, out var factory))
+                {
+                    factory = ActivatorUtilities.CreateFactory(validatorType, Type.EmptyTypes);
+                    factories.Add(validatorType, factory);
+                }
+
+                var resolvedLifetime = lifetime ?? this.ValidatorLifetime;
+
+                if (this.PromoteSafeValidatorsToSingleton &&
+                    resolvedLifetime != ServiceLifetime.Singleton &&
+                    this.CanBeShared(validatorType, validatorsByService, []))
+                {
+                    resolvedLifetime = ServiceLifetime.Singleton;
+                }
+
                 this.Services.TryAdd(new ServiceDescriptor(
                     validatedType,
-                    serviceProvider => Create(serviceProvider, validatorType, validationBehaviors),
-                    lifetime ?? this.ValidatorLifetime));
+                    serviceProvider => Create(serviceProvider, factory, validationBehaviors),
+                    resolvedLifetime));
             }
         }
 
-        private static object Create(
-            IServiceProvider serviceProvider, Type validatorType, ValidationBehaviors validationBehaviors)
+        /// <summary>
+        /// One validator per payload, chosen without regard to the order the delegate happened to be
+        /// written in.
+        /// </summary>
+        /// <remarks>
+        /// A payload named explicitly is settled by that, whether the scan that also found it ran before
+        /// or after — a host which scans an assembly and then names its own replacement has said
+        /// something unambiguous either way, and deciding it by line number would be order dependence in
+        /// the one place it hurts most.
+        /// <para>
+        /// What is left is a genuine contradiction — two different validators asked for with equal
+        /// standing — and that is refused rather than settled by whichever was seen first.
+        /// </para>
+        /// </remarks>
+        private IEnumerable<(Type ValidatedType, Type ValidatorType, ServiceLifetime? Lifetime)> Resolve()
         {
-            var factory = Factories.GetOrAdd(
-                validatorType, static type => ActivatorUtilities.CreateFactory(type, Type.EmptyTypes));
+            foreach (var group in this.registrations.GroupBy(registration => registration.ValidatedType))
+            {
+                var explicitly = group.Where(registration => registration.Explicit).ToArray();
+                var candidates = explicitly.Length > 0 ? explicitly : [.. group];
 
+                var chosen = candidates[0];
+
+                foreach (var candidate in candidates)
+                {
+                    if (candidate.ValidatorType != chosen.ValidatorType)
+                    {
+                        throw new InvalidOperationException(RefusalOf(chosen, candidate, group.Key));
+                    }
+                }
+
+                yield return (group.Key, chosen.ValidatorType, chosen.Lifetime);
+            }
+        }
+
+        /// <remarks>
+        /// The remedy differs by how the two were asked for: a scan can be settled by naming the one to
+        /// keep, while two explicit registrations have already named both.
+        /// </remarks>
+        private static string RefusalOf(Registration first, Registration second, Type validatedType)
+        {
+            var subject = $"'{first.ValidatorType}' and '{second.ValidatorType}' both validate " +
+                $"'{Validated(validatedType)}'";
+
+            return first.Explicit
+                ? $"{subject}, and both were registered explicitly. Name only one of them."
+                : $"{subject}, so a scan cannot choose between them. Register the one you want with " +
+                  "AddValidator — an explicit registration wins wherever it is written — or keep only " +
+                  "one of them in the assemblies being scanned.";
+        }
+
+        /// <summary>
+        /// Whether one instance of <paramref name="validatorType"/> can serve every request.
+        /// </summary>
+        /// <remarks>
+        /// Conservative by construction: anything it cannot prove is shareable, it treats as not. A
+        /// validator with several constructors, one depending on a service registered elsewhere at a
+        /// shorter lifetime, or one whose dependencies form a cycle, all stay where the configuration
+        /// put them.
+        /// </remarks>
+        private bool CanBeShared(
+            Type validatorType,
+            IReadOnlyDictionary<Type, Type> validatorsByService,
+            HashSet<Type> underConsideration)
+        {
+            if (!underConsideration.Add(validatorType))
+            {
+                // A cycle. Nothing can be concluded, so nothing is.
+                return false;
+            }
+
+            var constructors = validatorType.GetConstructors();
+
+            if (constructors.Length != 1)
+            {
+                return false;
+            }
+
+            foreach (var parameter in constructors[0].GetParameters())
+            {
+                if (!this.IsShareable(parameter.ParameterType, validatorsByService, underConsideration))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Whether one dependency is safe for a shared validator to hold.
+        /// </summary>
+        private bool IsShareable(
+            Type serviceType,
+            IReadOnlyDictionary<Type, Type> validatorsByService,
+            HashSet<Type> underConsideration)
+        {
+            // Another validator this same registration is about to add, whose own lifetime is therefore
+            // still being decided: it is safe exactly when it is itself promotable.
+            if (validatorsByService.TryGetValue(serviceType, out var dependency))
+            {
+                return this.CanBeShared(dependency, validatorsByService, underConsideration);
+            }
+
+            // Anything else has to be a singleton already. The last descriptor wins, as it does when the
+            // container resolves it.
+            for (var i = this.Services.Count - 1; i >= 0; i--)
+            {
+                if (this.Services[i].ServiceType == serviceType)
+                {
+                    return this.Services[i].Lifetime == ServiceLifetime.Singleton;
+                }
+            }
+
+            return false;
+        }
+
+        private static object Create(IServiceProvider serviceProvider, ObjectFactory factory, ValidationBehaviors validationBehaviors)
+        {
             var validator = factory(serviceProvider, arguments: null);
 
             if (validator is IMessageProviderTarget messageProviderTarget)
@@ -274,26 +436,21 @@ namespace NValidation
 
             foreach (var validatedType in validatedTypes)
             {
-                this.Add(validatedType, validatorType, lifetime);
+                this.Add(validatedType, validatorType, lifetime, isExplicit: true);
             }
 
             return this;
         }
 
         /// <remarks>
-        /// Two validators for the same payload are rejected rather than resolved by whichever
-        /// <see cref="Assembly.GetTypes"/> happened to return first: that order is not documented,
-        /// which would make the choice arbitrary and the behaviour reproducible only by luck. A payload
-        /// the caller has already named a validator for is settled, so the scan passes over it rather
-        /// than complaining about a choice that was made.
+        /// The scan only collects what it found. Which validator serves a payload — and whether the
+        /// answer is a contradiction at all — is settled in <see cref="Resolve"/> once the whole
+        /// delegate has run, because a payload this scan found may be named explicitly on a line the
+        /// scan has not reached yet.
         /// </remarks>
         private NValidationOptions AddValidatorsFromAssembly(ServiceLifetime? lifetime, params Assembly[] assemblies)
         {
             ArgumentNullException.ThrowIfNull(assemblies);
-
-            var settled = new HashSet<Type>(this.registrations.Select(registration => registration.ValidatedType));
-            var found = new Dictionary<Type, Type>();
-            var discovered = new List<(Type ValidatedType, Type ValidatorType)>();
 
             foreach (var assembly in assemblies)
             {
@@ -301,37 +458,9 @@ namespace NValidation
                 {
                     foreach (var validatedType in ValidatorTypeInfo.GetValidatedTypes(validatorType))
                     {
-                        // An explicit registration wins — TryAdd would keep it anyway — so a payload it
-                        // already covers is not something the scan has to choose about.
-                        if (settled.Contains(validatedType))
-                        {
-                            continue;
-                        }
-
-                        if (found.TryGetValue(validatedType, out var already))
-                        {
-                            if (already == validatorType)
-                            {
-                                continue;
-                            }
-
-                            throw new InvalidOperationException(
-                                $"'{already}' and '{validatorType}' both validate '{Validated(validatedType)}', so a " +
-                                "scan cannot choose between them. Register the one you want with AddValidator " +
-                                "before scanning — an explicit registration wins — or keep only one of them " +
-                                "in the assemblies being scanned.");
-                        }
-
-                        found.Add(validatedType, validatorType);
-                        discovered.Add((validatedType, validatorType));
+                        this.Add(validatedType, validatorType, lifetime, isExplicit: false);
                     }
                 }
-            }
-
-            // In discovery order, so the whole scan is rejected before any of it is registered.
-            foreach (var (validatedType, validatorType) in discovered)
-            {
-                this.Add(validatedType, validatorType, lifetime);
             }
 
             return this;
@@ -346,11 +475,20 @@ namespace NValidation
             return validatorServiceType.GetGenericArguments()[0];
         }
 
-        private NValidationOptions Add(Type validatedType, Type validatorType, ServiceLifetime? lifetime)
+        private NValidationOptions Add(Type validatedType, Type validatorType, ServiceLifetime? lifetime, bool isExplicit)
         {
-            this.registrations.Add((validatedType, validatorType, lifetime));
+            this.registrations.Add(new Registration(validatedType, validatorType, lifetime, isExplicit));
 
             return this;
         }
+
+        /// <summary>
+        /// One validator asked for, and whether it was named or merely found.
+        /// </summary>
+        private readonly record struct Registration(
+            Type ValidatedType,
+            Type ValidatorType,
+            ServiceLifetime? Lifetime,
+            bool Explicit);
     }
 }

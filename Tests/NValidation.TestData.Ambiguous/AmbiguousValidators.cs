@@ -6,22 +6,22 @@ namespace NValidation.TestData.Ambiguous
     /// </summary>
     public sealed class FirstAmbiguousValidator : Validator<AmbiguousPayload>
     {
-        public const string Code = "First";
+        public const string PropertyName = "First";
 
         public FirstAmbiguousValidator()
         {
-            this.Property(p => p.Name).WithErrorCode(Code).NotEmpty();
+            this.Property(p => p.Name).WithPropertyName(PropertyName).NotEmpty();
         }
     }
 
     /// <inheritdoc cref="FirstAmbiguousValidator"/>
     public sealed class SecondAmbiguousValidator : Validator<AmbiguousPayload>
     {
-        public const string Code = "Second";
+        public const string PropertyName = "Second";
 
         public SecondAmbiguousValidator()
         {
-            this.Property(p => p.Name).WithErrorCode(Code).NotEmpty();
+            this.Property(p => p.Name).WithPropertyName(PropertyName).NotEmpty();
         }
     }
 }

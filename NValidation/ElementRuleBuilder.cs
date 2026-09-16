@@ -12,8 +12,10 @@ namespace NValidation
     /// extended by exactly the same rule methods as anywhere else, so nothing has to be written twice
     /// for elements.
     /// </remarks>
-    public sealed class ElementRuleBuilder<TElement> : Validator<TElement>
+    public sealed class ElementRuleBuilder<TElement>
     {
+        private readonly ElementRules rules = new();
+
         private Func<TElement, bool>? condition;
 
         private IValidator<TElement>? elementValidator;
@@ -24,10 +26,20 @@ namespace NValidation
         {
         }
 
-        /// <inheritdoc cref="Validator{T}.Property{TProperty}"/>
-        public new PropertyRuleBuilder<TElement, TProperty?> Property<TProperty>(Expression<Func<TElement, TProperty>> expression)
+        /// <summary>
+        /// How much one entry reports: across its properties, and within one property's chain.
+        /// </summary>
+        /// <remarks>
+        /// Built where it is declared rather than by the container, so — like a validator constructed
+        /// with <c>new</c> — it takes the built-in defaults rather than what <c>AddNValidation</c>
+        /// configured. Every entry is still walked whatever this says; it governs what one entry reports.
+        /// </remarks>
+        public ValidationBehaviors ValidationBehaviors => this.rules.ValidationBehaviors;
+
+        /// <inheritdoc cref="Validator{T}.Property{TProperty}(System.Linq.Expressions.Expression{System.Func{T, TProperty}})"/>
+        public PropertyRuleBuilder<TElement, TProperty?> Property<TProperty>(Expression<Func<TElement, TProperty>> expression)
         {
-            return base.Property(expression);
+            return this.rules.Declare(expression);
         }
 
         /// <summary>
@@ -37,7 +49,7 @@ namespace NValidation
         /// </summary>
         public PropertyRuleBuilder<TElement, TElement?> Element()
         {
-            return this.RuleForSelf();
+            return this.rules.DeclareSelf();
         }
 
         /// <summary>
@@ -78,10 +90,10 @@ namespace NValidation
         /// </summary>
         /// <remarks>
         /// The position is still passed, for an identity which reads better one-based, or which falls
-        /// back to it. Only the code changes; <see cref="ValidationMessagePlaceholders.CollectionIndex"/>
+        /// back to it. Only the reported property name changes; <see cref="ValidationMessagePlaceholders.CollectionIndex"/>
         /// keeps reporting the position.
         /// <para>
-        /// Whatever this returns becomes part of the error code, which a host renders straight into its
+        /// Whatever this returns becomes part of the property name, which a host renders straight into its
         /// response — as a JSON member name, for a problem details body. Identify an element by
         /// something short and of the application's own choosing; a value the caller sent is echoed back
         /// at whatever length the caller chose.
@@ -98,7 +110,7 @@ namespace NValidation
 
         internal async ValueTask ValidateElementsAsync(
             IEnumerable<TElement> elements,
-            string code,
+            string propertyName,
             Action<ValidationError> report,
             IValidationMessageProvider messages,
             CancellationToken cancellationToken)
@@ -106,7 +118,7 @@ namespace NValidation
             var index = 0;
 
             // One list for the whole collection, cleared per entry: what an entry reports is copied out
-            // under the entry's own code straight away, so nothing has to be kept between entries. A
+            // under the entry's own propertyName straight away, so nothing has to be kept between entries. A
             // list per entry was the bulk of what an entry cost.
             List<ValidationError>? elementErrors = null;
 
@@ -124,7 +136,7 @@ namespace NValidation
                     continue;
                 }
 
-                var elementMessages = new IndexedMessageProvider<TElement>(messages, code, element, position, this.indexer);
+                var elementMessages = new IndexedMessageProvider<TElement>(messages, propertyName, element, position, this.indexer);
 
                 elementErrors ??= [];
                 elementErrors.Clear();
@@ -140,7 +152,7 @@ namespace NValidation
             List<ValidationError> elementErrors,
             CancellationToken cancellationToken)
         {
-            await this.ValidateIntoAsync(element, elementErrors, messages, cancellationToken);
+            await this.rules.ValidateIntoAsync(element, elementErrors, messages, cancellationToken);
 
             if (this.elementValidator != null)
             {
@@ -156,17 +168,45 @@ namespace NValidation
 
             foreach (var error in elementErrors)
             {
-                report(new ValidationError(Compose(messages.ElementCode, error.Code), error.Message));
+                report(new ValidationError(
+                    Compose(messages.ElementPropertyName, error.PropertyName),
+                    error.Message,
+                    error.ErrorCode,
+                    error.Arguments));
             }
         }
 
         /// <summary>
-        /// The code a failure is reported under. A rule about the element itself carries no property, so
-        /// the element's position is the whole code.
+        /// The property name a failure is reported under. A rule about the element itself carries no
+        /// property, so the element's position is the whole property name.
         /// </summary>
-        private static string Compose(string elementCode, string propertyCode)
+        private static string Compose(string elementPropertyName, string propertyName)
         {
-            return propertyCode.Length == 0 ? elementCode : $"{elementCode}.{propertyCode}";
+            return propertyName.Length == 0 ? elementPropertyName : $"{elementPropertyName}.{propertyName}";
+        }
+
+        /// <summary>
+        /// The rules an entry has to satisfy, as an ordinary validator.
+        /// </summary>
+        /// <remarks>
+        /// Held rather than inherited. An element builder that <em>was</em> a validator was publicly an
+        /// <see cref="IValidator{T}"/> which ignored half of its own configuration: running it directly
+        /// applied the property rules but not <see cref="Where"/>, <see cref="SetValidator"/> or
+        /// <see cref="WithIndexer"/>, so it gave a different verdict than the <c>ForEach</c> it belongs
+        /// to — and, satisfying <see cref="IValidator{T}"/>, it could even be passed to its own
+        /// <see cref="SetValidator"/>.
+        /// </remarks>
+        private sealed class ElementRules : Validator<TElement>
+        {
+            public PropertyRuleBuilder<TElement, TProperty?> Declare<TProperty>(Expression<Func<TElement, TProperty>> expression)
+            {
+                return this.Property(expression);
+            }
+
+            public PropertyRuleBuilder<TElement, TElement?> DeclareSelf()
+            {
+                return this.RuleForSelf();
+            }
         }
     }
 }

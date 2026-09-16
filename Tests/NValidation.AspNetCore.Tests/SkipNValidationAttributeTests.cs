@@ -5,13 +5,13 @@ namespace NValidation.AspNetCore.Tests
     /// string is a reason someone started writing and never finished.
     /// </summary>
     [Trait(Traits.Category, Traits.UnitTests)]
-    public class SkipValidationAttributeTests
+    public class SkipNValidationAttributeTests
     {
         [Fact]
         public void Constructor_WithoutAReason_LeavesTheReasonUnstated()
         {
             // Act
-            var attribute = new SkipValidationAttribute();
+            var attribute = new SkipNValidationAttribute();
 
             // Assert
             attribute.Reason.Should().BeNull();
@@ -21,7 +21,7 @@ namespace NValidation.AspNetCore.Tests
         public void Constructor_WithAReason_KeepsIt()
         {
             // Act
-            var attribute = new SkipValidationAttribute("Reports failures per row, not as a 400.");
+            var attribute = new SkipNValidationAttribute("Reports failures per row, not as a 400.");
 
             // Assert
             attribute.Reason.Should().Be("Reports failures per row, not as a 400.");
@@ -34,7 +34,7 @@ namespace NValidation.AspNetCore.Tests
         public void Constructor_WithAnEmptyReason_Throws(string? reason)
         {
             // Act
-            var act = () => new SkipValidationAttribute(reason!);
+            var act = () => new SkipNValidationAttribute(reason!);
 
             // Assert
             act.Should().Throw<ArgumentException>().WithParameterName("reason");

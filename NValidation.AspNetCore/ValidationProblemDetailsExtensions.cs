@@ -5,12 +5,20 @@ namespace NValidation.AspNetCore
 {
     /// <summary>
     /// Maps a validation failure onto the RFC7807 shape: a 400 problem details whose top-level
-    /// <c>errors</c> member holds the messages grouped by <see cref="ValidationError.Code"/>.
+    /// <c>errors</c> member holds the messages grouped by <see cref="ValidationError.PropertyName"/>.
     /// </summary>
     /// <remarks>
     /// Only <c>errors</c> is filled in. Title, Detail, Type and the trace identifier are deliberately
     /// left to the host, so a response built here is indistinguishable from the ones its own problem
     /// details pipeline produces.
+    /// <para>
+    /// The concrete type is <see cref="HttpValidationProblemDetails"/> rather than a
+    /// <see cref="ProblemDetails"/> carrying a dictionary under <c>Extensions["errors"]</c>. The two
+    /// serialize alike through the reflection-based serializer, but an extension member is typed
+    /// <see cref="object"/>, so writing one needs the runtime type resolved at serialization time —
+    /// which a published-ahead-of-time host, serializing through a source-generated context, cannot do.
+    /// <see cref="HttpValidationProblemDetails"/> is a framework type its own context already knows.
+    /// </para>
     /// </remarks>
     public static class ValidationProblemDetailsExtensions
     {
@@ -21,7 +29,7 @@ namespace NValidation.AspNetCore
         /// <paramref name="validationResult"/> succeeded. A problem details response always reports at
         /// least one error, so a successful result has nothing to report.
         /// </exception>
-        public static ProblemDetails ToProblemDetails(this ValidationResult validationResult)
+        public static HttpValidationProblemDetails ToProblemDetails(this ValidationResult validationResult)
         {
             ArgumentNullException.ThrowIfNull(validationResult);
 
@@ -37,26 +45,31 @@ namespace NValidation.AspNetCore
         /// The problem details for a <paramref name="validationException"/>, for the path where the
         /// failure was thrown rather than returned.
         /// </summary>
-        public static ProblemDetails ToProblemDetails(this ValidationException validationException)
+        public static HttpValidationProblemDetails ToProblemDetails(this ValidationException validationException)
         {
             ArgumentNullException.ThrowIfNull(validationException);
 
             return Create(validationException.Errors);
         }
 
-        private static ProblemDetails Create<TMessages>(IReadOnlyDictionary<string, TMessages> errors)
+        private static HttpValidationProblemDetails Create<TMessages>(IReadOnlyDictionary<string, TMessages> errors)
             where TMessages : IEnumerable<string>
         {
-            var problemDetails = new ProblemDetails
+            var byProperty = new Dictionary<string, string[]>(errors.Count, StringComparer.Ordinal);
+
+            foreach (var (propertyName, messages) in errors)
+            {
+                byProperty[propertyName] = messages as string[] ?? [.. messages];
+            }
+
+            return new HttpValidationProblemDetails(byProperty)
             {
                 Status = StatusCodes.Status400BadRequest,
-                Extensions =
-                {
-                    ["errors"] = errors
-                }
-            };
 
-            return problemDetails;
+                // The constructor fills one in. Leaving it would make this the one error response in the
+                // application whose title the host did not choose.
+                Title = null,
+            };
         }
     }
 }

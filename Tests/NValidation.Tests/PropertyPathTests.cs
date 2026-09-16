@@ -1,7 +1,7 @@
 namespace NValidation.Tests
 {
     /// <summary>
-    /// What a rule may be declared for. The path an expression produces is the error code, and it is
+    /// What a rule may be declared for. The path an expression produces is the property name, and it is
     /// also the key the compiled accessor and the reachability guard are cached under — so an expression
     /// whose path does not identify it has to be refused where it is written, not silently share another
     /// rule's delegate at run time.
@@ -42,7 +42,7 @@ namespace NValidation.Tests
 
         /// <summary>
         /// A rule declared for something the validated object does not own is not a rule about the
-        /// payload, however plausible the code it would report under looks.
+        /// payload, however plausible the propertyName it would report under looks.
         /// </summary>
         [Fact]
         public void Property_WithAPathRootedInACapturedObject_Throws()

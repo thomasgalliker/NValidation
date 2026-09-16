@@ -1,5 +1,59 @@
 1.0
 - Initial release.
+- ValidationError now answers three questions rather than one: PropertyName (where the failure is,
+  the dotted member path that was previously called Code), ErrorCode (which rule failed) and Message.
+  Arguments carries the values the message was rendered from. Renamed accordingly:
+  ValidationMessageKeys -> ValidationErrorCodes, MessageKeyProvider -> ErrorCodeProvider,
+  IValidationMessageProvider.GetMessage(messageKey, ...) -> GetMessage(errorCode, ...).
+- WithErrorCode now names the rule that failed rather than moving the reported property name. What it
+  used to do is WithPropertyName. The error code is also the key the message is resolved under, so a
+  Must rule localizes by being named instead of by carrying a literal.
+- Comparison rules now work for enums. EqualTo, NotEqualTo, GreaterThan, GreaterThanOrEqualTo,
+  LessThan, LessThanOrEqualTo and Between no longer require IComparable<T>/IEquatable<T>, which
+  System.Enum does not implement, so comparing an enum no longer means Must with a hardcoded literal.
+  A value type nothing can order is refused where the rule is declared rather than on the request.
+- Collapsed the comparison overloads from 50 to 38 (the library's rule surface from 104 to 92) by
+  removing the redundant non-nullable other-property forms. Call sites are unaffected: the lambda's
+  value converts to its nullable form and the reported property name is unchanged.
+- Added PrecisionScale for decimals, OneOf for a closed set of values, and MustAsync.
+- Added NValidationOptions.PromoteSafeValidatorsToSingleton: registers a validator as a singleton when
+  every constructor parameter resolves to a singleton or to another validator that also qualifies.
+  Resolving the sample four-validator graph drops from 8,489 ns / 24,200 B to 21.8 ns / 128 B.
+- Added Validator<T>.Property(name, accessor) and Property(name, accessor, isReachable): the same rule
+  chain without the expression tree, for a validator on a hot path.
+- Built-in English is now correct at a count of one ("must contain at least 1 entry"). A message
+  template may select between two forms with {MinCount:entry|entries}, which any provider and any
+  translation can use.
+- ExpectedError now matches an expected message exactly, as AwesomeAssertions' Be does, instead of
+  treating it as a wildcard pattern. ExpectedError.Matching(name, pattern) keeps the wildcards and
+  ExpectedError.Any(name) accepts any message, so a looser assertion says so at the call site.
+- The compiled-accessor and reachability caches are now held per closed generic rather than in a
+  dictionary keyed by Type. A validator declared for a type from a collectible AssemblyLoadContext no
+  longer roots that context for the life of the process.
+- Faster: validating is 1-7% quicker and constructing a validator allocates 14% less, because a
+  synchronous rule is no longer wrapped in a lambda returning a completed ValueTask and a
+  single-segment property name no longer builds a list.
+- Added Must(predicate) without a message, WithMessage(Func<T, string>) and
+  WithMessage(Func<T, TProperty, string>), ValidationAssertions.ShouldReportErrorCode, and the
+  BetweenExclusive/BetweenExclusiveFrom/BetweenExclusiveTo codes for the excluded-bound forms.
+- Renamed SkipValidationAttribute to SkipNValidationAttribute ([SkipNValidation]). .NET 10's shared
+  framework ships Microsoft.Extensions.Validation.SkipValidationAttribute, so importing both
+  namespaces made the shorter name a CS0104 ambiguity rather than a warning.
+- ElementRuleBuilder<T> no longer derives from Validator<T>. It was publicly an IValidator<T> that
+  ignored Where, SetValidator and WithIndexer, so running it directly gave a different verdict than
+  the ForEach it belongs to. Property, Element and ValidationBehaviors are unchanged.
+- Fixed: a message template whose format specifier a value cannot honour rendered as a FormatException
+  out of ValidateAsync, turning a bad request into a server error.
+- Fixed: Between with an excluded bound reported the inclusive wording, naming the two values it had
+  just refused as the permitted range. It now has its own codes for each combination of bounds.
+- Fixed: WithMessage did not substitute placeholders, and replaced the message of every failure a
+  composed validator reported. It now substitutes, and is refused where it follows SetValidator or
+  ForEach.
+- Fixed: a validator serving two payloads did not compile, though the registration supports one.
+- Fixed: an explicit AddValidator written after AddValidatorsFromAssembly was silently ignored.
+  Registration is now order-independent, and two conflicting explicit registrations are refused.
+- Fixed: the problem details body carried its errors in an extension member typed object, which a
+  host publishing ahead of time could not serialize. It is now HttpValidationProblemDetails.
 - Added ValidationBehavior: how much a validator reports, along two axes — across its properties
   (ValidationBehaviors.Class) and within one property's rule chain (ValidationBehaviors.Property).
   Configurable on the registration, on a validator, and per chain with WithValidationBehavior.
@@ -9,10 +63,10 @@
   package and depending on no test framework and no assertion library. result.ShouldReport("Vin",
   "Vin is required.") states the whole expected result — nothing else may be present, the count is
   implied, order is ignored — and the same overloads take a ValidationException or a
-  { code: [messages] } dictionary. An expected message is matched with wildcards, so a fragment is as
+  { propertyName: [messages] } dictionary. An expected message is matched with wildcards, so a fragment is as
   easy to express as the whole of it. A failure throws ValidationAssertionException naming what was
   missing, what was unexpected, and the near miss in between.
   Also TestValidator<T>, which declares the rule under test in the test itself and takes an optional
-  IValidationMessageProvider; MessageKeyProvider, for assertions independent of any translation;
-  TestTimeProvider, for the date rules; and ShouldResolveEveryCoreMessageKey, which holds an
+  IValidationMessageProvider; ErrorCodeProvider, for assertions independent of any translation;
+  TestTimeProvider, for the date rules; and ShouldResolveEveryCoreErrorCode, which holds an
   application's own message provider to every key this core can report.

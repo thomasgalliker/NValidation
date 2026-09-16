@@ -4,4 +4,6 @@
 public static class Collections
 {
     public const string CultureSpecific = "CultureSpecific";
+
+    public const string Concurrency = "Concurrency";
 }

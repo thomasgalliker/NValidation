@@ -5,7 +5,7 @@ namespace NValidation.Tests
         /// <summary>
         /// A rule declared on the element itself names no property, so the message would otherwise open
         /// with the empty string — " must be greater than or equal to 0." The element is named by the
-        /// very code the failure is reported under, which is what a reader has to match it to anyway.
+        /// very propertyName the failure is reported under, which is what a reader has to match it to anyway.
         /// </summary>
         [Fact]
         public async Task Element_NamesTheElement_InTheMessage()
@@ -70,7 +70,7 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// The identity a caller chose is what names the element, in the message as well as in the code.
+        /// The identity a caller chose is what names the element, in the message as well as in the name.
         /// </summary>
         [Fact]
         public async Task Element_WithAnIndexer_NamesTheElementByTheIdentity()

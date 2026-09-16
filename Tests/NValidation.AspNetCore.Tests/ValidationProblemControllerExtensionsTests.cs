@@ -20,11 +20,10 @@ namespace NValidation.AspNetCore.Tests
             // Assert
             result.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
 
-            var problemDetails = result.Value.Should().BeOfType<ProblemDetails>().Subject;
+            var problemDetails = result.Value.Should().BeOfType<HttpValidationProblemDetails>().Subject;
             problemDetails.Status.Should().Be(StatusCodes.Status400BadRequest);
 
-            var errors = (IReadOnlyDictionary<string, string[]>)problemDetails.Extensions["errors"]!;
-            errors.ShouldReport("Vin", "The VIN is required.");
+            problemDetails.Errors.ShouldReport("Vin", "The VIN is required.");
         }
 
         [Fact]

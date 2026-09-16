@@ -279,7 +279,7 @@ namespace NValidation.Tests
         public async Task NotEmpty_OnText_ReportsNotEmpty()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.Vin).NotEmpty();
 
             // Act
@@ -293,7 +293,7 @@ namespace NValidation.Tests
         public async Task NotEmpty_OnACollection_ReportsNotEmpty()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.FeatureIds).NotEmpty();
 
             // Act
@@ -307,7 +307,7 @@ namespace NValidation.Tests
         public async Task NotDefault_ReportsNotDefault_NotNotEmpty()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.FirstRegistration).NotDefault();
 
             // Act
@@ -321,7 +321,7 @@ namespace NValidation.Tests
         public async Task NotNull_ReportsNotNull()
         {
             // Arrange
-            var validator = new TestValidator<Car>(MessageKeyProvider.Instance);
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
             validator.Property(c => c.Model).NotNull();
 
             // Act

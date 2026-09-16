@@ -2,7 +2,7 @@ namespace NValidation.Internals
 {
     /// <summary>
     /// The name a message shows for a property: the display name the property opted into with
-    /// <c>WithDisplayName(...)</c>, or — the default — its code, i.e. its C# property name.
+    /// <c>WithDisplayName(...)</c>, or — the default — its property name, i.e. its C# member name.
     /// </summary>
     /// <remarks>
     /// Built per validation rather than per validator, because a localized display name has to be
@@ -29,16 +29,16 @@ namespace NValidation.Internals
                 if (rule.DisplayName != null)
                 {
                     displayNames ??= new Dictionary<string, Func<string>>(StringComparer.Ordinal);
-                    displayNames[rule.Code] = rule.DisplayName;
+                    displayNames[rule.PropertyName] = rule.DisplayName;
                 }
             }
 
             return displayNames == null ? None : new PropertyDisplayNames(displayNames);
         }
 
-        public string Resolve(string code)
+        public string Resolve(string propertyName)
         {
-            return this.displayNames.TryGetValue(code, out var displayName) ? displayName() : code;
+            return this.displayNames.TryGetValue(propertyName, out var displayName) ? displayName() : propertyName;
         }
     }
 }

@@ -1,7 +1,7 @@
 namespace NValidation.Tests
 {
     /// <summary>
-    /// Covers the validator base class itself — how a property's error code is derived, how a rule chain
+    /// Covers the validator base class itself — how a property's property name is derived, how a rule chain
     /// runs, and how a nested validator is merged — independently of any concrete rule.
     /// </summary>
     [Trait(Traits.Category, Traits.UnitTests)]
@@ -43,7 +43,7 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// A nested path becomes a dotted code, which is the convention callers bind to.
+        /// A nested path becomes a dotted propertyName, which is the convention callers bind to.
         /// </summary>
         [Fact]
         public async Task ValidateAsync_TakesTheErrorCode_FromANestedPropertyExpression()
@@ -121,7 +121,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
 
             // Assert
-            result.ShouldReport(expectedCodes.Select(code => new ExpectedError(code)));
+            result.ShouldReport(expectedCodes.Select(ExpectedError.Any));
         }
 
         /// <summary>
@@ -263,8 +263,9 @@ namespace NValidation.Tests
 
             // Assert
             result.ShouldReport([
-                new("Vin"),                                          // held back to one by the override
-                new("RegistrationPlate"), new("RegistrationPlate")]); // still reports both
+                ExpectedError.Any("Vin"),                            // held back to one by the override
+                ExpectedError.Any("RegistrationPlate"),
+                ExpectedError.Any("RegistrationPlate")]);            // still reports both
         }
 
         /// <summary>
@@ -286,7 +287,7 @@ namespace NValidation.Tests
             var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
 
             // Assert
-            result.ShouldReport(expectedCodes.Select(code => new ExpectedError(code)));
+            result.ShouldReport(expectedCodes.Select(ExpectedError.Any));
         }
 
         /// <summary>
@@ -452,7 +453,7 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// A rule which reports its own codes (one error per element of a collection, say) keeps them;
+        /// A rule which reports its own property names (one error per element of a collection, say) keeps them;
         /// only the wording is replaced.
         /// </summary>
         [Fact]
@@ -471,6 +472,369 @@ namespace NValidation.Tests
             result.ShouldReport("FeatureIds[0]", "the replacement");
         }
 
+        /// <summary>
+        /// A message of the caller's own is a template like the shipped ones, substituted against exactly
+        /// the arguments the rule supplies. Handing it back unsubstituted would render its braces into
+        /// the response, and naming a placeholder is the first thing anyone tries.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_WithMessage_SubstitutesThePlaceholdersTheRuleSupplies()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin)
+                .MinimumLength(17)
+                .WithMessage("{PropertyName} needs {MinLength} characters.");
+
+            var car = Cars.Car();
+            car.Vin = "TOOSHORT";
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport("Vin", "Vin needs 17 characters.");
+        }
+
+        /// <summary>
+        /// The display name is what a message calls the property, so an overridden message gets it too.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_WithMessage_SubstitutesTheDisplayName()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin)
+                .WithDisplayName("Vehicle ID")
+                .NotEmpty()
+                .WithMessage("{PropertyName} is missing.");
+
+            // Act
+            var result = await validator.ValidateAsync(new Car());
+
+            // Assert
+            result.ShouldReport("Vin", "Vehicle ID is missing.");
+        }
+
+        [Fact]
+        public async Task ValidateAsync_WithMessage_CanNameTheObjectBeingValidated()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin)
+                .Must(vin => vin == null, "replaced below")
+                .WithMessage(car => $"The VIN {car.Vin} is already registered.");
+
+            var car = Cars.Car();
+            car.Vin = "WVWZZZ1JZXW000001";
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport("Vin", "The VIN WVWZZZ1JZXW000001 is already registered.");
+        }
+
+        [Fact]
+        public async Task ValidateAsync_WithMessage_CanNameTheValueThatFailed()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage)
+                .GreaterThan(100_000)
+                .WithMessage((_, mileage) => $"{mileage} km is not enough.");
+
+            var car = Cars.Car();
+            car.Mileage = 42;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport("Mileage", "42 km is not enough.");
+        }
+
+        /// <summary>
+        /// What a composed validator found is its own judgement: it reported several things, each under
+        /// its own name, and one replacement wording cannot stand for all of them. Refused where it is
+        /// written rather than producing the same sentence under every one of those property names.
+        /// </summary>
+        [Fact]
+        public void WithMessage_AfterSetValidator_Throws()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
+            var modelValidator = new TestValidator<CarModel>();
+            modelValidator.Property(m => m.Name).NotEmpty();
+
+            // Act
+            var act = () => validator.Property(c => c.Model)
+                .SetValidator(modelValidator)
+                .WithMessage("the model is invalid");
+
+            // Assert
+            act.Should().Throw<InvalidOperationException>().WithMessage("*composed validator*");
+        }
+
+        /// <summary>
+        /// Every shipped rule names itself, so a client can tell two failures of one property apart
+        /// without reading English — which three of the built-in messages make impossible, since
+        /// NotEmpty, NotNull and NotDefault all render "is required".
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_ReportsTheCodeOfTheRuleThatFailed()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).MinimumLength(17);
+
+            var car = Cars.Car();
+            car.Vin = "SHORT";
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReportErrorCode("Vin", "MinimumLength");
+        }
+
+        /// <summary>
+        /// The arguments the message was rendered from, for a caller which logs the failure in parts.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_CarriesTheArgumentsTheMessageWasRenderedFrom()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).WithDisplayName("Vehicle ID").MinimumLength(17);
+
+            var car = Cars.Car();
+            car.Vin = "SHORT";
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            var arguments = result.Errors.Single().Arguments!;
+            arguments["PropertyName"].Should().Be("Vehicle ID");
+            arguments["MinLength"].Should().Be(17);
+        }
+
+        /// <summary>
+        /// One token: it names the rule a client branches on and selects the text the host resolves, so
+        /// a rule of the caller's own is localizable without a second modifier.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_WithErrorCode_NamesTheRuleAndResolvesTheMessageUnderIt()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>(new StubMessageProvider("SwissPlate", "The plate must be Swiss."));
+            validator.Property(c => c.Vin)
+                .Must(vin => vin != null && vin.StartsWith("CH", StringComparison.Ordinal))
+                .WithErrorCode("SwissPlate");
+
+            // Act
+            var result = await validator.ValidateAsync(new Car());
+
+            // Assert
+            result.ShouldReportErrorCode("Vin", "SwissPlate");
+            result.Errors.Single().Message.Should().Be("The plate must be Swiss.");
+        }
+
+        /// <summary>
+        /// Where the failure is reported and which rule reported it are separate answers, so overriding
+        /// one leaves the other alone.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_WithPropertyName_MovesThePathAndLeavesTheCode()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).WithPropertyName("vehicleId").NotEmpty();
+
+            // Act
+            var result = await validator.ValidateAsync(new Car());
+
+            // Assert
+            result.ShouldReportErrorCode("vehicleId", "NotEmpty");
+        }
+
+        /// <summary>
+        /// A failure a composed validator reported keeps its own identity while its path is prefixed,
+        /// so the rule that fired is still legible from the outside.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_WithANestedValidator_KeepsTheCodeOfTheRuleThatFailed()
+        {
+            // Arrange
+            var modelValidator = new TestValidator<CarModel>();
+            modelValidator.Property(m => m.Name).NotEmpty();
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Model).SetValidator(modelValidator);
+
+            var car = Cars.Car();
+            car.Model!.Name = null;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReportErrorCode("Model.Name", "NotEmpty");
+        }
+
+        /// <summary>
+        /// The same for an element of a collection, whose path also gains its position.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_WithElementRules_KeepsTheCodeOfTheRuleThatFailed()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
+
+            var car = Cars.Car();
+            car.ServiceHistory = [new ServiceRecord { Workshop = null }];
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReportErrorCode("ServiceHistory[0].Workshop", "NotEmpty");
+        }
+
+        /// <summary>
+        /// Answers one named code and falls back to the built-in English for the rest.
+        /// </summary>
+        private sealed class StubMessageProvider(string errorCode, string message) : IValidationMessageProvider
+        {
+            public string GetMessage(string code, IReadOnlyDictionary<string, object?> arguments)
+            {
+                return string.Equals(code, errorCode, StringComparison.Ordinal)
+                    ? message
+                    : DefaultValidationMessageProvider.Instance.GetMessage(code, arguments);
+            }
+        }
+
+        [Fact]
+        public void WithErrorCode_WithABlankCode_Throws()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
+            // Act
+            var act = () => validator.Property(c => c.Vin).NotEmpty().WithErrorCode("  ");
+
+            // Assert
+            act.Should().Throw<ArgumentException>();
+        }
+
+        [Fact]
+        public void WithErrorCode_WithoutARuleToApplyItTo_Throws()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
+            // Act
+            var act = () => validator.Property(c => c.Vin).WithErrorCode("VIN_REQUIRED");
+
+            // Assert
+            act.Should().Throw<InvalidOperationException>();
+        }
+
+        /// <summary>
+        /// For the same reason <c>WithMessage</c> is: a composed validator reported several things, each
+        /// under its own code, and one code cannot stand for all of them.
+        /// </summary>
+        [Fact]
+        public void WithErrorCode_AfterSetValidator_Throws()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
+            var modelValidator = new TestValidator<CarModel>();
+            modelValidator.Property(m => m.Name).NotEmpty();
+
+            // Act
+            var act = () => validator.Property(c => c.Model)
+                .SetValidator(modelValidator)
+                .WithErrorCode("MODEL_INVALID");
+
+            // Assert
+            act.Should().Throw<InvalidOperationException>().WithMessage("*composed validator*");
+        }
+
+        /// <summary>
+        /// The escape hatch for a hot path: the same rule, without the expression tree behind it.
+        /// </summary>
+        [Fact]
+        public async Task Property_NamedAndReadDirectly_ReportsUnderThatName()
+        {
+            // Arrange
+            var validator = new NamedPropertyCarValidator();
+
+            // Act
+            var result = await validator.ValidateAsync(new Car());
+
+            // Assert
+            result.ShouldReportErrorCode("Vin", "NotEmpty");
+        }
+
+        /// <summary>
+        /// Without a reachability predicate the accessor would dereference whatever the payload omitted,
+        /// so the overload that takes one is what makes a path through another object safe.
+        /// </summary>
+        [Fact]
+        public async Task Property_NamedWithAReachabilityPredicate_SkipsWhatIsNotThere()
+        {
+            // Arrange
+            var validator = new NamedNestedPropertyCarValidator();
+
+            // Act
+            var absent = await validator.ValidateAsync(new Car());
+            var present = await validator.ValidateAsync(new Car { Model = new CarModel { Name = null } });
+
+            // Assert
+            absent.Errors.Should().BeEmpty();
+            present.ShouldReportErrorCode("Model.Name", "NotEmpty");
+        }
+
+        [Fact]
+        public void Property_NamedWithABlankName_Throws()
+        {
+            // Act
+            var act = () => new BlankNameCarValidator();
+
+            // Assert
+            act.Should().Throw<ArgumentException>();
+        }
+
+        private sealed class NamedPropertyCarValidator : Validator<Car>
+        {
+            public NamedPropertyCarValidator()
+            {
+                this.Property("Vin", static c => c.Vin).NotEmpty();
+            }
+        }
+
+        private sealed class NamedNestedPropertyCarValidator : Validator<Car>
+        {
+            public NamedNestedPropertyCarValidator()
+            {
+                this.Property("Model.Name", static c => c.Model!.Name, static c => c.Model != null).NotEmpty();
+            }
+        }
+
+        private sealed class BlankNameCarValidator : Validator<Car>
+        {
+            public BlankNameCarValidator()
+            {
+                this.Property("  ", static c => c.Vin).NotEmpty();
+            }
+        }
+
         [Fact]
         public void WithMessage_WithoutARuleToApplyItTo_Throws()
         {
@@ -485,7 +849,7 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// The opt-in which replaces the C# property name in the wording — the code is what callers bind
+        /// The opt-in which replaces the C# property name in the wording — the propertyName is what callers bind
         /// to, so it must not follow.
         /// </summary>
         [Fact]
@@ -753,8 +1117,8 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// The error code comes from a property path, so anything else has to be rejected where the rule
-        /// is declared rather than producing a nonsensical code at runtime.
+        /// The property name comes from a property path, so anything else has to be rejected where the rule
+        /// is declared rather than producing a nonsensical propertyName at runtime.
         /// </summary>
         [Fact]
         public void Property_WithAnExpressionWhichIsNotAProperty_Throws()
@@ -795,7 +1159,7 @@ namespace NValidation.Tests
             {
                 await Task.Delay(1, cancellationToken);
 
-                context.AddError(new ValidationError(context.Code, "checked elsewhere"));
+                context.AddError(new ValidationError(context.PropertyName, "checked elsewhere"));
             });
 
             // Act
@@ -863,6 +1227,96 @@ namespace NValidation.Tests
         /// it reports and by which properties they name. Both axes are taken through the constructor
         /// because what is under test is the setting rather than the rules.
         /// </summary>
+        /// <summary>
+        /// The non-generic entry point is what the ASP.NET Core filter calls, having resolved a validator
+        /// by a parameter's runtime type.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_ThroughTheNonGenericInterface_ValidatesTheInstance()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty();
+
+            // Act
+            var result = await ((IValidator)validator).ValidateAsync(new Car());
+
+            // Assert
+            result.ShouldReport("Vin", "Vin is required.");
+        }
+
+        /// <summary>
+        /// A validator may serve more than one payload — <c>ValidatorTypeInfo</c> says so and the
+        /// registration registers every closed interface it finds. Before the base class declared the
+        /// non-generic member, such a type inherited two equally specific defaults and did not compile
+        /// at all (CS8705), so the shape the registration supports could not be written.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_ThroughTheNonGenericInterface_DispatchesOnTheInstanceType()
+        {
+            // Arrange
+            IValidator validator = new CarAndManufacturerValidator();
+
+            // Act
+            var car = await validator.ValidateAsync(new Car());
+            var manufacturer = await validator.ValidateAsync(new Manufacturer());
+
+            // Assert
+            car.ShouldReport("Vin", "Vin is required.");
+            manufacturer.ShouldReport("Name", "Name is required.");
+        }
+
+        /// <summary>
+        /// A single-payload validator handed something else says so, rather than reporting a failure that
+        /// was never judged.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_ThroughTheNonGenericInterface_RefusesAnInstanceOfAnotherType()
+        {
+            // Arrange
+            IValidator validator = new TestValidator<Car>();
+
+            // Act
+            var act = async () => await validator.ValidateAsync(new Manufacturer());
+
+            // Assert
+            (await act.Should().ThrowAsync<InvalidCastException>())
+                .WithMessage("*validates*Car*cannot validate an instance of*Manufacturer*");
+        }
+
+        /// <summary>
+        /// Validates a <see cref="Car"/> through the base class and a <see cref="Manufacturer"/> by hand.
+        /// It re-implements the non-generic member because only it knows about both payloads.
+        /// </summary>
+        private sealed class CarAndManufacturerValidator : Validator<Car>, IValidator<Manufacturer>
+        {
+            public CarAndManufacturerValidator()
+            {
+                this.Property(c => c.Vin).NotEmpty();
+            }
+
+            public ValueTask<ValidationResult> ValidateAsync(Manufacturer instance, CancellationToken cancellationToken = default)
+            {
+                ArgumentNullException.ThrowIfNull(instance);
+
+                return ValueTask.FromResult(string.IsNullOrWhiteSpace(instance.Name)
+                    ? ValidationResult.FromValidationErrors(new ValidationError("Name", "Name is required."))
+                    : ValidationResult.Success);
+            }
+
+            ValueTask<ValidationResult> IValidator.ValidateAsync(object instance, CancellationToken cancellationToken)
+            {
+                ArgumentNullException.ThrowIfNull(instance);
+
+                return instance switch
+                {
+                    Car car => this.ValidateAsync(car, cancellationToken),
+                    Manufacturer manufacturer => this.ValidateAsync(manufacturer, cancellationToken),
+                    _ => throw new InvalidCastException($"Cannot validate an instance of {instance.GetType()}."),
+                };
+            }
+        }
+
         private sealed class TwoFailingPropertiesValidator : Validator<Car>
         {
             /// <summary>

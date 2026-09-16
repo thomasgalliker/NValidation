@@ -3,7 +3,7 @@ using System.Linq.Expressions;
 namespace NValidation.Internals
 {
     /// <summary>
-    /// The other side of a rule which compares two properties of the same object: the code it is
+    /// The other side of a rule which compares two properties of the same object: the property name it is
     /// reported under and the compiled accessor that reads it.
     /// </summary>
     internal static class OtherProperty
@@ -12,9 +12,9 @@ namespace NValidation.Internals
         {
             ArgumentNullException.ThrowIfNull(expression);
 
-            var code = PropertyPath.From(expression);
+            var propertyName = PropertyPath.From(expression);
 
-            return new OtherProperty<T, TValue>(code, PropertyAccessor.For(code, expression), ReachabilityGuard.For(code, expression));
+            return new OtherProperty<T, TValue>(propertyName, PropertyAccessor.For(propertyName, expression), ReachabilityGuard.For(propertyName, expression));
         }
     }
 
@@ -25,14 +25,14 @@ namespace NValidation.Internals
 
         private readonly Func<T, bool>? isReachable;
 
-        public OtherProperty(string code, Func<T, TValue> read, Func<T, bool>? isReachable)
+        public OtherProperty(string propertyName, Func<T, TValue> read, Func<T, bool>? isReachable)
         {
-            this.Code = code;
+            this.PropertyName = propertyName;
             this.read = read;
             this.isReachable = isReachable;
         }
 
-        public string Code { get; }
+        public string PropertyName { get; }
 
         /// <summary>
         /// Reads the compared property, or reports that there is nothing to compare against.
@@ -67,16 +67,16 @@ namespace NValidation.Internals
         public void AddError<TProperty>(RuleContext<T, TProperty> context, ComparisonKind kind)
         {
             context.AddError(
-                Comparison.OtherPropertyMessageKey(kind),
-                (ValidationMessagePlaceholders.OtherPropertyName, context.GetDisplayName(this.Code)));
+                Comparison.OtherPropertyErrorCode(kind),
+                (ValidationMessagePlaceholders.OtherPropertyName, context.GetDisplayName(this.PropertyName)));
         }
 
         /// <inheritdoc cref="AddError{TProperty}(RuleContext{T, TProperty}, ComparisonKind)"/>
         public void AddError<TProperty>(RuleContext<T, TProperty> context, EqualityKind kind)
         {
             context.AddError(
-                Equality.OtherPropertyMessageKey(kind),
-                (ValidationMessagePlaceholders.OtherPropertyName, context.GetDisplayName(this.Code)));
+                Equality.OtherPropertyErrorCode(kind),
+                (ValidationMessagePlaceholders.OtherPropertyName, context.GetDisplayName(this.PropertyName)));
         }
     }
 }

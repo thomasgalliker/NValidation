@@ -12,16 +12,16 @@ namespace NValidation.Tests
         /// Every key the core can report, so a rule added without its message is caught here rather than
         /// by a caller reading the raw key in a response.
         /// </summary>
-        public static TheoryData<string> MessageKeys()
+        public static TheoryData<string> ErrorCodes()
         {
-            var messageKeys = new TheoryData<string>();
+            var errorCodes = new TheoryData<string>();
 
-            foreach (var messageKey in ValidationMessageProviderAssertions.CoreMessageKeys())
+            foreach (var errorCode in ValidationMessageProviderAssertions.CoreErrorCodes())
             {
-                messageKeys.Add(messageKey);
+                errorCodes.Add(errorCode);
             }
 
-            return messageKeys;
+            return errorCodes;
         }
 
         [Fact]
@@ -29,7 +29,7 @@ namespace NValidation.Tests
         {
             // Act
             var message = DefaultValidationMessageProvider.Instance.GetMessage(
-                ValidationMessageKeys.MaximumLength,
+                ValidationErrorCodes.MaximumLength,
                 "Name",
                 (ValidationMessagePlaceholders.MaxLength, 200));
 
@@ -39,15 +39,15 @@ namespace NValidation.Tests
 
         /// <summary>
         /// Has a message at all, and names no placeholder a rule does not supply. Both halves are what
-        /// <see cref="ValidationMessageProviderAssertions.ShouldResolveMessageKey"/> promises any provider,
+        /// <see cref="ValidationMessageProviderAssertions.ShouldResolveErrorCode"/> promises any provider,
         /// so the built-in one is held to the same bar an application's own is.
         /// </summary>
         [Theory]
-        [MemberData(nameof(MessageKeys))]
-        public void GetMessage_ResolvesEveryKeyOfTheCore(string messageKey)
+        [MemberData(nameof(ErrorCodes))]
+        public void GetMessage_ResolvesEveryKeyOfTheCore(string errorCode)
         {
             // Act
-            var act = () => DefaultValidationMessageProvider.Instance.ShouldResolveMessageKey(messageKey);
+            var act = () => DefaultValidationMessageProvider.Instance.ShouldResolveErrorCode(errorCode);
 
             // Assert
             act.Should().NotThrow();
@@ -59,19 +59,52 @@ namespace NValidation.Tests
         /// leave the property out.
         /// </summary>
         [Theory]
-        [MemberData(nameof(MessageKeys))]
-        public void GetMessage_NamesTheFailingProperty_ForEveryKeyOfTheCore(string messageKey)
+        [MemberData(nameof(ErrorCodes))]
+        public void GetMessage_NamesTheFailingProperty_ForEveryKeyOfTheCore(string errorCode)
         {
             // Arrange
             const string propertyName = "TheFailingProperty";
 
             // Act
             var message = DefaultValidationMessageProvider.Instance.GetMessage(
-                messageKey,
+                errorCode,
                 ValidationMessageProviderAssertions.CorePlaceholderArguments(propertyName));
 
             // Assert
-            message.Should().Contain(propertyName, $"{messageKey} must name the failing property");
+            message.Should().Contain(propertyName, $"{errorCode} must name the failing property");
+        }
+
+        /// <summary>
+        /// The built-in English is correct at its boundary values, not only at plural ones.
+        /// </summary>
+        [Theory]
+        [InlineData(1, "Name must be at least 1 character long.")]
+        [InlineData(2, "Name must be at least 2 characters long.")]
+        public void GetMessage_UsesTheSingularForACountOfOne(int minimumLength, string expected)
+        {
+            // Act
+            var message = DefaultValidationMessageProvider.Instance.GetMessage(
+                ValidationErrorCodes.MinimumLength,
+                "Name",
+                (ValidationMessagePlaceholders.MinLength, minimumLength));
+
+            // Assert
+            message.Should().Be(expected);
+        }
+
+        [Theory]
+        [InlineData(1, "Features must contain at least 1 entry.")]
+        [InlineData(3, "Features must contain at least 3 entries.")]
+        public void GetMessage_UsesTheSingularForACollectionOfOne(int minimumCount, string expected)
+        {
+            // Act
+            var message = DefaultValidationMessageProvider.Instance.GetMessage(
+                ValidationErrorCodes.MinimumCount,
+                "Features",
+                (ValidationMessagePlaceholders.MinCount, minimumCount));
+
+            // Assert
+            message.Should().Be(expected);
         }
 
         /// <summary>

@@ -8,24 +8,24 @@ namespace NValidation.Testing
     public static class ValidationMessageProviderAssertions
     {
         /// <summary>
-        /// Every message key the rules of this core can report, i.e. every constant of
-        /// <see cref="ValidationMessageKeys"/>. Also the list of what a provider has to cover.
+        /// Every error code the rules of this core can report, i.e. every constant of
+        /// <see cref="ValidationErrorCodes"/>. Also the list of what a provider has to cover.
         /// </summary>
         /// <remarks>
         /// Written out rather than read by reflection: a trimmer is free to drop the metadata of constants
         /// that were inlined at their use sites, which would silently shorten the list in a published
         /// application.
         /// </remarks>
-        public static IReadOnlyList<string> CoreMessageKeys()
+        public static IReadOnlyList<string> CoreErrorCodes()
         {
-            return MessageKeys;
+            return ErrorCodes;
         }
 
         /// <summary>
         /// Every placeholder name a rule of this core can supply, i.e. every constant of
         /// <see cref="ValidationMessagePlaceholders"/>.
         /// </summary>
-        /// <inheritdoc cref="CoreMessageKeys" path="/remarks"/>
+        /// <inheritdoc cref="CoreErrorCodes" path="/remarks"/>
         public static IReadOnlyList<string> CoreMessagePlaceholders()
         {
             return MessagePlaceholders;
@@ -57,7 +57,7 @@ namespace NValidation.Testing
         }
 
         /// <summary>
-        /// Asserts that <paramref name="provider"/> has a message for <paramref name="messageKey"/> and
+        /// Asserts that <paramref name="provider"/> has a message for <paramref name="errorCode"/> and
         /// that the message leaves no placeholder unresolved.
         /// </summary>
         /// <remarks>
@@ -65,19 +65,19 @@ namespace NValidation.Testing
         /// already labelled input reads better without it, so whether to name it is the translation's
         /// call.
         /// </remarks>
-        /// <exception cref="ArgumentNullException"><paramref name="provider"/> or <paramref name="messageKey"/> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="provider"/> or <paramref name="errorCode"/> is <c>null</c>.</exception>
         /// <exception cref="ValidationAssertionException">The provider has no message for the key, or the message names a placeholder no rule supplies.</exception>
-        public static void ShouldResolveMessageKey(this IValidationMessageProvider provider, string messageKey)
+        public static void ShouldResolveErrorCode(this IValidationMessageProvider provider, string errorCode)
         {
             ArgumentNullException.ThrowIfNull(provider);
-            ArgumentNullException.ThrowIfNull(messageKey);
+            ArgumentNullException.ThrowIfNull(errorCode);
 
-            var message = provider.GetMessage(messageKey, CorePlaceholderArguments(PropertyNameStandIn));
+            var message = provider.GetMessage(errorCode, CorePlaceholderArguments(PropertyNameStandIn));
 
-            if (string.Equals(message, messageKey, StringComparison.Ordinal))
+            if (string.Equals(message, errorCode, StringComparison.Ordinal))
             {
                 throw new ValidationAssertionException(
-                    $"Expected the provider to have a message for \"{messageKey}\", but it answered with the key itself.");
+                    $"Expected the provider to have a message for \"{errorCode}\", but it answered with the key itself.");
             }
 
             var unresolved = FindUnresolvedPlaceholder(message);
@@ -85,28 +85,28 @@ namespace NValidation.Testing
             if (unresolved is not null)
             {
                 throw new ValidationAssertionException(
-                    $"Expected the message for \"{messageKey}\" to name only placeholders a rule supplies, " +
+                    $"Expected the message for \"{errorCode}\" to name only placeholders a rule supplies, " +
                     $"but \"{unresolved}\" was left in \"{message}\".");
             }
         }
 
         /// <summary>
-        /// Asserts <see cref="ShouldResolveMessageKey"/> for every key of
-        /// <see cref="CoreMessageKeys"/>, reporting all of the keys that fail rather than only the first.
+        /// Asserts <see cref="ShouldResolveErrorCode"/> for every key of
+        /// <see cref="CoreErrorCodes"/>, reporting all of the keys that fail rather than only the first.
         /// </summary>
         /// <exception cref="ArgumentNullException"><paramref name="provider"/> is <c>null</c>.</exception>
         /// <exception cref="ValidationAssertionException">Any key fails.</exception>
-        public static void ShouldResolveEveryCoreMessageKey(this IValidationMessageProvider provider)
+        public static void ShouldResolveEveryCoreErrorCode(this IValidationMessageProvider provider)
         {
             ArgumentNullException.ThrowIfNull(provider);
 
             var failures = new List<string>();
 
-            foreach (var messageKey in MessageKeys)
+            foreach (var errorCode in ErrorCodes)
             {
                 try
                 {
-                    provider.ShouldResolveMessageKey(messageKey);
+                    provider.ShouldResolveErrorCode(errorCode);
                 }
                 catch (ValidationAssertionException exception)
                 {
@@ -117,8 +117,8 @@ namespace NValidation.Testing
             if (failures.Count > 0)
             {
                 throw new ValidationAssertionException(
-                    $"Expected the provider to answer for every message key of this core, but {failures.Count} of " +
-                    $"{MessageKeys.Length} failed:{Environment.NewLine}  " +
+                    $"Expected the provider to answer for every error code of this core, but {failures.Count} of " +
+                    $"{ErrorCodes.Length} failed:{Environment.NewLine}  " +
                     string.Join(Environment.NewLine + "  ", failures));
             }
         }
@@ -194,41 +194,47 @@ namespace NValidation.Testing
         /// </summary>
         private const string PropertyNameStandIn = "TheFailingProperty";
 
-        private static readonly string[] MessageKeys =
+        private static readonly string[] ErrorCodes =
         [
-            ValidationMessageKeys.NotEmpty,
-            ValidationMessageKeys.NotNull,
-            ValidationMessageKeys.NotDefault,
-            ValidationMessageKeys.NotNaN,
-            ValidationMessageKeys.MinimumLength,
-            ValidationMessageKeys.MaximumLength,
-            ValidationMessageKeys.Length,
-            ValidationMessageKeys.LengthBetween,
-            ValidationMessageKeys.Matches,
-            ValidationMessageKeys.EmailAddress,
-            ValidationMessageKeys.EmailTopLevelDomain,
-            ValidationMessageKeys.EmailTopLevelDomainNotAllowed,
-            ValidationMessageKeys.NotContaining,
-            ValidationMessageKeys.GreaterThan,
-            ValidationMessageKeys.GreaterThanOrEqualTo,
-            ValidationMessageKeys.LessThan,
-            ValidationMessageKeys.LessThanOrEqualTo,
-            ValidationMessageKeys.Between,
-            ValidationMessageKeys.EqualTo,
-            ValidationMessageKeys.NotEqualTo,
-            ValidationMessageKeys.GreaterThanOtherProperty,
-            ValidationMessageKeys.GreaterThanOrEqualToOtherProperty,
-            ValidationMessageKeys.LessThanOtherProperty,
-            ValidationMessageKeys.LessThanOrEqualToOtherProperty,
-            ValidationMessageKeys.EqualToOtherProperty,
-            ValidationMessageKeys.NotEqualToOtherProperty,
-            ValidationMessageKeys.MultipleOf,
-            ValidationMessageKeys.InThePast,
-            ValidationMessageKeys.InTheFuture,
-            ValidationMessageKeys.IsInEnum,
-            ValidationMessageKeys.MinimumCount,
-            ValidationMessageKeys.MaximumCount,
-            ValidationMessageKeys.NoDuplicates,
+            ValidationErrorCodes.Must,
+            ValidationErrorCodes.NotEmpty,
+            ValidationErrorCodes.NotNull,
+            ValidationErrorCodes.NotDefault,
+            ValidationErrorCodes.NotNaN,
+            ValidationErrorCodes.MinimumLength,
+            ValidationErrorCodes.MaximumLength,
+            ValidationErrorCodes.Length,
+            ValidationErrorCodes.LengthBetween,
+            ValidationErrorCodes.Matches,
+            ValidationErrorCodes.EmailAddress,
+            ValidationErrorCodes.EmailTopLevelDomain,
+            ValidationErrorCodes.EmailTopLevelDomainNotAllowed,
+            ValidationErrorCodes.NotContaining,
+            ValidationErrorCodes.GreaterThan,
+            ValidationErrorCodes.GreaterThanOrEqualTo,
+            ValidationErrorCodes.LessThan,
+            ValidationErrorCodes.LessThanOrEqualTo,
+            ValidationErrorCodes.Between,
+            ValidationErrorCodes.BetweenExclusive,
+            ValidationErrorCodes.BetweenExclusiveFrom,
+            ValidationErrorCodes.BetweenExclusiveTo,
+            ValidationErrorCodes.EqualTo,
+            ValidationErrorCodes.NotEqualTo,
+            ValidationErrorCodes.GreaterThanOtherProperty,
+            ValidationErrorCodes.GreaterThanOrEqualToOtherProperty,
+            ValidationErrorCodes.LessThanOtherProperty,
+            ValidationErrorCodes.LessThanOrEqualToOtherProperty,
+            ValidationErrorCodes.EqualToOtherProperty,
+            ValidationErrorCodes.NotEqualToOtherProperty,
+            ValidationErrorCodes.MultipleOf,
+            ValidationErrorCodes.PrecisionScale,
+            ValidationErrorCodes.OneOf,
+            ValidationErrorCodes.InThePast,
+            ValidationErrorCodes.InTheFuture,
+            ValidationErrorCodes.IsInEnum,
+            ValidationErrorCodes.MinimumCount,
+            ValidationErrorCodes.MaximumCount,
+            ValidationErrorCodes.NoDuplicates,
         ];
 
         private static readonly string[] MessagePlaceholders =
@@ -242,6 +248,9 @@ namespace NValidation.Testing
             ValidationMessagePlaceholders.From,
             ValidationMessagePlaceholders.To,
             ValidationMessagePlaceholders.Step,
+            ValidationMessagePlaceholders.Precision,
+            ValidationMessagePlaceholders.Scale,
+            ValidationMessagePlaceholders.AllowedValues,
             ValidationMessagePlaceholders.MinCount,
             ValidationMessagePlaceholders.MaxCount,
             ValidationMessagePlaceholders.TopLevelDomains,

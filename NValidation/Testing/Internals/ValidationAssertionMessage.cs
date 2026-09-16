@@ -78,29 +78,29 @@ namespace NValidation.Testing.Internals
                 return;
             }
 
-            var rows = new (string Code, string Message, string Reason)[match.UnmatchedExpectations.Count];
+            var rows = new (string PropertyName, string Message, string Reason)[match.UnmatchedExpectations.Count];
 
             for (var index = 0; index < rows.Length; index++)
             {
                 var expectation = match.UnmatchedExpectations[index];
                 var reason = match.NearMisses[index]
-                    ? $"(an error was reported under \"{expectation.Code}\", but its message differs)"
-                    : $"(nothing was reported under \"{expectation.Code}\")";
+                    ? $"(an error was reported under \"{expectation.PropertyName}\", but its message differs)"
+                    : $"(nothing was reported under \"{expectation.PropertyName}\")";
 
-                var (code, text) = Row(expectation);
+                var (propertyName, text) = Row(expectation);
 
-                rows[index] = (code, text, reason);
+                rows[index] = (propertyName, text, reason);
             }
 
             message.AppendLine().AppendLine("Not reported:");
 
-            var codeWidth = rows.Max(row => row.Code.Length);
+            var propertyNameWidth = rows.Max(row => row.PropertyName.Length);
             var messageWidth = rows.Max(row => row.Message.Length);
 
             foreach (var row in rows)
             {
                 message
-                    .Append("  ").Append(row.Code.PadRight(codeWidth))
+                    .Append("  ").Append(row.PropertyName.PadRight(propertyNameWidth))
                     .Append("  ").Append(row.Message.PadRight(messageWidth))
                     .Append("  ").AppendLine(row.Reason);
             }
@@ -118,10 +118,10 @@ namespace NValidation.Testing.Internals
         }
 
         /// <summary>
-        /// Writes the rows with the code column padded to a common width, so a reader can run an eye
-        /// down the codes instead of hunting for them inside the messages.
+        /// Writes the rows with the property-name column padded to a common width, so a reader can run an eye
+        /// down the property names instead of hunting for them inside the messages.
         /// </summary>
-        private static void AppendRows(StringBuilder message, IReadOnlyList<(string Code, string Message)> rows)
+        private static void AppendRows(StringBuilder message, IReadOnlyList<(string PropertyName, string Message)> rows)
         {
             if (rows.Count == 0)
             {
@@ -130,22 +130,22 @@ namespace NValidation.Testing.Internals
                 return;
             }
 
-            var codeWidth = rows.Max(row => row.Code.Length);
+            var propertyNameWidth = rows.Max(row => row.PropertyName.Length);
 
             foreach (var row in rows)
             {
-                message.Append("  ").Append(row.Code.PadRight(codeWidth)).Append("  ").AppendLine(row.Message);
+                message.Append("  ").Append(row.PropertyName.PadRight(propertyNameWidth)).Append("  ").AppendLine(row.Message);
             }
         }
 
-        private static (string Code, string Message) Row(ExpectedError expected)
+        private static (string PropertyName, string Message) Row(ExpectedError expected)
         {
-            return (expected.Code, expected.Message == "*" ? AnyMessage : Quote(expected.Message));
+            return (expected.PropertyName, expected.Match == ExpectedMessage.Any ? AnyMessage : Quote(expected.Message!));
         }
 
-        private static (string Code, string Message) Row(ValidationError error)
+        private static (string PropertyName, string Message) Row(ValidationError error)
         {
-            return (error.Code, Quote(error.Message));
+            return (error.PropertyName, Quote(error.Message));
         }
 
         private static string Count(int count)
