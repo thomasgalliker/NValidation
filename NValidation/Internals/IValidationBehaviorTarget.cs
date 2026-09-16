@@ -14,6 +14,6 @@ namespace NValidation.Internals
     /// </remarks>
     internal interface IValidationBehaviorTarget
     {
-        ValidationBehaviors AmbientValidationBehaviors { set; }
+        ValidationBehaviors RegisteredValidationBehaviors { set; }
     }
 }

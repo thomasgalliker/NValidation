@@ -192,7 +192,7 @@ namespace NValidation
                 }
 
                 var result = await NestedValidation.ValidateAsync(
-                    validator, context.Value, context.Messages, cancellationToken);
+                    validator, context.Value, context.Messages, context.RequestedBehaviors, cancellationToken);
 
                 foreach (var error in result.Errors)
                 {

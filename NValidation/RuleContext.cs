@@ -25,8 +25,10 @@ namespace NValidation
             string? propertyNameOverride,
             IValidationMessageProvider messages,
             PropertyDisplayNames displayNames,
-            List<ValidationError> errors)
+            List<ValidationError> errors,
+            RequestedBehaviors requested)
         {
+            this.RequestedBehaviors = requested;
             this.Instance = instance;
             this.Value = value;
             this.propertyPath = propertyPath;
@@ -36,6 +38,12 @@ namespace NValidation
             this.errors = errors;
             this.errorCountAtStart = errors.Count;
         }
+
+        /// <summary>
+        /// What the run this chain belongs to was asked for, so a rule which composes another validator
+        /// can pass them on rather than letting the composed one fall straight to <see cref="NValidationOptions.Default"/>.
+        /// </summary>
+        internal RequestedBehaviors RequestedBehaviors { get; }
 
         /// <summary>
         /// The object being validated. Rules which compare two properties read the other one from here.

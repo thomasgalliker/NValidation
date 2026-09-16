@@ -113,6 +113,7 @@ namespace NValidation
             string propertyName,
             Action<ValidationError> report,
             IValidationMessageProvider messages,
+            RequestedBehaviors requested,
             CancellationToken cancellationToken)
         {
             var index = 0;
@@ -141,7 +142,7 @@ namespace NValidation
                 elementErrors ??= [];
                 elementErrors.Clear();
 
-                await this.AddErrorsAsync(element, report, elementMessages, elementErrors, cancellationToken);
+                await this.AddErrorsAsync(element, report, elementMessages, elementErrors, requested, cancellationToken);
             }
         }
 
@@ -150,14 +151,15 @@ namespace NValidation
             Action<ValidationError> report,
             IndexedMessageProvider<TElement> messages,
             List<ValidationError> elementErrors,
+            RequestedBehaviors requested,
             CancellationToken cancellationToken)
         {
-            await this.rules.ValidateIntoAsync(element, elementErrors, messages, cancellationToken);
+            await this.rules.ValidateIntoAsync(element, elementErrors, messages, requested, cancellationToken);
 
             if (this.elementValidator != null)
             {
                 await NestedValidation.ValidateIntoAsync(
-                    this.elementValidator, element, elementErrors, messages, cancellationToken);
+                    this.elementValidator, element, elementErrors, messages, requested, cancellationToken);
             }
 
             if (elementErrors.Count == 0)

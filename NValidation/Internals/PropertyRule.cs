@@ -128,9 +128,10 @@ namespace NValidation.Internals
             IValidationMessageProvider messages,
             PropertyDisplayNames displayNames,
             ValidationBehavior propertyBehavior,
+            RequestedBehaviors requested,
             CancellationToken cancellationToken)
         {
-            var context = this.CreateContext(instance, errors, messages, displayNames);
+            var context = this.CreateContext(instance, errors, messages, displayNames, requested);
 
             if (context == null)
             {
@@ -174,7 +175,8 @@ namespace NValidation.Internals
             T instance,
             List<ValidationError> errors,
             IValidationMessageProvider messages,
-            PropertyDisplayNames displayNames)
+            PropertyDisplayNames displayNames,
+            RequestedBehaviors requested)
         {
             if (this.Condition != null && !this.Condition(instance))
             {
@@ -182,7 +184,7 @@ namespace NValidation.Internals
             }
 
             return new RuleContext<T, TProperty>(
-                instance, this.accessor(instance), this.PropertyName, this.PropertyNameOverride, messages, displayNames, errors);
+                instance, this.accessor(instance), this.PropertyName, this.PropertyNameOverride, messages, displayNames, errors, requested);
         }
 
         private sealed class RuleCheck

@@ -1,8 +1,9 @@
 namespace NValidation.Internals
 {
     /// <summary>
-    /// A validator which can be handed the message provider of the run it is taking part in, rather
-    /// than resolving messages through the one it carries itself.
+    /// A validator which can be handed the state of the run it is taking part in — the message
+    /// provider, and the behaviors the run was asked for — rather than resolving both through what it
+    /// carries itself.
     /// </summary>
     /// <remarks>
     /// Implemented by <see cref="Validator{T}"/>. It is what lets a validator composed into another —
@@ -15,13 +16,13 @@ namespace NValidation.Internals
     /// left alone, which is why this is a capability to test for rather than a requirement.
     /// </para>
     /// </remarks>
-    internal interface IMessageProviderAware<in T>
+    internal interface IValidationRunAware<in T>
     {
-        ValueTask<ValidationResult> ValidateAsync(T instance, IValidationMessageProvider messages, CancellationToken cancellationToken);
+        ValueTask<ValidationResult> ValidateAsync(T instance, IValidationMessageProvider messages, RequestedBehaviors requested, CancellationToken cancellationToken);
 
         /// <summary>
         /// The same, reporting into a list the caller owns rather than into a result of its own.
         /// </summary>
-        ValueTask ValidateIntoAsync(T instance, List<ValidationError> errors, IValidationMessageProvider messages, CancellationToken cancellationToken);
+        ValueTask ValidateIntoAsync(T instance, List<ValidationError> errors, IValidationMessageProvider messages, RequestedBehaviors requested, CancellationToken cancellationToken);
     }
 }

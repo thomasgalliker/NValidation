@@ -412,7 +412,7 @@ namespace NValidation
 
             if (validator is IValidationBehaviorTarget validationBehaviorTarget)
             {
-                validationBehaviorTarget.AmbientValidationBehaviors = validationBehaviors;
+                validationBehaviorTarget.RegisteredValidationBehaviors = validationBehaviors;
             }
 
             return validator;

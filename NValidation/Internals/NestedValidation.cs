@@ -10,10 +10,11 @@ namespace NValidation.Internals
             IValidator<T> validator,
             T instance,
             IValidationMessageProvider messages,
+            RequestedBehaviors requested,
             CancellationToken cancellationToken)
         {
-            return validator is IMessageProviderAware<T> aware
-                ? aware.ValidateAsync(instance, messages, cancellationToken)
+            return validator is IValidationRunAware<T> aware
+                ? aware.ValidateAsync(instance, messages, requested, cancellationToken)
                 : validator.ValidateAsync(instance, cancellationToken);
         }
 
@@ -26,11 +27,12 @@ namespace NValidation.Internals
             T instance,
             List<ValidationError> errors,
             IValidationMessageProvider messages,
+            RequestedBehaviors requested,
             CancellationToken cancellationToken)
         {
-            if (validator is IMessageProviderAware<T> aware)
+            if (validator is IValidationRunAware<T> aware)
             {
-                await aware.ValidateIntoAsync(instance, errors, messages, cancellationToken);
+                await aware.ValidateIntoAsync(instance, errors, messages, requested, cancellationToken);
                 return;
             }
 

@@ -263,7 +263,7 @@ namespace NValidation
                 if (context.Value is IEnumerable<TElement> sequence)
                 {
                     await elements.ValidateElementsAsync(
-                        sequence, context.PropertyName, context.AddComposedError, context.Messages, cancellationToken);
+                        sequence, context.PropertyName, context.AddComposedError, context.Messages, context.RequestedBehaviors, cancellationToken);
                 }
             });
         }
