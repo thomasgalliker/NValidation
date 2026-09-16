@@ -120,21 +120,11 @@ steps:
     assemblyfilters: '-xunit*'
 
 - task: DotNetCoreCLI@2
-  displayName: 'Pack NValidation'
+  displayName: 'Pack NValidation NuGets'
   condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
   inputs:
     command: pack
-    packagesToPack: NValidation/NValidation.csproj
-    versioningScheme: byEnvVar
-    versionEnvVar: semVersion
-    nobuild: true
-
-- task: DotNetCoreCLI@2
-  displayName: 'Pack NValidation.AspNetCore'
-  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
-  inputs:
-    command: pack
-    packagesToPack: NValidation.AspNetCore/NValidation.AspNetCore.csproj
+    packagesToPack: NValidation.*/NValidation.*.csproj
     versioningScheme: byEnvVar
     versionEnvVar: semVersion
     nobuild: true
