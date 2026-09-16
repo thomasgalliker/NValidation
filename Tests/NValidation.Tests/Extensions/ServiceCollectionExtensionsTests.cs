@@ -781,9 +781,16 @@ namespace NValidation.Tests.Extensions
 
         /// <summary>
         /// An element builder is built where it is declared rather than by the container, so — like a
-        /// validator constructed with <c>new</c> — the registration's setting does not reach it and it
-        /// keeps the built-in defaults. Pinned because it is a boundary a caller can be surprised by:
-        /// the same setting governs the payload's own properties.
+        /// validator constructed with <c>new</c> — the registration's setting is never <em>handed</em>
+        /// to it. Pinned because it is a boundary a caller can be surprised by: the same setting governs
+        /// the payload's own properties.
+        /// <para>
+        /// Handed is the distinction, not reached. What is <em>read</em> does arrive: see
+        /// <c>NValidationDefaultsTests.ValidationBehaviors_ReachAnElementChain</c> and
+        /// <c>NValidationOptionsTests.ValidateAsync_WithOptions_ReachAnElementChain</c>. The three
+        /// together are the contract, and this one alone would misread as "nothing reaches an element
+        /// builder".
+        /// </para>
         /// </summary>
         [Fact]
         public async Task ValidationBehaviors_DoNotReachAnElementBuilder()

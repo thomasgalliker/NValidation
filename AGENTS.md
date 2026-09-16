@@ -118,7 +118,8 @@
   Rules first, a blank line, then the payload. `new TestValidator<Car>()` answers in the built-in
   English, for a test about the message a rule renders; a test about *which* rule reported asserts
   `ValidationError.ErrorCode` through `ShouldReportErrorCode` instead. The provider is chosen at
-  construction, so nothing has to be sequenced or put back. Do not add a validator class per test case — the reader
+  construction — or, for a test about more than one validator at once, passed to `ValidateAsync` as an
+  `NValidationOptions`; either way nothing has to be sequenced or put back. Do not add a validator class per test case — the reader
   should not have to open a second file to learn what is being validated. A named validator, declared
   `private sealed` inside the test class that needs it, is for the case where something other than the
   rule chain depends on the *type*: the container constructs it by type, or a constant or payload factory
@@ -129,6 +130,12 @@
   day someone adds `--filter`.
 - Tests which change the ambient culture carry `[Collection(Collections.CultureSpecific)]`, because the
   culture is process-wide.
+- Tests which configure `NValidationOptions.Default` carry `[Collection(Collections.ValidationDefaults)]`
+  **and** call `NValidationOptions.Default.Reset()` in both their constructor and `Dispose`. The
+  collection stops them running beside the ~100 assertions on the built-in English; the reset in the
+  *constructor* is what the collection cannot do, because the defaults freeze the first time anything
+  validates and an earlier test elsewhere has already done that. A test which passes its own
+  `NValidationOptions` to `ValidateAsync` needs neither, and is the better shape where it fits.
 
 ## Vocabulary
 Two words, each meaning exactly one thing, everywhere in code, tests and docs:

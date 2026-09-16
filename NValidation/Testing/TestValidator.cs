@@ -27,7 +27,9 @@ namespace NValidation.Testing
     public sealed class TestValidator<T> : Validator<T>
     {
         /// <summary>
-        /// A validator answering in the built-in default validation message provider, for a test about the message a rule renders.
+        /// A validator answering through whatever nothing more specific has overruled — the built-in
+        /// English, unless a test configured <see cref="NValidationOptions.Default"/> — for a test about
+        /// the message a rule renders.
         /// </summary>
         public TestValidator()
         {

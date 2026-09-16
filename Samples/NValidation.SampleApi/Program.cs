@@ -5,8 +5,11 @@ using NValidation.TestData.Validators;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Everything this library needs is configured in one place.
-builder.Services.AddNValidation(o =>
+// Everything this library needs is configured in one place. How long a validator lives and how much
+// it reports come from appsettings.json, so they can be changed without a rebuild; what is registered
+// stays in code, because naming an assembly in a settings file turns a typo into a payload that is
+// silently never validated.
+builder.Services.AddNValidation(builder.Configuration.GetSection("NValidation"), o =>
 {
     // Every validator in this assembly is found and registered, along with whatever each one depends
     // on — CarValidator takes an IValidator<CarModel>, which in turn takes an IValidator<Manufacturer>.

@@ -16,7 +16,7 @@
   removing the redundant non-nullable other-property forms. Call sites are unaffected: the lambda's
   value converts to its nullable form and the reported property name is unchanged.
 - Added PrecisionScale for decimals, OneOf for a closed set of values, and MustAsync.
-- Added NValidationOptions.PromoteSafeValidatorsToSingleton: registers a validator as a singleton when
+- Added NValidationBuilder.PromoteSafeValidatorsToSingleton: registers a validator as a singleton when
   every constructor parameter resolves to a singleton or to another validator that also qualifies.
   Resolving the sample four-validator graph drops from 8,489 ns / 24,200 B to 21.8 ns / 128 B.
 - Added Validator<T>.Property(name, accessor) and Property(name, accessor, isReachable): the same rule
@@ -59,6 +59,31 @@
   Configurable on the registration, on a validator, and per chain with WithValidationBehavior.
   Replaces ContinueOnFailure(), which is equivalent to WithValidationBehavior(ValidationBehavior.All).
   The defaults are unchanged behaviour: every property, one message each.
+- Split the package in two. NValidation now has no dependencies at all; AddNValidation, the registration
+  and the IConfiguration overloads moved to a new NValidation.DependencyInjection package, which is what
+  NValidation.AspNetCore depends on. A host which only constructs validators no longer pulls
+  Microsoft.Extensions.DependencyInjection.Abstractions in to do it. The options object AddNValidation
+  configures is renamed NValidationBuilder, which is what it is: it registers things and returns itself.
+- Added NValidationOptions, which is what a validator falls back to when nothing more specific said —
+  the message provider, and how much it reports. Set NValidationOptions.Default once at startup and
+  every validator picks it up, so a host which constructs validators with new no longer configures each
+  instance. Unlike a setting on the registration, which is handed to the validators the container built,
+  these are read while validating and therefore also reach a nested validator and the element chain of a
+  ForEach, which nothing on a registration could ever reach.
+  The same type is accepted per call — validator.ValidateAsync(car, options) — for a request whose
+  messages are in its own language. It sits under whatever a validator declared for itself, so composing
+  a validator still does not overrule what that validator decided; it only supplies a default to one
+  which decided nothing.
+  Modelled on JsonSerializerOptions, including the freeze: options are mutable until something validates
+  with them, after which IsReadOnly is true and every setter throws. Reset() is the way back, which
+  JsonSerializerOptions has no equivalent of.
+- AddNValidation now takes an IConfiguration section, so ValidatorLifetime,
+  PromoteSafeValidatorsToSingleton and ValidationBehaviors can move to appsettings.json. Which validators
+  are registered and where messages come from stay in code, because a typo in a settings file would turn
+  those into a payload that is silently never validated. A value the setting does not permit is refused at
+  startup and the message names what was permitted. The settings are read key by key rather than through
+  IConfiguration.Bind, which is RequiresUnreferencedCode and would surface as a trimming warning in an
+  ahead-of-time consumer's build.
 - Added NValidation.Testing: assertions over a validation result for unit tests, shipped in the same
   package and depending on no test framework and no assertion library. result.ShouldReport("Vin",
   "Vin is required.") states the whole expected result — nothing else may be present, the count is

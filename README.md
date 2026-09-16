@@ -28,16 +28,25 @@ Or with the .NET CLI:
 
     dotnet add package NValidation
 
-For an ASP.NET Core application, install the integration package as well:
+To register validators with a dependency injection container, install the integration package as well:
+
+    PM> Install-Package NValidation.DependencyInjection
+
+And for an ASP.NET Core application:
 
     PM> Install-Package NValidation.AspNetCore
 
-| Package | What it adds |
-|---------|--------------|
-| [`NValidation`](https://www.nuget.org/packages/NValidation/) | The validators, rules and messages, and helper methods for unit tests. |
-| [`NValidation.AspNetCore`](https://www.nuget.org/packages/NValidation.AspNetCore/) | The RFC7807 problem details response, and the MVC filter that validates a payload before the action runs. |
+| Package | What it adds | Depends on |
+|---------|--------------|------------|
+| [`NValidation`](https://www.nuget.org/packages/NValidation/) | The validators, rules and messages, and helper methods for unit tests. | **nothing** |
+| [`NValidation.DependencyInjection`](https://www.nuget.org/packages/NValidation.DependencyInjection/) | `AddNValidation`: registering validators with an `IServiceCollection`, and binding the registration from `IConfiguration`. | `NValidation` |
+| [`NValidation.AspNetCore`](https://www.nuget.org/packages/NValidation.AspNetCore/) | The RFC7807 problem details response, and the MVC filter that validates a payload before the action runs. | `NValidation.DependencyInjection` |
 
-Both target .NET 8 and .NET 10.
+The core package has no dependencies at all, so a host which only constructs validators does not acquire
+a container's abstractions in order to do it. Each package pulls in the one above it, so installing
+`NValidation.AspNetCore` is enough for a web application.
+
+All three target .NET 8 and .NET 10.
 
 ## Contents
 
@@ -47,6 +56,7 @@ Both target .NET 8 and .NET 10.
 - [Built-in validators](#built-in-validators)
 - [Custom validators](#custom-validators)
 - [Overriding defaults](#overriding-defaults)
+  - [Validation options](#validation-options)
 - [Localization](#localization)
 - [Dependency injection](#dependency-injection)
 - [ASP.NET Core integration](#aspnet-core-integration)
@@ -161,10 +171,40 @@ var validator = new ManufacturerValidator();
 var result = await validator.ValidateAsync(manufacturer);
 ```
 
-A validator built this way answers in the built-in English and takes the built-in
-[validation behavior](#validation-behavior), because neither came from `AddNValidation` — see
-[what the container configures](#what-the-container-configures-and-what-it-does-not). Assign
-`validator.Messages` to give it a [message provider](#localization) of your own.
+A validator that takes other validators is constructed the same way — there is no container involved, so
+you pass them yourself:
+
+```csharp
+var validator = new CarValidator(
+    new CarModelValidator(new ManufacturerValidator()),
+    new ServiceRecordValidator());
+```
+
+A validator built this way was handed nothing, so it falls back to
+[`NValidationOptions.Default`](#validation-options) — the built-in English and the built-in
+[validation behavior](#validation-behavior), until an application says otherwise:
+
+```csharp
+// Once, at startup, before anything validates.
+NValidationOptions.Default.MessageProvider = new ResourceValidationMessageProvider();
+NValidationOptions.Default.ValidationBehaviors.Property = ValidationBehavior.All;
+```
+
+That reaches every validator in the process which has not said otherwise for itself — **including the
+three nested ones above**, which no assignment on `validator` could have reached, because a validator's
+own settings are about itself and are not handed down to what it composes.
+
+For one call rather than the whole process — a request whose messages are in its own language — pass the
+options instead:
+
+```csharp
+var result = await validator.ValidateAsync(car, options);
+```
+
+And `validator.Messages` and `validator.ValidationBehaviors` still settle it for one validator, outranking
+both. See [the override ladder](#the-override-ladder) for the whole order, and
+[what the container configures](#what-the-container-configures-and-what-it-does-not) for how this relates
+to `AddNValidation`.
 
 ### Validating an instance whose type is known only at run time
 
@@ -357,9 +397,10 @@ the caller already sent rather than by something the response should not be carr
 The element builder carries its own [validation behavior](#validation-behavior):
 `record.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError` governs what *one entry*
 reports, and every entry is still walked. It is built where it is declared rather than by the container,
-so — like a validator you construct with `new` — it takes the built-in defaults and not what
-`AddNValidation` configured. Set it on the element builder itself where an element's rules should follow
-a different policy from the defaults.
+so — like a validator you construct with `new` — what `AddNValidation` configured is never *handed* to
+it. What is *read* still reaches it: an axis left unset here takes what the options passed to the call
+asked for, then [`NValidationOptions.Default`](#validation-options), then the built-in default. Set it on
+the element builder itself where an element's rules should follow a different policy from all of those.
 
 A missing collection and a `null` element are skipped — whether entries have to be there at all is a
 question for the collection's own rules.
@@ -414,8 +455,9 @@ this.Property(c => c.Vin)
 
 Both axes are nullable, and `null` — which is what they start as — means *inherit from the level above*.
 Naming one therefore never silently changes the other: a validator that sets `Class` leaves `Property`
-taking whatever the registration configured, and a registration that sets neither leaves both at the
-defaults above. That is also why the setting is mutated rather than assigned; replacing the whole object
+taking whatever the registration configured, and a registration that sets neither leaves both to
+[the options this call or this process was given](#validation-options), and failing those the defaults
+above. That is also why the setting is mutated rather than assigned; replacing the whole object
 would replace the axis you did not mean to touch.
 
 The defaults are chosen for the common case. Reporting every property at once is what lets a caller fix a
@@ -484,7 +526,7 @@ always an ordinary language feature:
 | Inheritance / polymorphic validators | `Must` that dispatches, or a validator per concrete type resolved by the caller |
 | `Include`, to merge one validator's rules into another | `SetValidator` on the property, or an extension method holding the shared chain |
 | A pre-validation hook | The first rule of the chain |
-| A global static configuration object | `AddNValidation`, or the validator's own constructor |
+| A global configuration object that is the *only* place to look | [`NValidationOptions.Default`](#validation-options) exists, but as the bottom rung of [a documented ladder](#the-override-ladder) — per-call options, the validator itself and the registration all outrank it, so what a validator does is still readable from its own source |
 
 ## Validation results
 
@@ -1318,17 +1360,72 @@ Settings that exist at more than one level are resolved from the most specific o
 
 | Default | Out of the box | Overridden at |
 |---|---|---|
-| Message text | the built-in English | your `IValidationMessageProvider`, or `WithMessage` for one rule |
+| Message text | the built-in English | `NValidationOptions.Default` → `AddNValidation` → the options passed to the call → the validator's `Messages` → `WithMessage` for one rule |
 | Display name | the property's member path | `WithDisplayName`, per property |
 | Reported property name | the property's member path | `WithPropertyName`, per property |
-| `ValidationBehaviors.Class` | `All` | `AddNValidation` → the validator → (`WithValidationBehavior` on a chain) |
+| `ValidationBehaviors.Class` | `All` | `NValidationOptions.Default` → `AddNValidation` → the options passed to the call → the validator → (`WithValidationBehavior` on a chain) |
 | `ValidationBehaviors.Property` | `StopAtFirstError` | the same ladder |
 | Validator lifetime | `ServiceLifetime.Scoped` | `o.ValidatorLifetime`, or per registration |
 | Element index | the zero-based position | `WithIndexer`, per `ForEach` |
 | Missing-validator behavior | `Ignore` | `AddValidationFilter` |
 
-There is no global static configuration object to reach for: everything is either on the registration or
-on the validator that cares.
+The two lowest rungs are the ones a validator built with `new` can reach:
+[`NValidationOptions.Default`](#validation-options) for the whole process, and an `NValidationOptions`
+passed to `ValidateAsync` for one call. Both are *read* while validating rather than handed over at
+construction, which is why — unlike anything configured on `AddNValidation` — they also reach a nested
+validator and the element chain of a `ForEach`.
+
+They sit **below** what a validator declared for itself, and that order is the point: a validator which
+said something about itself keeps it, and only one which said nothing inherits. Composing a validator
+therefore still never overrules what that validator decided — it only supplies a default to one that
+decided nothing.
+
+### Validation options
+
+`NValidationOptions` carries the two settings a validator can be given without a container: where its
+rules take their message texts from, and how much it reports. It serves two roles.
+
+**For the process**, set `NValidationOptions.Default` once at startup:
+
+```csharp
+NValidationOptions.Default.MessageProvider = new ResourceValidationMessageProvider();
+NValidationOptions.Default.ValidationBehaviors.Property = ValidationBehavior.All;
+```
+
+**For one call**, pass an instance instead — a request answered in its own language, say:
+
+```csharp
+var options = new NValidationOptions { MessageProvider = german };
+
+var result = await validator.ValidateAsync(car, options);
+```
+
+Both are read while validating, so they reach a nested validator and the element chain of a `ForEach`,
+which nothing configured on `AddNValidation` can. Both sit below what a validator declared for itself —
+see [the override ladder](#the-override-ladder).
+
+#### They freeze once they are used
+
+Options are mutable until something validates with them. From that moment `IsReadOnly` is `true` and
+every setter throws, so nothing a run is reading can change underneath it:
+
+```csharp
+await validator.ValidateAsync(car);
+
+NValidationOptions.Default.MessageProvider = other;
+// InvalidOperationException: ... Configure them before anything validates, or call Reset() first.
+```
+
+`MakeReadOnly()` does it deliberately, for a host which would rather a misplaced configuration call
+failed at startup than whenever validation first happens to run. `Reset()` puts every setting back and
+allows changes again — which is what makes the type usable from a test suite or a benchmark.
+
+This is `JsonSerializerOptions`' model, with two deliberate differences: `JsonSerializerOptions.Default`
+is read-only from the start and cannot be configured at all, and it has no `Reset()`.
+
+> **For an application to set, not a library.** A package which configures `NValidationOptions.Default`
+> from a module initializer silently changes the wording every one of its consumers sees. A library which
+> needs its own settings passes them per call.
 
 ### Display names are member paths, not prose
 
@@ -1469,15 +1566,22 @@ be scoped too.
 Registering `IValidationMessageProvider` on the service collection yourself, before `AddNValidation`, works
 as well and wins — the default English is only added if nothing else claimed the service.
 
-A validator constructed with `new` was never handed anything, so it answers in English until you say
-otherwise:
+A validator constructed with `new` was never handed anything, so it answers through
+[`NValidationOptions.Default`](#validation-options) — which an application sets once, in the place it
+would otherwise have configured every instance:
+
+```csharp
+NValidationOptions.Default.MessageProvider = new ResourceValidationMessageProvider();
+```
+
+One validator can still be settled on its own, which outranks both that and the registration:
 
 ```csharp
 var validator = new ManufacturerValidator { Messages = new ResourceValidationMessageProvider() };
 ```
 
-Without a provider the built-in English messages are used, so the library is usable before any of this is
-set up.
+Without a provider anywhere the built-in English messages are used, so the library is usable before any
+of this is set up.
 
 ### Holding a provider to every code
 
@@ -1503,9 +1607,14 @@ To check one code — a code of your own, which the core knows nothing about —
 
 ## Dependency injection
 
+Everything in this section lives in the
+[`NValidation.DependencyInjection`](https://www.nuget.org/packages/NValidation.DependencyInjection/)
+package. The core package has no container abstractions in it at all, so an application which only
+constructs validators never acquires them.
+
 ### AddNValidation
 
-Everything this library needs is configured in one delegate:
+Everything the container needs to know is configured in one delegate, on an `NValidationBuilder`:
 
 ```csharp
 services.AddNValidation(o =>
@@ -1523,6 +1632,37 @@ services.AddNValidation();
 
 Nothing reaches the service collection until the delegate has finished, so the order of the calls inside
 it never decides anything.
+
+### From appsettings.json
+
+The settings which are a deployment decision rather than a code one take an `IConfiguration` section:
+
+```csharp
+services.AddNValidation(builder.Configuration.GetSection("NValidation"), o =>
+{
+    o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly);
+});
+```
+
+```json
+{
+  "NValidation": {
+    "ValidatorLifetime": "Singleton",
+    "PromoteSafeValidatorsToSingleton": true,
+    "ValidationBehaviors": { "Class": "All", "Property": "StopAtFirstError" }
+  }
+}
+```
+
+The delegate runs after the section, so what it names outranks what configuration said. A key which is
+absent leaves that setting alone; a key whose value is not one of the permitted ones is refused at
+startup, and the message names what was permitted — a typo in a settings file should not be something you
+discover from a response.
+
+**Which validators are registered, and where messages come from, stay in code.** Naming an assembly or a
+provider type in a settings file turns a typo into a payload that is silently never validated, which is
+the one failure this library should not have. A message provider an application already holds goes on
+[`NValidationOptions.Default`](#validation-options) instead.
 
 ### Registering validators
 
@@ -1637,15 +1777,19 @@ is a dependency like any other and a test can substitute it.
 
 ### What the container configures, and what it does not
 
-A validator the container built is handed two things a validator you constructed yourself is not:
+A validator the container built is **handed** two things a validator you constructed yourself is not:
 
 - its `Messages` — the registered `IValidationMessageProvider`;
-- the ambient [validation behavior](#validation-behavior) configured on `AddNValidation`.
+- the [validation behavior](#validation-behavior) configured on `AddNValidation`.
 
-So `new CarValidator(...)` answers in the built-in English and takes the built-in behaviour defaults, and
-so does the element builder inside a `ForEach`, which is built where it is declared. That is usually what
-a unit test wants. Where it is not, assign `validator.Messages`, and mutate the axes of
-`validator.ValidationBehaviors`.
+Handed is the operative word, and it is the whole distinction. The container can only hand something to a
+validator it constructed — so a registration reaches neither `new CarValidator(...)`, nor a validator
+another validator composed for itself, nor the element builder inside a `ForEach`, which is built where
+it is declared.
+
+[`NValidationOptions`](#validation-options) is *read* rather than handed, which is why it reaches all
+three. That is the setting to use where you want something to apply everywhere; `AddNValidation` is for
+what only the container can decide — which validators exist, and how long they live.
 
 `o.Services` is the service collection itself, for an integration that needs to register something of its
 own alongside — which is how `AddValidationFilter` in the ASP.NET Core package is built.

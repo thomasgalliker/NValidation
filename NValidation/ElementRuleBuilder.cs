@@ -31,8 +31,10 @@ namespace NValidation
         /// </summary>
         /// <remarks>
         /// Built where it is declared rather than by the container, so — like a validator constructed
-        /// with <c>new</c> — it takes the built-in defaults rather than what <c>AddNValidation</c>
-        /// configured. Every entry is still walked whatever this says; it governs what one entry reports.
+        /// with <c>new</c> — what <c>AddNValidation</c> configured is never handed to it. What is
+        /// <em>read</em> still reaches it: an axis left unset here takes what the options passed to the
+        /// call asked for, then <see cref="NValidationOptions.Default"/>, then the built-in default.
+        /// Every entry is still walked whatever this says; it governs what one entry reports.
         /// </remarks>
         public ValidationBehaviors ValidationBehaviors => this.rules.ValidationBehaviors;
 

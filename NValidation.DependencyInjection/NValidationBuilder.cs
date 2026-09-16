@@ -86,16 +86,23 @@ namespace NValidation
         /// axis leaves the other at its built-in default.
         /// </summary>
         /// <remarks>
-        /// Reaches the validators this registration constructs, which is every validator resolved from
-        /// the container. One built with <c>new</c> takes the built-in defaults instead, exactly as it
-        /// takes the built-in English messages.
+        /// Handed to the validators this registration constructs, which is every validator resolved
+        /// from the container — but only those, so it reaches neither a validator built with <c>new</c>
+        /// nor one a validator composed for itself. Those read their defaults instead: the options
+        /// passed to the call, then <c>NValidationOptions.Default</c>, then the built-in ones.
         /// </remarks>
         public ValidationBehaviors ValidationBehaviors { get; } = new();
 
         /// <summary>
         /// The <see cref="IValidationMessageProvider"/> rules take their message texts from — typically
-        /// the application's resources, served in the language of the current request. Left unset, the
-        /// built-in English is used.
+        /// the application's resources, served in the language of the current request. Left unset,
+        /// <c>NValidationOptions.Default.MessageProvider</c> is used, which is the built-in English
+        /// until a host configures otherwise.
+        /// <para>
+        /// A <see cref="Type"/> rather than an instance, because the container builds it and a provider
+        /// may therefore take what it depends on through its constructor. A provider a host already
+        /// holds goes on <c>NValidationOptions.Default</c> instead.
+        /// </para>
         /// </summary>
         /// <remarks>
         /// Built by the container, so a provider may take whatever it depends on through its
