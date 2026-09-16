@@ -12,14 +12,12 @@ pool:
 trigger:
   branches:
     include:
-    - main
-    - develop
-    - feature/*
-    - bugfix/*
+      - main
+      - develop
 
   paths:
     exclude:
-    - Docs/*
+      - Docs/*
 
 variables:
   buildPlatform: 'Any CPU'
@@ -40,7 +38,7 @@ variables:
 
 steps:
 - task: Bash@3
-  displayName: 'Print all variables'
+  displayName: 'Print All Variables'
   inputs:
     targetType: 'inline'
     script: 'env | sort'
@@ -79,58 +77,48 @@ steps:
     versionSpec: 6.x
 
 - task: DotNetCoreCLI@2
-  displayName: 'NuGet restore'
+  displayName: 'NuGet Restore'
   inputs:
     command: restore
     projects: |
-      NValidation/**/*.csproj
-      NValidation.AspNetCore/**/*.csproj
-      **/*.Tests.csproj
+      NValidation*/**/*.csproj
+      Tests/**/*.Tests.csproj
 
 - task: DotNetCoreCLI@2
-  displayName: 'Build solution'
+  displayName: 'Build Projects'
   inputs:
     projects: |
-      NValidation/**/*.csproj
-      NValidation.AspNetCore/**/*.csproj
-      **/*.Tests.csproj
-    arguments: '--no-restore --configuration $(buildConfiguration)'
+      NValidation*/**/*.csproj
+      Tests/**/*.Tests.csproj
+    arguments: >
+      --no-restore --configuration $(buildConfiguration)
 
 - task: DotNetCoreCLI@2
   displayName: 'Run Unit Tests'
   inputs:
     command: test
-    projects: 'Tests/**/*.Tests.csproj'
+    projects: Tests/**/*.Tests.csproj
     arguments: >
-      --no-restore
-      --no-build
-      --configuration $(buildConfiguration)
-      /p:CollectCoverage=true
+      --no-restore --no-build 
+      --configuration $(buildConfiguration) 
       /p:Exclude="[Microsoft*]*%2C[Mono*]*%2C[xunit*]*%2C[*.Testdata]*"
-      /p:CoverletOutput=UnitTests.coverage.cobertura.xml
-      /p:MergeWith=$(Build.SourcesDirectory)/Tests/CoverletOutput/coverage.json
+      /p:CollectCoverage=true
       /p:CoverletOutputFormat=cobertura
-
-- task: reportgenerator@5
-  displayName: 'Create Code Coverage Report'
-  inputs:
-    reports: '$(Build.SourcesDirectory)/Tests/**/*.coverage.cobertura*.xml'
-    targetdir: '$(Build.SourcesDirectory)/CodeCoverage'
-    reporttypes: 'Cobertura'
-    assemblyfilters: '-xunit*'
+      /p:CoverletOutput=$(Build.SourcesDirectory)/TestResults/CodeCoverage/
+      /p:MergeWith=$(Build.SourcesDirectory)/TestResults/CodeCoverage/coverage.json
 
 - task: DotNetCoreCLI@2
-  displayName: 'Pack NValidation NuGets'
+  displayName: 'Create NuGet Packages'
   condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
   inputs:
     command: pack
-    packagesToPack: NValidation.*/NValidation.*.csproj
+    packagesToPack: NValidation*/**/*.csproj
     versioningScheme: byEnvVar
     versionEnvVar: semVersion
     nobuild: true
 
 - task: CopyFiles@2
-  displayName: 'Copy Files to: $(Build.ArtifactStagingDirectory)'
+  displayName: 'Copy Files To: $(Build.ArtifactStagingDirectory)'
   inputs:
     SourceFolder: '$(system.defaultworkingdirectory)'
     Contents: |
@@ -140,11 +128,12 @@ steps:
     TargetFolder: '$(Build.ArtifactStagingDirectory)'
 
 - task: PublishCodeCoverageResults@2
-  displayName: 'Publish code coverage'
+  displayName: 'Publish Code Coverage Results'
   inputs:
     codeCoverageTool: Cobertura
-    summaryFileLocation: '$(Build.SourcesDirectory)/CodeCoverage/Cobertura.xml'
-    reportDirectory: '$(Build.SourcesDirectory)/CodeCoverage'
+    summaryFileLocation: '$(Build.SourcesDirectory)/TestResults/**/coverage.cobertura.xml'
+    pathToSources: '$(Build.SourcesDirectory)'
+    failIfCoverageEmpty: true
 
 - task: PublishBuildArtifacts@1
   displayName: 'Publish Artifact: drop'
