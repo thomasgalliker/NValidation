@@ -15,6 +15,16 @@ namespace NValidation
     /// </remarks>
     public sealed class ValidationBehaviors
     {
+        private ValidationBehavior? classBehavior;
+
+        private ValidationBehavior? propertyBehavior;
+
+        /// <summary>
+        /// Whether these axes can still be changed. Set when the <see cref="NValidationOptions"/> they
+        /// belong to is first used, and never for the ones a validator or a registration holds.
+        /// </summary>
+        internal bool IsReadOnly { get; private set; }
+
         /// <summary>
         /// Whether a run keeps going once a property has reported. Defaults to
         /// <see cref="ValidationBehavior.All"/>, so a caller is told about every field that is wrong
@@ -35,7 +45,20 @@ namespace NValidation
         /// is passed on whole.
         /// </para>
         /// </remarks>
-        public ValidationBehavior? Class { get; set; }
+        /// <exception cref="InvalidOperationException">
+        /// These axes belong to an <see cref="NValidationOptions"/> which has already been used.
+        /// </exception>
+        public ValidationBehavior? Class
+        {
+            get => this.classBehavior;
+
+            set
+            {
+                this.ThrowIfReadOnly();
+
+                this.classBehavior = value;
+            }
+        }
 
         /// <summary>
         /// Whether a property's chain keeps going once one of its rules has failed. Defaults to
@@ -48,6 +71,46 @@ namespace NValidation
         /// chain whose rules are genuinely independent — a password that is judged on length, digits and
         /// case at once.
         /// </remarks>
-        public ValidationBehavior? Property { get; set; }
+        /// <inheritdoc cref="Class" path="/exception"/>
+        public ValidationBehavior? Property
+        {
+            get => this.propertyBehavior;
+
+            set
+            {
+                this.ThrowIfReadOnly();
+
+                this.propertyBehavior = value;
+            }
+        }
+
+        /// <summary>
+        /// Refuses every later change to these axes.
+        /// </summary>
+        internal void MakeReadOnly()
+        {
+            this.IsReadOnly = true;
+        }
+
+        /// <summary>
+        /// Puts both axes back to inheriting, and allows changes again.
+        /// </summary>
+        internal void Reset()
+        {
+            this.IsReadOnly = false;
+            this.classBehavior = null;
+            this.propertyBehavior = null;
+        }
+
+        private void ThrowIfReadOnly()
+        {
+            if (this.IsReadOnly)
+            {
+                throw new InvalidOperationException(
+                    "These validation behaviors have already been used, so changing them now would " +
+                    "apply unevenly: what has already validated used the old ones. Configure them " +
+                    $"before anything validates, or call {nameof(NValidationOptions)}.{nameof(NValidationOptions.Reset)}() first.");
+            }
+        }
     }
 }
