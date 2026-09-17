@@ -442,9 +442,9 @@ namespace NValidation.Tests.Testing
         }
 
         /// <summary>
-        /// The two shapes a caller holds — <see cref="ValidationResult.ToErrorsDictionary"/> hands back
-        /// arrays, <see cref="ValidationException.Errors"/> hands back read-only lists — go through the
-        /// same overload.
+        /// Whatever collection a caller's dictionary holds its messages in — the arrays of
+        /// <see cref="ValidationResult.ToErrorsDictionary"/> and <see cref="ValidationException.Errors"/>,
+        /// or a list of its own — goes through the same overload.
         /// </summary>
         [Fact]
         public void ShouldReport_OnAnErrorsDictionary_TakesEitherMessageCollection()
@@ -452,7 +452,7 @@ namespace NValidation.Tests.Testing
             // Arrange
             IReadOnlyDictionary<string, string[]> arrays = Result(("Vin", "Vin is required.")).ToErrorsDictionary();
             IReadOnlyDictionary<string, IReadOnlyList<string>> lists =
-                new ValidationException(Result(("Vin", "Vin is required."))).Errors;
+                new Dictionary<string, IReadOnlyList<string>> { ["Vin"] = new List<string> { "Vin is required." } };
 
             // Act
             var fromArrays = () => arrays.ShouldReport("Vin", "Vin is required.");

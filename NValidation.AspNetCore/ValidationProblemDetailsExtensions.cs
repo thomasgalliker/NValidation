@@ -52,14 +52,13 @@ namespace NValidation.AspNetCore
             return Create(validationException.Errors);
         }
 
-        private static HttpValidationProblemDetails Create<TMessages>(IReadOnlyDictionary<string, TMessages> errors)
-            where TMessages : IEnumerable<string>
+        private static HttpValidationProblemDetails Create(IReadOnlyDictionary<string, string[]> errors)
         {
             var byProperty = new Dictionary<string, string[]>(errors.Count, StringComparer.Ordinal);
 
             foreach (var (propertyName, messages) in errors)
             {
-                byProperty[propertyName] = messages as string[] ?? [.. messages];
+                byProperty[propertyName] = messages;
             }
 
             return new HttpValidationProblemDetails(byProperty)

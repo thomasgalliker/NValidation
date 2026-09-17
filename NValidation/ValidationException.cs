@@ -41,24 +41,22 @@ namespace NValidation
         public ValidationException(IReadOnlyDictionary<string, string[]> errors)
             : base(BuildMessage(errors))
         {
+            // Copied, so the exception does not share arrays with whoever built the dictionary.
             this.Errors = errors.ToDictionary(
                 error => error.Key,
-                error => (IReadOnlyList<string>)error.Value.ToArray(),
+                error => error.Value.ToArray(),
                 StringComparer.Ordinal);
         }
 
         /// <summary>
-        /// The validation failures, keyed by <see cref="ValidationError.PropertyName"/>, each mapping to one or
-        /// more messages. Empty when the exception was created from a message alone.
+        /// The validation failures, keyed by <see cref="ValidationError.PropertyName"/>, each mapping to
+        /// one or more messages — the same shape as <see cref="ValidationResult.ToErrorsDictionary"/>.
+        /// Empty when the exception was created from a message alone.
         /// </summary>
-        /// <remarks>
-        /// Read-only all the way down: the messages of an exception already in flight cannot be
-        /// rewritten by whatever handles it.
-        /// </remarks>
-        public IReadOnlyDictionary<string, IReadOnlyList<string>> Errors { get; }
+        public IReadOnlyDictionary<string, string[]> Errors { get; }
 
-        private static IReadOnlyDictionary<string, IReadOnlyList<string>> EmptyErrors { get; } =
-            new Dictionary<string, IReadOnlyList<string>>(0, StringComparer.Ordinal);
+        private static IReadOnlyDictionary<string, string[]> EmptyErrors { get; } =
+            new Dictionary<string, string[]>(0, StringComparer.Ordinal);
 
         private static ValidationResult RequireValidationResult(ValidationResult validationResult)
         {
