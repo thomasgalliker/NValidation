@@ -123,10 +123,6 @@ namespace NValidation.Testing
             }
         }
 
-        /// <summary>
-        /// The first <c>{Placeholder}</c> or <c>{Placeholder:format}</c> still in <paramref name="message"/>,
-        /// or <c>null</c> when the arguments covered all of them.
-        /// </summary>
         private static string? FindUnresolvedPlaceholder(string message)
         {
             var openingBrace = message.IndexOf('{', StringComparison.Ordinal);
@@ -153,10 +149,6 @@ namespace NValidation.Testing
             return null;
         }
 
-        /// <summary>
-        /// A name of word characters, optionally followed by <c>:</c> and a format — which is the shape
-        /// <see cref="ValidationMessageFormatter"/> substitutes. Anything else inside braces is text.
-        /// </summary>
         private static bool LooksLikeAPlaceholder(ReadOnlySpan<char> token)
         {
             var name = token;
@@ -189,8 +181,8 @@ namespace NValidation.Testing
         }
 
         /// <summary>
-        /// Stands in for the failing property while a provider is being checked. Distinctive enough that
-        /// it cannot collide with the wording of a message.
+        /// Stands in for the failing property while a provider is being checked. Distinctive enough that it
+        /// cannot collide with the wording of a message.
         /// </summary>
         private const string PropertyNameStandIn = "TheFailingProperty";
 

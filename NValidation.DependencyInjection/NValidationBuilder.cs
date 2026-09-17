@@ -56,11 +56,9 @@ namespace NValidation
         /// already registered as a singleton, or to another validator which itself qualifies; one with a
         /// scoped dependency, or with more than one public constructor, is left where it was. The
         /// decision is made once, from the service collection.
-        /// <para>
         /// A lifetime the host named — on a registration call, or through <see cref="ValidatorLifetime"/>
         /// — is an instruction, and the default promotion leaves it alone. Setting this to <c>true</c>
         /// yourself asks for promotion regardless, which lifts a named lifetime too.
-        /// </para>
         /// </remarks>
         public bool PromoteSafeValidatorsToSingleton
         {
@@ -152,9 +150,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, naming the validated type as well — so the compiler checks that
-        /// <typeparamref name="TValidator"/> really does validate <typeparamref name="TInstance"/>.
+        /// Registers <typeparamref name="TValidator"/> as the validator for
+        /// <typeparamref name="TInstance"/>, so the compiler checks that it really does validate that type.
         /// </summary>
+        /// <inheritdoc cref="AddValidator{TValidator}()" path="/remarks"/>
         public NValidationBuilder AddValidator<TInstance, TValidator>()
             where TValidator : class, IValidator<TInstance>
         {
@@ -207,9 +206,8 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Writes everything the delegate asked for into the service collection. Deferred to here so
-        /// that <see cref="ValidatorLifetime"/> and <see cref="MessageProvider"/> apply wherever in the
-        /// delegate they were set.
+        /// Writes everything the delegate asked for into the service collection. Deferred to here so that
+        /// ValidatorLifetime and MessageProvider apply wherever in the delegate they were set.
         /// </summary>
         internal void Apply()
         {
@@ -271,19 +269,9 @@ namespace NValidation
         }
 
         /// <summary>
-        /// One validator per payload, chosen without regard to the order the delegate happened to be
-        /// written in.
+        /// One validator per payload, whatever order the delegate was written in. An explicit registration
+        /// settles a payload; two of them naming different validators is a contradiction and is refused.
         /// </summary>
-        /// <remarks>
-        /// A payload named explicitly is settled by that, whether the scan that also found it ran before
-        /// or after — a host which scans an assembly and then names its own replacement has said
-        /// something unambiguous either way, and deciding it by line number would be order dependence in
-        /// the one place it hurts most.
-        /// <para>
-        /// What is left is a genuine contradiction — two different validators asked for with equal
-        /// standing — and that is refused rather than settled by whichever was seen first.
-        /// </para>
-        /// </remarks>
         private IEnumerable<(Type ValidatedType, Type ValidatorType, ServiceLifetime? Lifetime)> Resolve()
         {
             foreach (var group in this.registrations.GroupBy(registration => registration.ValidatedType))
@@ -305,10 +293,10 @@ namespace NValidation
             }
         }
 
-        /// <remarks>
-        /// The remedy differs by how the two were asked for: a scan can be settled by naming the one to
-        /// keep, while two explicit registrations have already named both.
-        /// </remarks>
+        /// <summary>
+        /// The remedy differs by how the two were asked for: a scan can be settled by naming the one to keep,
+        /// while two explicit registrations have already named both.
+        /// </summary>
         private static string RefusalOf(Registration first, Registration second, Type validatedType)
         {
             var subject = $"'{first.ValidatorType}' and '{second.ValidatorType}' both validate " +
@@ -322,14 +310,9 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Whether one instance of <paramref name="validatorType"/> can serve every request.
+        /// Whether one instance can serve every request. Conservative: anything it cannot prove shareable, it
+        /// does not.
         /// </summary>
-        /// <remarks>
-        /// Conservative by construction: anything it cannot prove is shareable, it treats as not. A
-        /// validator with several constructors, one depending on a service registered elsewhere at a
-        /// shorter lifetime, or one whose dependencies form a cycle, all stay where the configuration
-        /// put them.
-        /// </remarks>
         private bool CanBeShared(
             Type validatorType,
             IReadOnlyDictionary<Type, Type> validatorsByService,
@@ -359,9 +342,6 @@ namespace NValidation
             return true;
         }
 
-        /// <summary>
-        /// Whether one dependency is safe for a shared validator to hold.
-        /// </summary>
         private bool IsShareable(
             Type serviceType,
             IReadOnlyDictionary<Type, Type> validatorsByService,
@@ -405,10 +385,10 @@ namespace NValidation
             return validator;
         }
 
-        /// <remarks>
-        /// The type is inspected now rather than at <see cref="Apply"/>, so a type that validates
-        /// nothing is reported from the call that named it.
-        /// </remarks>
+        /// <summary>
+        /// The type is inspected now rather than at Apply, so a type that validates nothing is reported from
+        /// the call that named it.
+        /// </summary>
         private NValidationBuilder AddValidator(Type validatorType, ServiceLifetime? lifetime)
         {
             ArgumentNullException.ThrowIfNull(validatorType);
@@ -429,12 +409,9 @@ namespace NValidation
             return this;
         }
 
-        /// <remarks>
-        /// The scan only collects what it found. Which validator serves a payload — and whether the
-        /// answer is a contradiction at all — is settled in <see cref="Resolve"/> once the whole
-        /// delegate has run, because a payload this scan found may be named explicitly on a line the
-        /// scan has not reached yet.
-        /// </remarks>
+        /// <summary>
+        /// The scan only collects. Which validator serves a payload is settled in <see cref="Apply"/>.
+        /// </summary>
         private NValidationBuilder AddValidatorsFromAssembly(ServiceLifetime? lifetime, params Assembly[] assemblies)
         {
             ArgumentNullException.ThrowIfNull(assemblies);
@@ -453,10 +430,6 @@ namespace NValidation
             return this;
         }
 
-        /// <summary>
-        /// The payload behind a service type, so a message about <c>IValidator&lt;Car&gt;</c> talks about
-        /// the <c>Car</c> the reader wrote a validator for.
-        /// </summary>
         private static Type Validated(Type validatorServiceType)
         {
             return validatorServiceType.GetGenericArguments()[0];
@@ -469,9 +442,6 @@ namespace NValidation
             return this;
         }
 
-        /// <summary>
-        /// One validator asked for, and whether it was named or merely found.
-        /// </summary>
         private readonly record struct Registration(
             Type ValidatedType,
             Type ValidatorType,

@@ -10,9 +10,10 @@ namespace NValidation
         /// fails, for a caller which treats a failure as an exception rather than as a result to inspect.
         /// </summary>
         /// <remarks>
-        /// The same as <c>(await validator.ValidateAsync(instance, cancellationToken)).ThrowIfInvalid()</c>,
-        /// which is what most call sites would otherwise write.
+        /// The same as <c>(await validator.ValidateAsync(instance, cancellationToken)).ThrowIfInvalid()</c>.
         /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="validator"/> is <c>null</c>.</exception>
+        /// <exception cref="ValidationException"><paramref name="instance"/> is not valid.</exception>
         public static async ValueTask ValidateAndThrowAsync<T>(
             this IValidator<T> validator,
             T instance,

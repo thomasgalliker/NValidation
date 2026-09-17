@@ -8,7 +8,7 @@
 ## Code Quality Standards
 
 ### Must Have
-- ✅ Useful XML documentation on all public APIs
+- ✅ XML documentation on public APIs, to the bar in [Comments and XML docs](#comments-and-xml-docs)
 - ✅ Unit tests for all new functionality
 - ✅ Nullable reference type annotations
 - ✅ Async/await patterns for I/O operations
@@ -144,6 +144,61 @@ The reasoning behind the shape of the library — the settings ladder, the struc
 per-pass frame, the synchronous fast path, why everything absent passes — lives in `docs/design.md`.
 A doc comment says what a member does and, in one sentence, why; an argument longer than that belongs in
 that document, not in the comment.
+
+## Comments and XML docs
+
+The docs grew once by accretion — every pass added and none replaced — until a third of the shipped
+source was comment and the published `NValidation.xml` carried 418 members, 76 of them from
+`Internals`. These are the rules that pass settled on.
+
+- **Public and protected members get a `<summary>`**, unless the name and signature already say
+  everything a caller needs: a constant whose name is its value (`NotEmpty = "NotEmpty"`), a
+  constructor whose arguments the container supplies. Never write a summary that restates the
+  signature — "Creates the filter", "Adds validation".
+- **A declaration that is commented at all is commented with `///`** — private and internal included.
+  `//` is for statement-level comments inside a method body, never above a member.
+- **Most private and internal members need no comment at all.** The declaration is usually the
+  documentation: `enum EqualityKind { EqualTo, NotEqualTo }` does not need "which way round an equality
+  rule reads" above it. Comment one only where the name cannot carry the point — an invariant, a trap,
+  a "why not the obvious thing" — and keep it to one or two lines. csc emits a `<member>` entry for
+  anything carrying `///` whatever its accessibility, so these ship; that is a reason to keep them
+  short, not a reason to reach for `//`.
+- **Delete the wrapper instead of explaining it.** A one-line method whose comment justifies its
+  existence usually should not exist: `GetLoadableTypes(assembly)` wrapping
+  `GetLoadableTypes(assembly.GetTypes)` cost two comments and earned none.
+- **A summary is one sentence and reads on its own.** It appears in an IntelliSense popup with no
+  neighbours, so "The same, …" and "The form for …" say nothing there. The one sentence worth
+  repeating across overloads is the absent-value contract: *A missing value passes; use `NotNull()` to
+  require one.*
+- **`<remarks>` states a fact the caller cannot infer and would otherwise get wrong**: thread-safety,
+  how something absent is treated, what resolves before what, or a guarantee the library explicitly
+  does *not* make. One to three lines; a second paragraph usually means the argument belongs in
+  `docs/design.md` instead.
+- **A `//` comment earns its place when a competent reader would otherwise break the code**: an
+  invariant the compiler cannot express, a deliberate departure from a rule in this file, a "why not
+  the obvious thing", a correctness argument. Not a restatement of the next line.
+- **History lives in the log.** No comment says "it used to", "previously" or "the old behaviour";
+  a regression test states the invariant it pins, not the bug it was written for. For rationale, see
+  [Design notes](#design-notes) above.
+- **A test's name is its documentation.** Delete a `[Fact]`/`[Theory]` summary that restates the name;
+  where the summary says what the name should have said, rename the test. Keep one on the class, and
+  on a test whose point a name cannot carry — why a race matters, why a case is refused. The
+  `// Arrange` / `// Act` / `// Assert` markers are never touched.
+- **Do not add `<param>` or `<returns>`.** `TreatWarningsAsErrors` is on, and one `<param>` on a
+  multi-parameter member turns its undocumented siblings into CS1573 errors. `<paramref>` inside a
+  summary is free.
+
+### inheritdoc
+
+An inheritdoc that carries the **summary** — a bare one, or `path="/summary"` — is legal only when the
+cref names the same member (an overload, or a sync/async twin). A summary is the member's identity:
+inheriting one across names is how `NotEqualTo` came to document itself as `EqualTo`, and how four
+`InTheFuture` overloads came to describe `InThePast`. `path="/remarks"` and `path="/exception"` may
+cross names, because rationale and throws are genuinely shared.
+
+**The compiler validates a cref but never evaluates `path=`.** A `path` that selects nothing is silent
+in every configuration, for good. And `GenerateDocumentationFile` is Release-only, so a broken cref is
+a Release-only failure: **build `-c Release` before trusting a doc change.**
 
 ## Vocabulary
 Two words, each meaning exactly one thing, everywhere in code, tests and docs:

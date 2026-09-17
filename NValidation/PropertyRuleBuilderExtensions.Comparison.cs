@@ -8,6 +8,7 @@ namespace NValidation
         /// <summary>
         /// Requires the value to be greater than <paramref name="value"/>.
         /// </summary>
+        /// <remarks>Reports <see cref="ValidationErrorCodes.GreaterThan"/>.</remarks>
         public static PropertyRuleBuilder<T, TValue> GreaterThan<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, TValue value)
             where TValue : struct
         {
@@ -15,9 +16,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The form for a property which may be absent. A missing value passes; use <c>NotNull()</c> to
-        /// require one.
+        /// Requires the value to be greater than <paramref name="value"/>. A missing value passes;
+        /// use <c>NotNull()</c> to require one.
         /// </summary>
+        /// <inheritdoc cref="GreaterThan{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue)" path="/remarks"/>
         public static PropertyRuleBuilder<T, TValue?> GreaterThan<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, TValue value)
             where TValue : struct
         {
@@ -25,8 +27,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, where the other property may be absent. Nothing to compare against passes.
+        /// Requires the value to be greater than <paramref name="otherProperty"/>. A missing value on
+        /// the other property passes.
         /// </summary>
+        /// <remarks>Reports <see cref="ValidationErrorCodes.GreaterThanOtherProperty"/>, naming that property.</remarks>
         public static PropertyRuleBuilder<T, TValue> GreaterThan<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, Expression<Func<T, TValue?>> otherProperty)
             where TValue : struct
         {
@@ -34,8 +38,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, where either property may be absent.
+        /// Requires the value to be greater than <paramref name="otherProperty"/>. A missing value on
+        /// either side passes.
         /// </summary>
+        /// <inheritdoc cref="GreaterThan{T, TValue}(PropertyRuleBuilder{T, TValue}, Expression{Func{T, System.Nullable{TValue}}})" path="/remarks"/>
         public static PropertyRuleBuilder<T, TValue?> GreaterThan<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, Expression<Func<T, TValue?>> otherProperty)
             where TValue : struct
         {
@@ -45,6 +51,7 @@ namespace NValidation
         /// <summary>
         /// Requires the value to be greater than or equal to <paramref name="value"/>.
         /// </summary>
+        /// <remarks>Reports <see cref="ValidationErrorCodes.GreaterThanOrEqualTo"/>.</remarks>
         public static PropertyRuleBuilder<T, TValue> GreaterThanOrEqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, TValue value)
             where TValue : struct
         {
@@ -52,9 +59,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The form for a property which may be absent. A missing value passes; use <c>NotNull()</c> to
-        /// require one.
+        /// Requires the value to be greater than or equal to <paramref name="value"/>. A missing value passes;
+        /// use <c>NotNull()</c> to require one.
         /// </summary>
+        /// <inheritdoc cref="GreaterThanOrEqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue)" path="/remarks"/>
         public static PropertyRuleBuilder<T, TValue?> GreaterThanOrEqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, TValue value)
             where TValue : struct
         {
@@ -62,8 +70,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, where the other property may be absent. Nothing to compare against passes.
+        /// Requires the value to be greater than or equal to <paramref name="otherProperty"/>. A missing value on
+        /// the other property passes.
         /// </summary>
+        /// <remarks>Reports <see cref="ValidationErrorCodes.GreaterThanOrEqualToOtherProperty"/>, naming that property.</remarks>
         public static PropertyRuleBuilder<T, TValue> GreaterThanOrEqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, Expression<Func<T, TValue?>> otherProperty)
             where TValue : struct
         {
@@ -71,8 +81,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, where either property may be absent.
+        /// Requires the value to be greater than or equal to <paramref name="otherProperty"/>. A missing value on
+        /// either side passes.
         /// </summary>
+        /// <inheritdoc cref="GreaterThanOrEqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, Expression{Func{T, System.Nullable{TValue}}})" path="/remarks"/>
         public static PropertyRuleBuilder<T, TValue?> GreaterThanOrEqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, Expression<Func<T, TValue?>> otherProperty)
             where TValue : struct
         {
@@ -82,6 +94,7 @@ namespace NValidation
         /// <summary>
         /// Requires the value to be less than <paramref name="value"/>.
         /// </summary>
+        /// <remarks>Reports <see cref="ValidationErrorCodes.LessThan"/>.</remarks>
         public static PropertyRuleBuilder<T, TValue> LessThan<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, TValue value)
             where TValue : struct
         {
@@ -89,9 +102,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The form for a property which may be absent. A missing value passes; use <c>NotNull()</c> to
-        /// require one.
+        /// Requires the value to be less than <paramref name="value"/>. A missing value passes;
+        /// use <c>NotNull()</c> to require one.
         /// </summary>
+        /// <inheritdoc cref="LessThan{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue)" path="/remarks"/>
         public static PropertyRuleBuilder<T, TValue?> LessThan<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, TValue value)
             where TValue : struct
         {
@@ -99,8 +113,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, where the other property may be absent. Nothing to compare against passes.
+        /// Requires the value to be less than <paramref name="otherProperty"/>. A missing value on
+        /// the other property passes.
         /// </summary>
+        /// <remarks>Reports <see cref="ValidationErrorCodes.LessThanOtherProperty"/>, naming that property.</remarks>
         public static PropertyRuleBuilder<T, TValue> LessThan<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, Expression<Func<T, TValue?>> otherProperty)
             where TValue : struct
         {
@@ -108,8 +124,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, where either property may be absent.
+        /// Requires the value to be less than <paramref name="otherProperty"/>. A missing value on
+        /// either side passes.
         /// </summary>
+        /// <inheritdoc cref="LessThan{T, TValue}(PropertyRuleBuilder{T, TValue}, Expression{Func{T, System.Nullable{TValue}}})" path="/remarks"/>
         public static PropertyRuleBuilder<T, TValue?> LessThan<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, Expression<Func<T, TValue?>> otherProperty)
             where TValue : struct
         {
@@ -119,6 +137,7 @@ namespace NValidation
         /// <summary>
         /// Requires the value to be less than or equal to <paramref name="value"/>.
         /// </summary>
+        /// <remarks>Reports <see cref="ValidationErrorCodes.LessThanOrEqualTo"/>.</remarks>
         public static PropertyRuleBuilder<T, TValue> LessThanOrEqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, TValue value)
             where TValue : struct
         {
@@ -126,9 +145,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The form for a property which may be absent. A missing value passes; use <c>NotNull()</c> to
-        /// require one.
+        /// Requires the value to be less than or equal to <paramref name="value"/>. A missing value passes;
+        /// use <c>NotNull()</c> to require one.
         /// </summary>
+        /// <inheritdoc cref="LessThanOrEqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue)" path="/remarks"/>
         public static PropertyRuleBuilder<T, TValue?> LessThanOrEqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, TValue value)
             where TValue : struct
         {
@@ -136,8 +156,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, where the other property may be absent. Nothing to compare against passes.
+        /// Requires the value to be less than or equal to <paramref name="otherProperty"/>. A missing value on
+        /// the other property passes.
         /// </summary>
+        /// <remarks>Reports <see cref="ValidationErrorCodes.LessThanOrEqualToOtherProperty"/>, naming that property.</remarks>
         public static PropertyRuleBuilder<T, TValue> LessThanOrEqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, Expression<Func<T, TValue?>> otherProperty)
             where TValue : struct
         {
@@ -145,8 +167,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, where either property may be absent.
+        /// Requires the value to be less than or equal to <paramref name="otherProperty"/>. A missing value on
+        /// either side passes.
         /// </summary>
+        /// <inheritdoc cref="LessThanOrEqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, Expression{Func{T, System.Nullable{TValue}}})" path="/remarks"/>
         public static PropertyRuleBuilder<T, TValue?> LessThanOrEqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, Expression<Func<T, TValue?>> otherProperty)
             where TValue : struct
         {
@@ -157,6 +181,11 @@ namespace NValidation
         /// Requires the value to lie between <paramref name="from"/> and <paramref name="to"/>, both
         /// bounds included.
         /// </summary>
+        /// <remarks>
+        /// Reports <see cref="ValidationErrorCodes.Between"/>, or the matching <c>BetweenExclusive</c>
+        /// key where a bound is excluded, so the message never names a value the rule refuses as one
+        /// of the permitted ones.
+        /// </remarks>
         /// <exception cref="ArgumentOutOfRangeException">
         /// <paramref name="from"/> is greater than <paramref name="to"/>, which is a range nothing can
         /// satisfy.
@@ -168,8 +197,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, with both bounds included or both excluded.
+        /// Requires the value to lie between <paramref name="from"/> and <paramref name="to"/>, with both
+        /// bounds included or both excluded.
         /// </summary>
+        /// <inheritdoc cref="Between{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue, TValue)" path="/remarks"/>
         /// <inheritdoc cref="Between{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue, TValue)" path="/exception"/>
         public static PropertyRuleBuilder<T, TValue> Between<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, TValue from, TValue to, bool inclusive)
             where TValue : struct
@@ -178,9 +209,11 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, with each bound included or excluded on its own — e.g. a value which may reach its
-        /// maximum but must stay above zero.
+        /// Requires the value to lie between <paramref name="from"/> and <paramref name="to"/>, with each
+        /// bound included or excluded on its own — a value which may reach its maximum but must
+        /// stay above zero, say.
         /// </summary>
+        /// <inheritdoc cref="Between{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue, TValue)" path="/remarks"/>
         /// <inheritdoc cref="Between{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue, TValue)" path="/exception"/>
         public static PropertyRuleBuilder<T, TValue> Between<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, TValue from, TValue to, bool inclusiveFrom, bool inclusiveTo)
             where TValue : struct
@@ -197,8 +230,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The form for a property which may be absent. A missing value passes.
+        /// Requires the value to lie between <paramref name="from"/> and <paramref name="to"/>, both
+        /// bounds included. A missing value passes.
         /// </summary>
+        /// <inheritdoc cref="Between{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue, TValue)" path="/remarks"/>
         /// <inheritdoc cref="Between{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue, TValue)" path="/exception"/>
         public static PropertyRuleBuilder<T, TValue?> Between<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, TValue from, TValue to)
             where TValue : struct
@@ -206,14 +241,24 @@ namespace NValidation
             return builder.Between(from, to, inclusiveFrom: true, inclusiveTo: true);
         }
 
-        /// <inheritdoc cref="Between{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue, TValue, bool)"/>
+        /// <summary>
+        /// Requires the value to lie between <paramref name="from"/> and <paramref name="to"/>, with both
+        /// bounds included or both excluded. A missing value passes.
+        /// </summary>
+        /// <inheritdoc cref="Between{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue, TValue)" path="/remarks"/>
+        /// <inheritdoc cref="Between{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue, TValue)" path="/exception"/>
         public static PropertyRuleBuilder<T, TValue?> Between<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, TValue from, TValue to, bool inclusive)
             where TValue : struct
         {
             return builder.Between(from, to, inclusive, inclusive);
         }
 
-        /// <inheritdoc cref="Between{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue, TValue, bool, bool)"/>
+        /// <summary>
+        /// Requires the value to lie between <paramref name="from"/> and <paramref name="to"/>, with each
+        /// bound included or excluded on its own. A missing value passes.
+        /// </summary>
+        /// <inheritdoc cref="Between{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue, TValue)" path="/remarks"/>
+        /// <inheritdoc cref="Between{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue, TValue)" path="/exception"/>
         public static PropertyRuleBuilder<T, TValue?> Between<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, TValue from, TValue to, bool inclusiveFrom, bool inclusiveTo)
             where TValue : struct
         {
@@ -231,6 +276,7 @@ namespace NValidation
         /// <summary>
         /// Requires the value to equal <paramref name="value"/>.
         /// </summary>
+        /// <remarks>Reports <see cref="ValidationErrorCodes.EqualTo"/>.</remarks>
         public static PropertyRuleBuilder<T, TValue> EqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, TValue value)
             where TValue : struct
         {
@@ -238,8 +284,9 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The form for a property which may be absent. A missing value passes.
+        /// Requires the value to equal <paramref name="value"/>. A missing value passes.
         /// </summary>
+        /// <inheritdoc cref="EqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue)" path="/remarks"/>
         public static PropertyRuleBuilder<T, TValue?> EqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, TValue value)
             where TValue : struct
         {
@@ -249,13 +296,17 @@ namespace NValidation
         /// <summary>
         /// Requires the value to differ from <paramref name="value"/>.
         /// </summary>
+        /// <remarks>Reports <see cref="ValidationErrorCodes.NotEqualTo"/>.</remarks>
         public static PropertyRuleBuilder<T, TValue> NotEqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, TValue value)
             where TValue : struct
         {
             return builder.CheckAgainst(value, EqualityKind.NotEqualTo);
         }
 
-        /// <inheritdoc cref="EqualTo{T, TValue}(PropertyRuleBuilder{T, System.Nullable{TValue}}, TValue)" path="/summary"/>
+        /// <summary>
+        /// Requires the value to differ from <paramref name="value"/>. A missing value passes.
+        /// </summary>
+        /// <inheritdoc cref="NotEqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue)" path="/remarks"/>
         public static PropertyRuleBuilder<T, TValue?> NotEqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, TValue value)
             where TValue : struct
         {
@@ -263,41 +314,50 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Requires the text to equal <paramref name="value"/>, exactly. A missing value passes; use
-        /// <c>NotEmpty()</c> to require one.
+        /// Requires the text to equal <paramref name="value"/>, compared ordinally. A missing
+        /// value passes; use <c>NotEmpty()</c> to require one.
         /// </summary>
+        /// <inheritdoc cref="EqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue)" path="/remarks"/>
         public static PropertyRuleBuilder<T, string?> EqualTo<T>(this PropertyRuleBuilder<T, string?> builder, string? value)
         {
             return builder.CheckAgainst(value, StringComparison.Ordinal, EqualityKind.EqualTo);
         }
 
         /// <summary>
-        /// The same, comparing the way <paramref name="comparison"/> says — e.g. a country code a client may send
-        /// in any casing.
+        /// Requires the text to equal <paramref name="value"/>, compared the way
+        /// <paramref name="comparison"/> says — a country code a client may send in any casing, typically.
         /// </summary>
-        /// <inheritdoc cref="EqualTo{T}(PropertyRuleBuilder{T, string}, string)" path="/summary"/>
+        /// <inheritdoc cref="EqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue)" path="/remarks"/>
         public static PropertyRuleBuilder<T, string?> EqualTo<T>(this PropertyRuleBuilder<T, string?> builder, string? value, StringComparison comparison)
         {
             return builder.CheckAgainst(value, comparison, EqualityKind.EqualTo);
         }
 
         /// <summary>
-        /// Requires the text to differ from <paramref name="value"/>, exactly. A missing value passes.
+        /// Requires the text to differ from <paramref name="value"/>, compared ordinally. A missing
+        /// value passes; use <c>NotEmpty()</c> to require one.
         /// </summary>
+        /// <inheritdoc cref="NotEqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue)" path="/remarks"/>
         public static PropertyRuleBuilder<T, string?> NotEqualTo<T>(this PropertyRuleBuilder<T, string?> builder, string? value)
         {
             return builder.CheckAgainst(value, StringComparison.Ordinal, EqualityKind.NotEqualTo);
         }
 
-        /// <inheritdoc cref="EqualTo{T}(PropertyRuleBuilder{T, string}, string, StringComparison)" path="/summary"/>
+        /// <summary>
+        /// Requires the text to differ from <paramref name="value"/>, compared the way
+        /// <paramref name="comparison"/> says — a country code a client may send in any casing, typically.
+        /// </summary>
+        /// <inheritdoc cref="NotEqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue)" path="/remarks"/>
         public static PropertyRuleBuilder<T, string?> NotEqualTo<T>(this PropertyRuleBuilder<T, string?> builder, string? value, StringComparison comparison)
         {
             return builder.CheckAgainst(value, comparison, EqualityKind.NotEqualTo);
         }
 
         /// <summary>
-        /// The same, where the other property may be absent. Nothing to compare against passes.
+        /// Requires the value to equal <paramref name="otherProperty"/>. A missing value on
+        /// the other property passes.
         /// </summary>
+        /// <remarks>Reports <see cref="ValidationErrorCodes.EqualToOtherProperty"/>, naming that property.</remarks>
         public static PropertyRuleBuilder<T, TValue> EqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, Expression<Func<T, TValue?>> otherProperty)
             where TValue : struct
         {
@@ -305,60 +365,86 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, where either property may be absent.
+        /// Requires the value to equal <paramref name="otherProperty"/>. A missing value on
+        /// either side passes.
         /// </summary>
+        /// <inheritdoc cref="EqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, Expression{Func{T, System.Nullable{TValue}}})" path="/remarks"/>
         public static PropertyRuleBuilder<T, TValue?> EqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, Expression<Func<T, TValue?>> otherProperty)
             where TValue : struct
         {
             return builder.CheckAgainst(otherProperty, EqualityKind.EqualTo);
         }
 
-        /// <inheritdoc cref="EqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, Expression{Func{T, System.Nullable{TValue}}})" path="/summary"/>
+        /// <summary>
+        /// Requires the value to differ from <paramref name="otherProperty"/>. A missing value on
+        /// the other property passes.
+        /// </summary>
+        /// <remarks>Reports <see cref="ValidationErrorCodes.NotEqualToOtherProperty"/>, naming that property.</remarks>
         public static PropertyRuleBuilder<T, TValue> NotEqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, Expression<Func<T, TValue?>> otherProperty)
             where TValue : struct
         {
             return builder.CheckAgainst(otherProperty, EqualityKind.NotEqualTo);
         }
 
-        /// <inheritdoc cref="EqualTo{T, TValue}(PropertyRuleBuilder{T, System.Nullable{TValue}}, Expression{Func{T, System.Nullable{TValue}}})" path="/summary"/>
+        /// <summary>
+        /// Requires the value to differ from <paramref name="otherProperty"/>. A missing value on
+        /// either side passes.
+        /// </summary>
+        /// <inheritdoc cref="NotEqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, Expression{Func{T, System.Nullable{TValue}}})" path="/remarks"/>
         public static PropertyRuleBuilder<T, TValue?> NotEqualTo<T, TValue>(this PropertyRuleBuilder<T, TValue?> builder, Expression<Func<T, TValue?>> otherProperty)
             where TValue : struct
         {
             return builder.CheckAgainst(otherProperty, EqualityKind.NotEqualTo);
         }
 
-        /// <inheritdoc cref="EqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, Expression{Func{T, System.Nullable{TValue}}})" path="/summary"/>
+        /// <summary>
+        /// Requires the text to equal <paramref name="otherProperty"/>, compared ordinally. A
+        /// missing value on either side passes.
+        /// </summary>
+        /// <inheritdoc cref="EqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, Expression{Func{T, System.Nullable{TValue}}})" path="/remarks"/>
         public static PropertyRuleBuilder<T, string?> EqualTo<T>(this PropertyRuleBuilder<T, string?> builder, Expression<Func<T, string?>> otherProperty)
         {
             return builder.CheckAgainst(otherProperty, StringComparison.Ordinal, EqualityKind.EqualTo);
         }
 
-        /// <inheritdoc cref="EqualTo{T}(PropertyRuleBuilder{T, string}, string, StringComparison)" path="/summary"/>
+        /// <summary>
+        /// Requires the text to equal <paramref name="otherProperty"/>, compared the way
+        /// <paramref name="comparison"/> says. A missing value on either side passes.
+        /// </summary>
+        /// <inheritdoc cref="EqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, Expression{Func{T, System.Nullable{TValue}}})" path="/remarks"/>
         public static PropertyRuleBuilder<T, string?> EqualTo<T>(this PropertyRuleBuilder<T, string?> builder, Expression<Func<T, string?>> otherProperty, StringComparison comparison)
         {
             return builder.CheckAgainst(otherProperty, comparison, EqualityKind.EqualTo);
         }
 
-        /// <inheritdoc cref="NotEqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, Expression{Func{T, System.Nullable{TValue}}})" path="/summary"/>
+        /// <summary>
+        /// Requires the text to differ from <paramref name="otherProperty"/>, compared ordinally. A
+        /// missing value on either side passes.
+        /// </summary>
+        /// <inheritdoc cref="NotEqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, Expression{Func{T, System.Nullable{TValue}}})" path="/remarks"/>
         public static PropertyRuleBuilder<T, string?> NotEqualTo<T>(this PropertyRuleBuilder<T, string?> builder, Expression<Func<T, string?>> otherProperty)
         {
             return builder.CheckAgainst(otherProperty, StringComparison.Ordinal, EqualityKind.NotEqualTo);
         }
 
-        /// <inheritdoc cref="EqualTo{T}(PropertyRuleBuilder{T, string}, string, StringComparison)" path="/summary"/>
+        /// <summary>
+        /// Requires the text to differ from <paramref name="otherProperty"/>, compared the way
+        /// <paramref name="comparison"/> says. A missing value on either side passes.
+        /// </summary>
+        /// <inheritdoc cref="NotEqualTo{T, TValue}(PropertyRuleBuilder{T, TValue}, Expression{Func{T, System.Nullable{TValue}}})" path="/remarks"/>
         public static PropertyRuleBuilder<T, string?> NotEqualTo<T>(this PropertyRuleBuilder<T, string?> builder, Expression<Func<T, string?>> otherProperty, StringComparison comparison)
         {
             return builder.CheckAgainst(otherProperty, comparison, EqualityKind.NotEqualTo);
         }
 
         /// <summary>
-        /// Requires the value to be one of <paramref name="values"/> — a closed set the contract names,
-        /// e.g. the currencies an endpoint settles in.
+        /// Requires the value to be one of <paramref name="values"/> — a closed set the contract
+        /// names, e.g. the currencies an endpoint settles in.
         /// </summary>
         /// <remarks>
-        /// The message names the allowed values, unlike <c>NotContaining</c>, which names none of the
-        /// ones it refuses. An allowlist may say what it allows; a blocklist which reports its own
-        /// entries is one the next value works around.
+        /// Reports <see cref="ValidationErrorCodes.OneOf"/>, whose message names the allowed values. An
+        /// allowlist may say what it allows; a blocklist which reported its own entries would be one the
+        /// next value works around, which is why <c>NotContaining</c> names none of them.
         /// </remarks>
         /// <exception cref="ArgumentException"><paramref name="values"/> is empty.</exception>
         public static PropertyRuleBuilder<T, TValue> OneOf<T, TValue>(this PropertyRuleBuilder<T, TValue> builder, params TValue[] values)
@@ -376,8 +462,8 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The form for a property which may be absent. A missing value passes; use <c>NotNull()</c> to
-        /// require one.
+        /// Requires the value to be one of <paramref name="values"/>. A missing value passes; use
+        /// <c>NotNull()</c> to require one.
         /// </summary>
         /// <inheritdoc cref="OneOf{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue[])" path="/remarks"/>
         /// <inheritdoc cref="OneOf{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue[])" path="/exception"/>
@@ -396,7 +482,8 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The text form, compared exactly. A missing value passes.
+        /// Requires the text to be one of <paramref name="values"/>, compared ordinally. A missing
+        /// value passes.
         /// </summary>
         /// <inheritdoc cref="OneOf{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue[])" path="/remarks"/>
         /// <exception cref="ArgumentException"><paramref name="values"/> is empty, or names a blank entry.</exception>
@@ -406,11 +493,11 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, comparing the way <paramref name="comparison"/> says — a code a client may send in
-        /// any casing, typically.
+        /// Requires the text to be one of <paramref name="values"/>, compared the way
+        /// <paramref name="comparison"/> says — a code a client may send in any casing, typically.
         /// </summary>
-        /// <inheritdoc cref="OneOf{T}(PropertyRuleBuilder{T, string}, string[])" path="/remarks"/>
-        /// <inheritdoc cref="OneOf{T}(PropertyRuleBuilder{T, string}, string[])" path="/exception"/>
+        /// <inheritdoc cref="OneOf{T, TValue}(PropertyRuleBuilder{T, TValue}, TValue[])" path="/remarks"/>
+        /// <inheritdoc cref="OneOf{T}(PropertyRuleBuilder{T, System.String}, System.String[])" path="/exception"/>
         public static PropertyRuleBuilder<T, string?> OneOf<T>(
             this PropertyRuleBuilder<T, string?> builder,
             StringComparison comparison,
@@ -488,13 +575,9 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Reports the failure under the key that matches the bounds actually applied.
+        /// Reports under the key matching the bounds actually applied, so the message never names a value the
+        /// rule just refused as one of the permitted ones.
         /// </summary>
-        /// <remarks>
-        /// A range which excludes a bound has to say so. Reporting the inclusive wording for every form
-        /// would name the two values the rule just refused as the permitted ones, and no translation
-        /// could put that right, because the inclusivity would never reach the provider.
-        /// </remarks>
         private static void AddBetweenError<T, TProperty, TValue>(
             RuleContext<T, TProperty> context, TValue from, TValue to, bool inclusiveFrom, bool inclusiveTo)
             where TValue : struct
@@ -632,10 +715,10 @@ namespace NValidation
             });
         }
 
-        /// <remarks>
-        /// A missing value passes, as it does for every other rule about a string: whether the text has
-        /// to be there at all is <c>NotEmpty</c>'s question, not this one's.
-        /// </remarks>
+        /// <summary>
+        /// A missing value passes, as it does for every other rule about a string: whether the text has to be
+        /// there at all is NotEmpty's question, not this one's.
+        /// </summary>
         private static PropertyRuleBuilder<T, string?> CheckAgainst<T>(
             this PropertyRuleBuilder<T, string?> builder, string? value, StringComparison comparison, EqualityKind kind)
         {
@@ -680,7 +763,6 @@ namespace NValidation
             });
         }
 
-        /// <inheritdoc cref="CheckAgainst{T}(PropertyRuleBuilder{T, string}, string, StringComparison, EqualityKind)" path="/remarks"/>
         private static PropertyRuleBuilder<T, string?> CheckAgainst<T>(
             this PropertyRuleBuilder<T, string?> builder, Expression<Func<T, string?>> otherProperty, StringComparison comparison, EqualityKind kind)
         {

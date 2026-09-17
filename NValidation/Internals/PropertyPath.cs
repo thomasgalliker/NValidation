@@ -2,15 +2,12 @@ using System.Linq.Expressions;
 
 namespace NValidation.Internals
 {
-    /// <summary>
-    /// Turns a property expression into the dotted property name the error is reported under.
-    /// </summary>
     internal static class PropertyPath
     {
         /// <summary>
-        /// The path of a rule declared for the instance itself rather than for one of its properties.
-        /// Empty because there is no member to name: an element of a collection of scalars is identified
-        /// by its position alone, so <c>ServiceMileages[1]</c> is the whole name.
+        /// The path of a rule declared for the instance itself rather than for one of its properties. Empty
+        /// because there is no member to name: an element of a collection of scalars is identified by its
+        /// position alone, so ServiceMileages[1] is the whole name.
         /// </summary>
         public const string Self = "";
 

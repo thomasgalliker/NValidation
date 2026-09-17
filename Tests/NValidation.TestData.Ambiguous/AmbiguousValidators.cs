@@ -14,7 +14,6 @@ namespace NValidation.TestData.Ambiguous
         }
     }
 
-    /// <inheritdoc cref="FirstAmbiguousValidator"/>
     public sealed class SecondAmbiguousValidator : Validator<AmbiguousPayload>
     {
         public const string PropertyName = "Second";

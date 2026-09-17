@@ -39,10 +39,6 @@ namespace NValidation
             return this;
         }
 
-        /// <summary>
-        /// Appends a rule which runs a validator this chain composed — a nested object's, or an
-        /// element's — whose failures are reported as that validator judged them.
-        /// </summary>
         internal PropertyRuleBuilder<T, TProperty> AddComposed(Func<RuleContext<T, TProperty>, CancellationToken, ValueTask> check)
         {
             ArgumentNullException.ThrowIfNull(check);
@@ -52,10 +48,6 @@ namespace NValidation
             return this;
         }
 
-        /// <summary>
-        /// The same, for a composed validator whose every rule judges rather than awaits, so this chain
-        /// stays synchronous.
-        /// </summary>
         internal PropertyRuleBuilder<T, TProperty> AddComposed(Action<RuleContext<T, TProperty>> check)
         {
             ArgumentNullException.ThrowIfNull(check);
@@ -100,9 +92,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, for a message which has to be resolved while the rule runs rather than while it is
-        /// declared — a localized resource depends on the culture of the current thread.
+        /// Gives the rule just declared a wording of its own, resolved while the rule runs rather than while
+        /// it is declared — a localized resource depends on the culture of the current thread.
         /// </summary>
+        /// <inheritdoc cref="WithMessage(System.String)" path="/remarks"/>
         public PropertyRuleBuilder<T, TProperty> WithMessage(Func<string> message)
         {
             ArgumentNullException.ThrowIfNull(message);
@@ -111,12 +104,12 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, for a message which names something about the object being validated:
+        /// Gives the rule just declared a wording that names something about the object being validated:
         /// <c>this.Property(x => x.Vin).Must(...).WithMessage(car => $"VIN {car.Vin} is already registered.");</c>
         /// </summary>
         /// <remarks>
-        /// The result is a template like any other spelling of <c>WithMessage</c>, so it may still name
-        /// the placeholders the rule supplies.
+        /// Applies to that one rule, not to the whole chain. The result is a template like any other spelling
+        /// of <c>WithMessage</c>, so it may still name the placeholders the rule supplies.
         /// </remarks>
         public PropertyRuleBuilder<T, TProperty> WithMessage(Func<T, string> message)
         {
@@ -126,9 +119,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, for a message which names the value that failed as well as the object it came from.
+        /// Gives the rule just declared a wording that names the value which failed as well as the object it
+        /// came from.
         /// </summary>
-        /// <inheritdoc cref="WithMessage(Func{T, string})" path="/remarks"/>
+        /// <inheritdoc cref="WithMessage(System.Func{T, System.String})" path="/remarks"/>
         public PropertyRuleBuilder<T, TProperty> WithMessage(Func<T, TProperty, string> message)
         {
             ArgumentNullException.ThrowIfNull(message);
@@ -144,14 +138,11 @@ namespace NValidation
         /// </summary>
         /// <remarks>
         /// Applies to that one rule, not to the whole chain, and does not affect where the failure is
-        /// reported — that is <see cref="WithPropertyName(string)"/>'s job.
-        /// <para>
-        /// The code is also the key the message is resolved under, which is what makes a rule of the
-        /// caller's own localizable: <c>.Must(...).WithErrorCode("SwissPlate")</c> asks the host's
-        /// provider for the <c>SwissPlate</c> text, exactly as a shipped rule asks for its own. A
-        /// provider with nothing under that code answers with the code itself, which is visible rather
-        /// than silent.
-        /// </para>
+        /// reported — that is <see cref="WithPropertyName(string)"/>'s job. The code is also the key
+        /// the message is resolved under, which is what makes a rule of the caller's own localizable:
+        /// <c>.Must(...).WithErrorCode("SwissPlate")</c> asks the host's provider for the
+        /// <c>SwissPlate</c> text, exactly as a shipped rule asks for its own, and a provider with
+        /// nothing under that code answers with the code itself.
         /// </remarks>
         /// <exception cref="ArgumentException"><paramref name="errorCode"/> is empty or whitespace.</exception>
         public PropertyRuleBuilder<T, TProperty> WithErrorCode(string errorCode)
@@ -185,9 +176,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, for a display name which has to be resolved while the rules run rather than while
-        /// they are declared — a localized resource depends on the culture of the current thread.
+        /// Names this property in its messages, resolved while the rules run rather than while they are
+        /// declared — a localized resource depends on the culture of the current thread.
         /// </summary>
+        /// <inheritdoc cref="WithDisplayName(System.String)" path="/remarks"/>
         public PropertyRuleBuilder<T, TProperty> WithDisplayName(Func<string> displayName)
         {
             ArgumentNullException.ThrowIfNull(displayName);
@@ -206,11 +198,9 @@ namespace NValidation
         /// default. Override it where the client's field is not shaped like the model's — a flattened
         /// form, or a property name the contract froze before the model was refactored. Applies to the whole
         /// property, like <see cref="WithDisplayName(string)"/>, and does not affect the wording of any
-        /// message.
-        /// <para>
-        /// A rule which reports under a property name of its own — one error per collection entry, say —
-        /// keeps that property name; this replaces what the property's own rules report under.
-        /// </para>
+        /// message. A rule which reports under a property name of its own — one error per collection
+        /// entry, say — keeps that property name; this replaces what the property's own rules report
+        /// under.
         /// </remarks>
         /// <exception cref="ArgumentException">
         /// <paramref name="propertyName"/> is empty or whitespace. The property name is the token a
@@ -296,8 +286,8 @@ namespace NValidation
         }
 
         /// <summary>
-        /// A builder is only meaningful when it came from <see cref="Validator{T}.Property{TProperty}(System.Linq.Expressions.Expression{System.Func{T, TProperty}})"/>.
-        /// It is a struct, so a caller can also write <c>default</c>, which carries no rule to append to.
+        /// A builder is only meaningful when it came from Validator. It is a struct, so a caller can also
+        /// write default, which carries no rule to append to.
         /// </summary>
         private PropertyRule<T, TProperty> RequireRule()
         {

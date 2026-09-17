@@ -2,10 +2,6 @@ using System.Text;
 
 namespace NValidation.Testing.Internals
 {
-    /// <summary>
-    /// Writes the text of a failed assertion: what was expected, what came back, and which of the two
-    /// the reader has to look at. Ordering is never implied, because the match ignores it.
-    /// </summary>
     internal static class ValidationAssertionMessage
     {
         private const string AnyMessage = "(any message)";
@@ -117,10 +113,6 @@ namespace NValidation.Testing.Internals
             AppendRows(message, match.UnmatchedErrors.Select(Row).ToArray());
         }
 
-        /// <summary>
-        /// Writes the rows with the property-name column padded to a common width, so a reader can run an eye
-        /// down the property names instead of hunting for them inside the messages.
-        /// </summary>
         private static void AppendRows(StringBuilder message, IReadOnlyList<(string PropertyName, string Message)> rows)
         {
             if (rows.Count == 0)

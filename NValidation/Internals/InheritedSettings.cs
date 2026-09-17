@@ -1,13 +1,5 @@
 namespace NValidation.Internals
 {
-    /// <summary>
-    /// The settings a pass inherits: at the root, what the call was given; below it, what the composer
-    /// resolved for itself. A member left <c>null</c> was not named at that level.
-    /// </summary>
-    /// <remarks>
-    /// Two bytes rather than two <see cref="Nullable{T}"/>, because this travels inside every
-    /// <see cref="ValidationRun"/> and sits on every <see cref="ValidationFrame"/>.
-    /// </remarks>
     internal readonly struct InheritedSettings
     {
         private readonly byte classBehavior;
@@ -34,10 +26,6 @@ namespace NValidation.Internals
                 : new InheritedSettings(options.MessageProvider, options.ValidationBehaviors.Class, options.ValidationBehaviors.Property);
         }
 
-        /// <summary>
-        /// The same as options, for a validator written by hand which can only take those; <c>null</c>
-        /// where nothing is named.
-        /// </summary>
         public NValidationOptions? AsOptions()
         {
             if (this.MessageProvider is null && this.classBehavior == 0 && this.propertyBehavior == 0)

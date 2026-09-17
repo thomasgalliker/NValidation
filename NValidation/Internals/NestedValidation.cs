@@ -1,9 +1,5 @@
 namespace NValidation.Internals
 {
-    /// <summary>
-    /// Runs a validator that another validator composed, passing the <see cref="ValidationRun"/> on where
-    /// the composed validator can take one and the inherited settings as options where it cannot.
-    /// </summary>
     internal static class NestedValidation
     {
         public static ValueTask<ValidationResult> ValidateAsync<T>(IValidator<T> validator, T instance, ValidationRun run)
@@ -19,8 +15,8 @@ namespace NValidation.Internals
         }
 
         /// <summary>
-        /// The same, reporting into a list the caller owns. A validator written by hand can only answer
-        /// with a result, so its errors are copied across.
+        /// The same, reporting into a list the caller owns. A validator written by hand can only answer with
+        /// a result, so its errors are copied across.
         /// </summary>
         public static async ValueTask ValidateIntoAsync<T>(
             IValidator<T> validator, T instance, List<ValidationError> errors, ValidationRun run)

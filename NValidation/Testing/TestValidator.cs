@@ -12,14 +12,10 @@ namespace NValidation.Testing
     /// reader has to go and open.
     /// </summary>
     /// <remarks>
-    /// Not a different kind of validator: <see cref="Property{TProperty}"/> is
-    /// <see cref="Validator{T}.Property{TProperty}(System.Linq.Expressions.Expression{System.Func{T, TProperty}})"/> made reachable and nothing else, so a rule declared
-    /// here behaves exactly as the same rule declared in a validator an application ships. That is the
-    /// point — what the test proves is what a caller gets.
-    /// <para>
-    /// Declare every rule before validating: the first run freezes the rules, and a rule declared after
-    /// it throws <see cref="InvalidOperationException"/> rather than being silently ignored.
-    /// </para>
+    /// <see cref="Property{TProperty}"/> only makes the base class's own <c>Property</c> reachable, so
+    /// a rule declared here behaves exactly as it would in a validator an application ships. Declare
+    /// every rule before validating: the first run freezes them, and a rule declared after it throws
+    /// <see cref="InvalidOperationException"/> rather than being silently ignored.
     /// </remarks>
     /// <typeparam name="T">The type being validated.</typeparam>
     public sealed class TestValidator<T> : Validator<T>

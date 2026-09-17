@@ -197,7 +197,6 @@ namespace NValidation.Tests
             act.Should().Throw<ArgumentOutOfRangeException>();
         }
 
-        /// <inheritdoc cref="MultipleOf_WithAZeroStep_ThrowsWhileTheRuleIsDeclared" path="/summary"/>
         [Fact]
         public void MultipleOf_WithAZeroWholeNumberStep_ThrowsWhileTheRuleIsDeclared()
         {

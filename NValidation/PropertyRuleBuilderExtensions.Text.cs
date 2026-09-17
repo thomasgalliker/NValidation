@@ -8,18 +8,20 @@ namespace NValidation
     public static partial class PropertyRuleBuilderExtensions
     {
         /// <summary>
-        /// How long a caller-supplied pattern may run before it is abandoned. A pattern is data as much
-        /// as a value is, and a pathological one must not be able to occupy a request indefinitely.
+        /// How long a caller-supplied pattern may run before it is abandoned. A pattern is data as much as a
+        /// value is, and a pathological one must not be able to occupy a request indefinitely.
         /// </summary>
         private static readonly TimeSpan MatchTimeout = TimeSpan.FromSeconds(1);
 
         /// <summary>
-        /// Requires at least <paramref name="minimumLength"/> characters. A missing value passes; use
-        /// <c>NotEmpty()</c> to require one.
+        /// Requires at least <paramref name="minimumLength"/> characters. A missing value passes;
+        /// use <c>NotEmpty()</c> to require one.
         /// </summary>
         /// <remarks>
-        /// The text is measured as it arrived. Surrounding whitespace counts, and rejecting a blank
-        /// value is <c>NotEmpty</c>'s job, not this rule's.
+        /// Reports <see cref="ValidationErrorCodes.MinimumLength"/> with
+        /// <see cref="ValidationMessagePlaceholders.MinLength"/>.
+        /// The text is measured as it arrived: surrounding whitespace counts, and rejecting a blank value is
+        /// <c>NotEmpty</c>'s job.
         /// </remarks>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="minimumLength"/> is negative.</exception>
         public static PropertyRuleBuilder<T, string?> MinimumLength<T>(this PropertyRuleBuilder<T, string?> builder, int minimumLength)
@@ -36,9 +38,13 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Caps the number of characters, typically to whatever the column behind it holds. A missing
-        /// value passes.
+        /// Caps the number of characters, typically to whatever the column behind it holds. A
+        /// missing value passes.
         /// </summary>
+        /// <remarks>
+        /// Reports <see cref="ValidationErrorCodes.MaximumLength"/> with
+        /// <see cref="ValidationMessagePlaceholders.MaxLength"/>.
+        /// </remarks>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumLength"/> is negative.</exception>
         public static PropertyRuleBuilder<T, string?> MaximumLength<T>(this PropertyRuleBuilder<T, string?> builder, int maximumLength)
         {
@@ -54,9 +60,13 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Requires an exact number of characters, e.g. an ISO currency code.
+        /// Requires an exact number of characters, e.g. an ISO currency code. A missing value
+        /// passes.
         /// </summary>
-        /// <inheritdoc cref="MinimumLength{T}" path="/remarks"/>
+        /// <remarks>
+        /// Reports <see cref="ValidationErrorCodes.Length"/> with
+        /// <see cref="ValidationMessagePlaceholders.Length"/>.
+        /// </remarks>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="length"/> is negative.</exception>
         public static PropertyRuleBuilder<T, string?> Length<T>(this PropertyRuleBuilder<T, string?> builder, int length)
         {
@@ -73,8 +83,12 @@ namespace NValidation
 
         /// <summary>
         /// Requires the number of characters to lie between <paramref name="minimumLength"/> and
-        /// <paramref name="maximumLength"/>, both included.
+        /// <paramref name="maximumLength"/>, both included. A missing value passes.
         /// </summary>
+        /// <remarks>
+        /// Reports <see cref="ValidationErrorCodes.LengthBetween"/> with
+        /// <see cref="ValidationMessagePlaceholders.MinLength"/> and <see cref="ValidationMessagePlaceholders.MaxLength"/>.
+        /// </remarks>
         /// <exception cref="ArgumentOutOfRangeException">
         /// <paramref name="minimumLength"/> is negative, or greater than <paramref name="maximumLength"/>.
         /// </exception>
@@ -103,15 +117,17 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Requires the text to match <paramref name="regex"/>. A missing or blank value passes; use
-        /// <c>NotEmpty()</c> to require one.
+        /// Requires the text to match <paramref name="regex"/>. A missing or blank value passes;
+        /// use <c>NotEmpty()</c> to require one.
         /// </summary>
         /// <remarks>
+        /// Reports <see cref="ValidationErrorCodes.Matches"/> with
+        /// <see cref="ValidationMessagePlaceholders.Pattern"/>.
         /// The caller owns the match timeout here: a <see cref="Regex"/> built without one runs under
-        /// <see cref="Regex.InfiniteMatchTimeout"/>, and a pattern that backtracks pathologically can
-        /// then occupy the request for as long as it likes. Give the instance a timeout, or use the
-        /// pattern overload, which applies one. A value the pattern cannot decide within its timeout
-        /// counts as not matching.
+        /// <see cref="Regex.InfiniteMatchTimeout"/>, and a pattern that backtracks pathologically can then
+        /// occupy the request for as long as it likes. Give the instance a timeout, or use the pattern
+        /// overload, which applies one. A value the pattern cannot decide within its timeout counts as not
+        /// matching.
         /// </remarks>
         public static PropertyRuleBuilder<T, string?> Matches<T>(this PropertyRuleBuilder<T, string?> builder, Regex regex)
         {
@@ -146,12 +162,14 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, from a pattern. The pattern is compiled once, when the rule is declared, with a
-        /// match timeout.
+        /// Requires the text to match <paramref name="pattern"/>, which is compiled once when the
+        /// rule is declared and carries a match timeout. A missing or blank value passes.
         /// </summary>
         /// <remarks>
-        /// Pass a <see cref="Regex"/> instead when the pattern is reused across validators, or when it
-        /// needs options this overload does not expose.
+        /// Reports <see cref="ValidationErrorCodes.Matches"/> with
+        /// <see cref="ValidationMessagePlaceholders.Pattern"/>.
+        /// Pass a <see cref="Regex"/> instead when the pattern is reused across validators, or when it needs
+        /// options this overload does not expose.
         /// </remarks>
         public static PropertyRuleBuilder<T, string?> Matches<T>(this PropertyRuleBuilder<T, string?> builder, string pattern)
         {
@@ -167,22 +185,16 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Requires the value to be one mail address and nothing else. A missing or blank value passes;
-        /// use <c>NotEmpty()</c> to require one.
+        /// Requires the value to be one mail address and nothing else. A missing or blank value
+        /// passes; use <c>NotEmpty()</c> to require one.
         /// </summary>
         /// <remarks>
-        /// Parsed by <see cref="MailAddress"/> rather than matched against a pattern. The address forms
-        /// that are legal are far broader than a hand-written pattern allows — a quoted local part, an
-        /// IP literal, an internationalized domain — and a pattern wide enough to admit them is one
-        /// nobody can read, let alone review. A parser also cannot be made to backtrack by a hostile
-        /// value.
-        /// <para>
-        /// The value has to be the address <em>alone</em>. <see cref="MailAddress"/> parses the header
-        /// forms too, so <c>Foo &lt;a@b.com&gt;</c>, <c>a@b.com, c@d.com</c> and a value with
-        /// surrounding whitespace all parse — and each of them is something other than the single
-        /// address the field asked for. What a host does with such a value later, in a mail header or a
-        /// recipient list, is not this rule's to assume, so they are rejected here.
-        /// </para>
+        /// Reports <see cref="ValidationErrorCodes.EmailAddress"/>.
+        /// Parsed by <see cref="MailAddress"/> rather than matched against a pattern, which also cannot be
+        /// made to backtrack by a hostile value. The value has to be the address <em>alone</em>:
+        /// <see cref="MailAddress"/> parses the header forms too, so <c>Foo &lt;a@b.com&gt;</c>,
+        /// <c>a@b.com, c@d.com</c> and a value with surrounding whitespace all parse, and each is something
+        /// other than the single address the field asked for.
         /// </remarks>
         public static PropertyRuleBuilder<T, string?> EmailAddress<T>(this PropertyRuleBuilder<T, string?> builder)
         {
@@ -197,14 +209,16 @@ namespace NValidation
 
         /// <summary>
         /// Requires a mail address to sit under one of <paramref name="topLevelDomains"/>, e.g. the
-        /// domains a tenant is allowed to invite from. Entries are compared without regard to case, and
-        /// may be written with or without their leading dot.
+        /// domains a tenant is allowed to invite from. Entries are compared without regard to case, and may
+        /// be written with or without their leading dot.
         /// </summary>
         /// <remarks>
-        /// Declare it after <see cref="EmailAddress{T}"/>: this rule asks which domain the address is
-        /// under, and a value that is not an address has no answer, so it passes here and is reported by
-        /// the rule whose question it is. An address whose host carries no top-level domain — a bare
-        /// host name, or an IP literal — is not under any of them and is reported.
+        /// Reports <see cref="ValidationErrorCodes.EmailTopLevelDomain"/> with
+        /// <see cref="ValidationMessagePlaceholders.TopLevelDomains"/>.
+        /// Declare it after <see cref="EmailAddress{T}"/>: this rule asks which domain the address is under,
+        /// and a value that is not an address has no answer, so it passes here and is reported by the rule
+        /// whose question it is. An address whose host carries no top-level domain — a bare host name, or an
+        /// IP literal — is not under any of them and is reported.
         /// </remarks>
         /// <exception cref="ArgumentException"><paramref name="topLevelDomains"/> is empty, or names a blank entry.</exception>
         public static PropertyRuleBuilder<T, string?> EmailTopLevelDomainIn<T>(this PropertyRuleBuilder<T, string?> builder, params string[] topLevelDomains)
@@ -228,10 +242,16 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The inverse: refuses a mail address under any of <paramref name="topLevelDomains"/> — the
-        /// throwaway domains a signup form will not take, typically.
+        /// Refuses a mail address under any of <paramref name="topLevelDomains"/> — the throwaway
+        /// domains a signup form will not take, typically. Entries are compared without regard to case, and
+        /// may be written with or without their leading dot.
         /// </summary>
-        /// <inheritdoc cref="EmailTopLevelDomainIn{T}" path="/remarks"/>
+        /// <remarks>
+        /// Reports <see cref="ValidationErrorCodes.EmailTopLevelDomainNotAllowed"/> with
+        /// <see cref="ValidationMessagePlaceholders.TopLevelDomain"/>.
+        /// Declare it after <see cref="EmailAddress{T}"/>, for the same reason as its counterpart: a value
+        /// that is not an address has no domain to judge and passes here.
+        /// </remarks>
         /// <inheritdoc cref="EmailTopLevelDomainIn{T}" path="/exception"/>
         public static PropertyRuleBuilder<T, string?> EmailTopLevelDomainNotIn<T>(this PropertyRuleBuilder<T, string?> builder, params string[] topLevelDomains)
         {
@@ -254,13 +274,14 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Refuses text that contains any of <paramref name="values"/> — a list of terms a public-facing
-        /// field will not carry, typically. Compared without regard to case; a missing value passes.
+        /// Refuses text that contains any of <paramref name="values"/> — a list of terms a
+        /// public-facing field will not carry, typically. Compared without regard to case; a missing value
+        /// passes.
         /// </summary>
         /// <remarks>
-        /// The message does not say which term matched. A blocklist that reports its own entries is a
-        /// blocklist the next value works around, and the reader is being told to write something else
-        /// rather than to guess a word.
+        /// Reports <see cref="ValidationErrorCodes.NotContaining"/>.
+        /// The message does not say which term matched: a blocklist that reports its own entries is one the
+        /// next value works around.
         /// </remarks>
         /// <exception cref="ArgumentException"><paramref name="values"/> is empty, or names a blank entry.</exception>
         public static PropertyRuleBuilder<T, string?> NotContaining<T>(this PropertyRuleBuilder<T, string?> builder, params string[] values)
@@ -269,10 +290,11 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, comparing the way <paramref name="comparison"/> says.
+        /// Refuses text that contains any of <paramref name="values"/>, compared the way
+        /// <paramref name="comparison"/> says. A missing value passes.
         /// </summary>
-        /// <inheritdoc cref="NotContaining{T}(PropertyRuleBuilder{T, string}, string[])" path="/remarks"/>
-        /// <inheritdoc cref="NotContaining{T}(PropertyRuleBuilder{T, string}, string[])" path="/exception"/>
+        /// <inheritdoc cref="NotContaining{T}(PropertyRuleBuilder{T, System.String}, System.String[])" path="/remarks"/>
+        /// <inheritdoc cref="NotContaining{T}(PropertyRuleBuilder{T, System.String}, System.String[])" path="/exception"/>
         public static PropertyRuleBuilder<T, string?> NotContaining<T>(
             this PropertyRuleBuilder<T, string?> builder,
             StringComparison comparison,
@@ -299,31 +321,14 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Whether the value is one mail address and nothing else.
+        /// Whether the value is one mail address and nothing else. Decided over the characters for the
+        /// everyday shape, because <c>MailAddress</c> also parses the header forms.
         /// </summary>
-        /// <remarks>
-        /// The everyday shape is decided over the characters themselves, because
-        /// <see cref="MailAddress"/> allocates the parsed address and its parts, and a value the rule
-        /// accepts should not pay for producing something nobody goes on to read. The span pass only
-        /// ever answers yes: everything it is not certain about — a quoted local part, an address
-        /// literal, an internationalized domain, a host without a dot — falls through to the parser,
-        /// which is what decides those. A rule which needs the parsed address itself, rather than a
-        /// verdict about it, still asks <see cref="TryGetBareAddress"/>.
-        /// </remarks>
         private static bool IsBareAddress(string value)
         {
             return IsOrdinaryAddress(value) || TryGetBareAddress(value, out _);
         }
 
-        /// <summary>
-        /// Whether the value is an address of the everyday shape — a dot-atom local part of unreserved
-        /// ASCII, one <c>@</c>, then a dotted host of letters, digits and hyphens — which
-        /// <see cref="MailAddress"/> parses to exactly itself, so accepting it here and accepting it
-        /// there are the same answer.
-        /// </summary>
-        /// <remarks>
-        /// <c>false</c> means "not decided here", never "not an address".
-        /// </remarks>
         private static bool IsOrdinaryAddress(ReadOnlySpan<char> value)
         {
             var at = value.IndexOf('@');
@@ -336,10 +341,6 @@ namespace NValidation
             return IsDotAtom(value[..at]) && IsDottedHost(value[(at + 1)..]);
         }
 
-        /// <summary>
-        /// A local part of unreserved ASCII, with dots between its atoms rather than at either end or
-        /// doubled.
-        /// </summary>
         private static bool IsDotAtom(ReadOnlySpan<char> local)
         {
             if (local[0] == '.' || local[^1] == '.')
@@ -376,11 +377,6 @@ namespace NValidation
             return true;
         }
 
-        /// <summary>
-        /// A host of dot-separated labels of letters, digits and hyphens, each label non-empty and
-        /// neither starting nor ending with a hyphen. A host carrying no dot is legal and left to the
-        /// parser.
-        /// </summary>
         private static bool IsDottedHost(ReadOnlySpan<char> host)
         {
             var labelLength = 0;
@@ -419,9 +415,6 @@ namespace NValidation
             return dots > 0 && labelLength > 0 && previous != '-';
         }
 
-        /// <summary>
-        /// The value read as one mail address and nothing else.
-        /// </summary>
         private static bool TryGetBareAddress(string value, [NotNullWhen(true)] out MailAddress? address)
         {
             if (MailAddress.TryCreate(value, out var parsed) && string.Equals(parsed.Address, value, StringComparison.Ordinal))
@@ -434,10 +427,6 @@ namespace NValidation
             return false;
         }
 
-        /// <summary>
-        /// The last label of the address's host, or <c>null</c> where there is none to take: a host with
-        /// no dot in it, or an IP literal, which is written in brackets and is not a domain at all.
-        /// </summary>
         private static string? TopLevelDomainOf(MailAddress address)
         {
             var host = address.Host;

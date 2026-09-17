@@ -7,9 +7,7 @@ namespace NValidation.Internals
         private readonly Func<T, TProperty> accessor;
         private readonly List<RuleCheck> checks = [];
 
-        // The checks as an array, taken when the validator freezes and never re-read.
         private RuleCheck[]? frozenChecks;
-
 
         private Func<string>? displayName;
 
@@ -25,14 +23,8 @@ namespace NValidation.Internals
 
         public string PropertyName { get; }
 
-        /// <summary>
-        /// The display names of every property of the validator, handed over when it freezes.
-        /// </summary>
         public PropertyDisplayNames DisplayNames { get; private set; } = PropertyDisplayNames.None;
 
-        /// <summary>
-        /// What messages call this property instead of its property name. <c>null</c> until the chain opts in.
-        /// </summary>
         public Func<string>? DisplayName
         {
             get => this.displayName;
@@ -45,10 +37,6 @@ namespace NValidation.Internals
             }
         }
 
-        /// <summary>
-        /// What failures of this property are reported under instead of its member path. <c>null</c>
-        /// until the chain opts in.
-        /// </summary>
         public string? PropertyNameOverride
         {
             get => this.propertyNameOverride;
@@ -62,8 +50,8 @@ namespace NValidation.Internals
         }
 
         /// <summary>
-        /// What this chain does once one of its rules has failed, where the chain declared it for
-        /// itself. <c>null</c> — the default — means it takes whatever the validator resolved.
+        /// What this chain does once one of its rules has failed, where the chain declared it for itself.
+        /// null — the default — means it takes whatever the validator resolved.
         /// </summary>
         public ValidationBehavior? ValidationBehaviorOverride
         {
@@ -77,19 +65,12 @@ namespace NValidation.Internals
             }
         }
 
-        /// <summary>
-        /// Decides whether this property is validated at all. <c>null</c> means always.
-        /// </summary>
         private Func<T, bool>? Condition { get; set; }
 
-        /// <inheritdoc/>
         public bool IsSynchronous { get; private set; } = true;
 
         private RuleCheck[] Checks => this.frozenChecks ??= [.. this.checks];
 
-        /// <summary>
-        /// Appends a rule which has something to await.
-        /// </summary>
         public void Add(Func<RuleContext<T, TProperty>, CancellationToken, ValueTask> check)
         {
             this.ThrowIfFrozen();
@@ -99,9 +80,9 @@ namespace NValidation.Internals
         }
 
         /// <summary>
-        /// Appends a rule which judges the value without awaiting. Kept as written rather than wrapped
-        /// in a lambda returning a completed <see cref="ValueTask"/>, because almost every rule is one of
-        /// these and the wrapper would cost a delegate call and a <see cref="ValueTask"/> per rule per run.
+        /// Appends a rule which judges the value without awaiting. Kept as written rather than wrapped in a
+        /// lambda returning a completed ValueTask, because almost every rule is one of these and the wrapper
+        /// would cost a delegate call and a ValueTask per rule per run.
         /// </summary>
         public void Add(Action<RuleContext<T, TProperty>> check)
         {
@@ -110,10 +91,6 @@ namespace NValidation.Internals
             this.checks.Add(new RuleCheck(check, isComposed: false));
         }
 
-        /// <summary>
-        /// Appends a check which runs a validator this chain composed rather than judging the value
-        /// itself; the composed validator awaits something.
-        /// </summary>
         public void AddComposed(Func<RuleContext<T, TProperty>, CancellationToken, ValueTask> check)
         {
             this.ThrowIfFrozen();
@@ -122,10 +99,6 @@ namespace NValidation.Internals
             this.checks.Add(new RuleCheck(check, isComposed: true));
         }
 
-        /// <summary>
-        /// The same, for a composed validator whose every rule judges rather than awaits, so this chain
-        /// stays synchronous.
-        /// </summary>
         public void AddComposed(Action<RuleContext<T, TProperty>> check)
         {
             this.ThrowIfFrozen();
@@ -134,8 +107,7 @@ namespace NValidation.Internals
         }
 
         /// <summary>
-        /// Gives the rule which was added last a message of its own, replacing the one its error code
-        /// would have produced.
+        /// Applies to the rule added last, not to the chain.
         /// </summary>
         public void SetMessageOfLastCheck(Func<T, TProperty, string> message)
         {
@@ -159,8 +131,8 @@ namespace NValidation.Internals
         }
 
         /// <summary>
-        /// Gives the rule which was added last an error code of its own, which is both what the failure
-        /// reports and the key its message is resolved under.
+        /// Applies to the rule added last. The code is both what the failure reports and the key its message
+        /// is resolved under.
         /// </summary>
         public void SetErrorCodeOfLastCheck(string errorCode)
         {
@@ -184,8 +156,8 @@ namespace NValidation.Internals
         }
 
         /// <summary>
-        /// Narrows when the chain applies. Several conditions combine, so each one can only make the
-        /// chain apply less often.
+        /// Narrows when the chain applies. Several conditions combine, so each one can only make the chain
+        /// apply less often.
         /// </summary>
         public void AddCondition(Func<T, bool> condition)
         {
@@ -217,13 +189,11 @@ namespace NValidation.Internals
         }
 
         /// <summary>
-        /// Runs a chain whose every rule judges rather than awaits.
+        /// Runs a chain whose every rule judges rather than awaits. The twin of ValidateAwaitingAsync: the
+        /// same loop with the one branch that can suspend. Two loops because sharing the body would make this
+        /// an async method, which is the state machine it exists to avoid. A change to the cascade rule is
+        /// made to both.
         /// </summary>
-        /// <remarks>
-        /// The twin of <see cref="ValidateAwaitingAsync"/>: the same loop with the one branch that can
-        /// suspend. Two loops because sharing the body would make this an async method, which is the
-        /// state machine it exists to avoid. A change to the cascade rule is made to both.
-        /// </remarks>
         public void Validate(ValidationFrame<T> frame, IValidationMessageProvider messageProvider, ValidationBehavior propertyBehavior)
         {
             if (!this.TryReadValue(frame, out var value))
@@ -252,7 +222,6 @@ namespace NValidation.Internals
             }
         }
 
-        /// <inheritdoc cref="Validate"/>
         private async ValueTask ValidateAwaitingAsync(ValidationFrame<T> frame, IValidationMessageProvider messageProvider, ValidationBehavior propertyBehavior)
         {
             if (!this.TryReadValue(frame, out var value))
@@ -289,11 +258,9 @@ namespace NValidation.Internals
             }
         }
 
-        /// <summary>
-        /// The property's value, or <c>false</c> where a condition says the chain does not apply. The
-        /// condition is asked before the property is read: it is what guards a chain whose path is only
-        /// reachable when the condition holds.
-        /// </summary>
+        // The property's value, or false where a condition says the chain does not apply. The condition is
+        // asked before the property is read: it is what guards a chain whose path is only reachable when
+        // the condition holds.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryReadValue(ValidationFrame<T> frame, out TProperty value)
         {
@@ -316,7 +283,6 @@ namespace NValidation.Internals
             return new RuleContext<T, TProperty>(frame, messageProvider, this, ruleCheck, value, errorCountAtStart);
         }
 
-        /// <exception cref="InvalidOperationException">The chain has already been used to validate.</exception>
         private void ThrowIfFrozen()
         {
             if (this.frozenChecks != null)
@@ -327,9 +293,6 @@ namespace NValidation.Internals
             }
         }
 
-        /// <summary>
-        /// One rule of the chain: what it runs, and the message and code the chain gave it.
-        /// </summary>
         internal sealed class RuleCheck
         {
             public RuleCheck(Func<RuleContext<T, TProperty>, CancellationToken, ValueTask> check, bool isComposed)
@@ -345,24 +308,22 @@ namespace NValidation.Internals
             }
 
             /// <summary>
-            /// Set for a rule which has something to await; <see cref="SyncCheck"/> is set instead for
-            /// one which has not. Exactly one of the two is ever set.
+            /// The body of a rule which awaits. Exactly one of this and SyncCheck is set.
             /// </summary>
             public Func<RuleContext<T, TProperty>, CancellationToken, ValueTask>? Check { get; }
 
-            /// <inheritdoc cref="Check"/>
+            /// <summary>
+            /// The body of a rule which judges rather than awaits. Exactly one of this and Check is set.
+            /// </summary>
             public Action<RuleContext<T, TProperty>>? SyncCheck { get; }
 
             public Func<T, TProperty, string>? Message { get; set; }
 
-            /// <summary>
-            /// What this rule reports instead of its own code, and resolves its message under.
-            /// </summary>
             public string? ErrorCodeOverride { get; set; }
 
             /// <summary>
-            /// Whether this check runs a validator the chain composed, whose failures are its own and
-            /// which <c>WithMessage</c> and <c>WithErrorCode</c> therefore cannot follow.
+            /// Whether this check runs a validator the chain composed, whose failures are its own and which
+            /// WithMessage and WithErrorCode therefore cannot follow.
             /// </summary>
             public bool IsComposed { get; }
         }

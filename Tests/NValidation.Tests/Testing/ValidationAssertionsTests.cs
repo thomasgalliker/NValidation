@@ -100,9 +100,6 @@ namespace NValidation.Tests.Testing
             act.Should().NotThrow();
         }
 
-        /// <summary>
-        /// An asterisk in an expected message is now a literal asterisk, not "anything".
-        /// </summary>
         [Fact]
         public void ShouldReport_WithAnAsteriskInTheExpectedMessage_MatchesItLiterally()
         {
@@ -386,7 +383,6 @@ namespace NValidation.Tests.Testing
             act.Should().Throw<ArgumentNullException>();
         }
 
-        /// <inheritdoc cref="ShouldReport_WithANullExpectation_ThrowsArgumentNullException" path="/summary"/>
         [Fact]
         public void ShouldReport_WithoutAnyExpectations_ThrowsArgumentNullException()
         {

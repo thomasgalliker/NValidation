@@ -18,8 +18,8 @@ namespace NValidation.Testing
     {
         /// <summary>
         /// Asserts that the only failure is <paramref name="message"/>, reported under
-        /// <paramref name="propertyName"/>. The message is matched with wildcards — see
-        /// <see cref="ExpectedError"/>.
+        /// <paramref name="propertyName"/>. The message is matched exactly; for a pattern, pass
+        /// <see cref="ExpectedError.Matching"/>.
         /// </summary>
         public static void ShouldReport(this ValidationResult result, string propertyName, string message)
         {
@@ -84,11 +84,8 @@ namespace NValidation.Testing
         /// these arrives in: <see cref="Dictionary{TKey, TValue}"/>, <see cref="IDictionary{TKey, TValue}"/>
         /// (which is how the framework's own <c>HttpValidationProblemDetails.Errors</c> is typed) and
         /// <see cref="IReadOnlyDictionary{TKey, TValue}"/> alike. Overloads for two of those would make
-        /// the third ambiguous.
-        /// <para>
-        /// A property carrying several messages counts as several failures, so the grouping makes no
-        /// difference to what has to be expected.
-        /// </para>
+        /// the third ambiguous. A property carrying several messages counts as several failures, so the
+        /// grouping makes no difference to what has to be expected.
         /// </remarks>
         /// <exception cref="ArgumentNullException"><paramref name="errors"/> or <paramref name="expected"/> is <c>null</c>.</exception>
         /// <exception cref="ValidationAssertionException">The errors are not what was expected.</exception>
@@ -159,10 +156,6 @@ namespace NValidation.Testing
                 ValidationAssertionMessage.Build(subject, expectations, actual, match));
         }
 
-        /// <summary>
-        /// Turns a <c>{ propertyName: [messages] }</c> shape back into the flat list of failures it was grouped
-        /// from, so every overload is matched the same way.
-        /// </summary>
         private static IReadOnlyList<ValidationError> Flatten<TMessages>(IEnumerable<KeyValuePair<string, TMessages>> errors)
             where TMessages : IEnumerable<string>
         {

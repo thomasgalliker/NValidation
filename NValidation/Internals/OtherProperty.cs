@@ -2,10 +2,6 @@ using System.Linq.Expressions;
 
 namespace NValidation.Internals
 {
-    /// <summary>
-    /// The other side of a rule which compares two properties of the same object: the property name it is
-    /// reported under and the compiled accessor that reads it.
-    /// </summary>
     internal static class OtherProperty
     {
         public static OtherProperty<T, TValue> Of<T, TValue>(Expression<Func<T, TValue>> expression)
@@ -18,7 +14,6 @@ namespace NValidation.Internals
         }
     }
 
-    /// <inheritdoc cref="OtherProperty"/>
     internal sealed class OtherProperty<T, TValue>
     {
         private readonly Func<T, TValue> read;
@@ -35,15 +30,13 @@ namespace NValidation.Internals
         public string PropertyName { get; }
 
         /// <summary>
-        /// Reads the compared property, or reports that there is nothing to compare against.
+        /// Reads the compared property, or reports that there is nothing to compare against. The property is
+        /// guarded exactly as the validated one is: a payload which omitted an object on the way to it has
+        /// nothing to compare against, and a comparison with nothing on one side passes — the same answer the
+        /// rest of the library gives to something absent. Left unguarded this would dereference the missing
+        /// object and turn a bad request into a server error. Whether the object in between has to be there
+        /// at all is a question for a rule of its own.
         /// </summary>
-        /// <remarks>
-        /// The property is guarded exactly as the validated one is: a payload which omitted an object on
-        /// the way to it has nothing to compare against, and a comparison with nothing on one side
-        /// passes — the same answer the rest of the library gives to something absent. Left unguarded
-        /// this would dereference the missing object and turn a bad request into a server error.
-        /// Whether the object in between has to be there at all is a question for a rule of its own.
-        /// </remarks>
         public bool TryRead(T instance, out TValue value)
         {
             if (this.isReachable != null && !this.isReachable(instance))
@@ -57,13 +50,10 @@ namespace NValidation.Internals
         }
 
         /// <summary>
-        /// Reports the failure under the property being validated, naming the compared property by
-        /// whatever display name it declared.
+        /// Reports the failure under the property being validated, naming the compared property by whatever
+        /// display name it declared. Generic in the validated property's own type, because the two sides of a
+        /// comparison do not have to be declared with the same nullability.
         /// </summary>
-        /// <remarks>
-        /// Generic in the validated property's own type, because the two sides of a comparison do not
-        /// have to be declared with the same nullability.
-        /// </remarks>
         public void AddError<TProperty>(RuleContext<T, TProperty> context, ComparisonKind kind)
         {
             context.AddError(
@@ -71,7 +61,6 @@ namespace NValidation.Internals
                 (ValidationMessagePlaceholders.OtherPropertyName, context.GetDisplayName(this.PropertyName)));
         }
 
-        /// <inheritdoc cref="AddError{TProperty}(RuleContext{T, TProperty}, ComparisonKind)"/>
         public void AddError<TProperty>(RuleContext<T, TProperty> context, EqualityKind kind)
         {
             context.AddError(

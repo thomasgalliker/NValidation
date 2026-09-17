@@ -1,16 +1,10 @@
 namespace NValidation.Testing.Internals
 {
     /// <summary>
-    /// Matches an expected message against an actual one. <c>*</c> stands for any run of characters,
-    /// <c>?</c> for exactly one, and <c>\*</c>, <c>\?</c> and <c>\\</c> for those characters themselves.
-    /// The comparison is ordinal and case-sensitive, because a message which differs only in case
-    /// differs.
+    /// Matches a pattern of <c>*</c> and <c>?</c> against a value, with <c>\</c> escaping either.
     /// </summary>
     internal static class WildcardPattern
     {
-        /// <summary>
-        /// <c>true</c> when <paramref name="value"/> matches <paramref name="pattern"/>.
-        /// </summary>
         public static bool IsMatch(string pattern, string value)
         {
             // A scan with one point of return: on a mismatch, go back to the last '*' seen and let it
@@ -54,10 +48,6 @@ namespace NValidation.Testing.Internals
             return patternIndex == pattern.Length;
         }
 
-        /// <summary>
-        /// <c>true</c> when the token at <paramref name="patternIndex"/> matches exactly the one
-        /// character <paramref name="candidate"/>.
-        /// </summary>
         private static bool IsSingleCharacterMatch(string pattern, int patternIndex, char candidate)
         {
             if (pattern[patternIndex] == '?')
@@ -73,10 +63,6 @@ namespace NValidation.Testing.Internals
             return pattern[patternIndex] == candidate;
         }
 
-        /// <summary>
-        /// How many characters of the pattern the token at <paramref name="patternIndex"/> occupies:
-        /// two for an escape, one otherwise.
-        /// </summary>
         private static int TokenLength(string pattern, int patternIndex)
         {
             return IsEscape(pattern, patternIndex) ? 2 : 1;

@@ -72,11 +72,9 @@ namespace NValidation
             return message;
         }
 
-        /// <remarks>
-        /// Also where <paramref name="errors"/> is checked, because this runs before the base
-        /// constructor: an exception whose message was built from an empty dictionary would otherwise
-        /// exist for as long as it took to throw the one complaining about it.
-        /// </remarks>
+        /// <summary>
+        /// Also where <paramref name="errors"/> is checked, because this runs before the base constructor.
+        /// </summary>
         private static string BuildMessage(IReadOnlyDictionary<string, string[]> errors)
         {
             ArgumentNullException.ThrowIfNull(errors);

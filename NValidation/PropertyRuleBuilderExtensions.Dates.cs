@@ -9,12 +9,10 @@ namespace NValidation
         /// <remarks>
         /// <paramref name="timeProvider"/> is what "now" means, so a test passes one to make the rule
         /// deterministic. The overload without it asks <see cref="TimeProvider.System"/>.
-        /// <para>
         /// The comparison happens in UTC. A <see cref="DateTimeKind.Local"/> value is converted, and a
         /// <see cref="DateTimeKind.Unspecified"/> one — which is what a date deserialized without an
         /// offset carries — is read as UTC rather than as local time, so the verdict does not depend on
         /// the machine's time zone.
-        /// </para>
         /// </remarks>
         public static PropertyRuleBuilder<T, DateTime> InThePast<T>(this PropertyRuleBuilder<T, DateTime> builder, TimeProvider timeProvider)
         {
@@ -44,9 +42,13 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The unambiguous form: a <see cref="DateTimeOffset"/> carries its own offset, so there is
-        /// nothing to assume about the time zone.
+        /// Requires the date to lie strictly before now. A missing value passes; use <c>NotDefault()</c>
+        /// to require one.
         /// </summary>
+        /// <remarks>
+        /// A <see cref="DateTimeOffset"/> carries its own offset, so nothing is assumed about the time
+        /// zone. <paramref name="timeProvider"/> is what "now" means.
+        /// </remarks>
         public static PropertyRuleBuilder<T, DateTimeOffset> InThePast<T>(this PropertyRuleBuilder<T, DateTimeOffset> builder, TimeProvider timeProvider)
         {
             ArgumentNullException.ThrowIfNull(timeProvider);
@@ -106,7 +108,11 @@ namespace NValidation
             });
         }
 
-        /// <inheritdoc cref="InThePast{T}(PropertyRuleBuilder{T, DateTimeOffset}, TimeProvider)" path="/summary"/>
+        /// <summary>
+        /// Requires the date to lie strictly after now. A missing value passes; use <c>NotDefault()</c>
+        /// to require one.
+        /// </summary>
+        /// <inheritdoc cref="InThePast{T}(PropertyRuleBuilder{T, DateTimeOffset}, TimeProvider)" path="/remarks"/>
         public static PropertyRuleBuilder<T, DateTimeOffset> InTheFuture<T>(this PropertyRuleBuilder<T, DateTimeOffset> builder, TimeProvider timeProvider)
         {
             ArgumentNullException.ThrowIfNull(timeProvider);
@@ -135,7 +141,8 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, against the system clock.
+        /// Requires the date to lie strictly before now by the system clock. A missing value passes; use
+        /// <c>NotDefault()</c> to require one.
         /// </summary>
         public static PropertyRuleBuilder<T, DateTime> InThePast<T>(this PropertyRuleBuilder<T, DateTime> builder)
         {
@@ -160,25 +167,28 @@ namespace NValidation
             return builder.InThePast(TimeProvider.System);
         }
 
-        /// <inheritdoc cref="InThePast{T}(PropertyRuleBuilder{T, DateTime})"/>
+        /// <summary>
+        /// Requires the date to lie strictly after now by the system clock. A missing value passes; use
+        /// <c>NotDefault()</c> to require one.
+        /// </summary>
         public static PropertyRuleBuilder<T, DateTime> InTheFuture<T>(this PropertyRuleBuilder<T, DateTime> builder)
         {
             return builder.InTheFuture(TimeProvider.System);
         }
 
-        /// <inheritdoc cref="InThePast{T}(PropertyRuleBuilder{T, DateTime})"/>
+        /// <inheritdoc cref="InTheFuture{T}(PropertyRuleBuilder{T, DateTime})"/>
         public static PropertyRuleBuilder<T, DateTime?> InTheFuture<T>(this PropertyRuleBuilder<T, DateTime?> builder)
         {
             return builder.InTheFuture(TimeProvider.System);
         }
 
-        /// <inheritdoc cref="InThePast{T}(PropertyRuleBuilder{T, DateTime})"/>
+        /// <inheritdoc cref="InTheFuture{T}(PropertyRuleBuilder{T, DateTime})"/>
         public static PropertyRuleBuilder<T, DateTimeOffset> InTheFuture<T>(this PropertyRuleBuilder<T, DateTimeOffset> builder)
         {
             return builder.InTheFuture(TimeProvider.System);
         }
 
-        /// <inheritdoc cref="InThePast{T}(PropertyRuleBuilder{T, DateTime})"/>
+        /// <inheritdoc cref="InTheFuture{T}(PropertyRuleBuilder{T, DateTime})"/>
         public static PropertyRuleBuilder<T, DateTimeOffset?> InTheFuture<T>(this PropertyRuleBuilder<T, DateTimeOffset?> builder)
         {
             return builder.InTheFuture(TimeProvider.System);

@@ -95,9 +95,6 @@ namespace NValidation.DependencyInjection.Tests
                 new("CountryCode", "CountryCode is required.")]);
         }
 
-        /// <summary>
-        /// A validator may depend on other services — typically the validator of a nested object.
-        /// </summary>
         [Fact]
         public async Task AddValidator_ResolvesTheValidatorsOwnDependencies()
         {
@@ -141,10 +138,6 @@ namespace NValidation.DependencyInjection.Tests
             result.ShouldReport("HandWritten", "brings its own message");
         }
 
-        /// <summary>
-        /// The one-argument form: the validated type is read off the validator's own
-        /// <see cref="IValidator{T}"/>, so it does not have to be named twice.
-        /// </summary>
         [Fact]
         public async Task AddValidator_InfersTheValidatedType_FromTheValidator()
         {
@@ -185,10 +178,6 @@ namespace NValidation.DependencyInjection.Tests
             result.Succeeded.Should().BeTrue();
         }
 
-        /// <summary>
-        /// A scanned validator is wired up just as fully as an explicitly registered one — its own
-        /// dependencies included.
-        /// </summary>
         [Fact]
         public async Task AddValidatorsFromAssembly_ResolvesTheDependenciesOfWhatItFinds()
         {
@@ -320,9 +309,6 @@ namespace NValidation.DependencyInjection.Tests
                 .WithMessage($"*both validate '{typeof(AmbiguousPayload)}'*");
         }
 
-        /// <summary>
-        /// Naming the same validator twice is not a contradiction, so it is not an error.
-        /// </summary>
         [Fact]
         public void AddValidator_WithTheSameValidatorTwice_Registers()
         {
@@ -361,10 +347,6 @@ namespace NValidation.DependencyInjection.Tests
             descriptor.Lifetime.Should().Be(ServiceLifetime.Singleton);
         }
 
-        /// <summary>
-        /// And the case the Scoped default exists for: a validator holding something scoped is left
-        /// alone, because a shared one would capture it.
-        /// </summary>
         [Fact]
         public void PromoteSafeValidatorsToSingleton_LeavesAValidatorWithAScopedDependencyAlone()
         {
@@ -421,9 +403,6 @@ namespace NValidation.DependencyInjection.Tests
             descriptor.Lifetime.Should().Be(ServiceLifetime.Singleton);
         }
 
-        /// <summary>
-        /// And the opt-out puts it back, for a host which would rather decide this for itself.
-        /// </summary>
         [Fact]
         public void PromoteSafeValidatorsToSingleton_WhenTurnedOff_LeavesTheLifetimeAlone()
         {
@@ -442,9 +421,6 @@ namespace NValidation.DependencyInjection.Tests
             descriptor.Lifetime.Should().Be(ServiceLifetime.Scoped);
         }
 
-        /// <summary>
-        /// A promoted validator still validates, and still answers through the configured provider.
-        /// </summary>
         [Fact]
         public async Task PromoteSafeValidatorsToSingleton_StillValidates()
         {
@@ -497,7 +473,6 @@ namespace NValidation.DependencyInjection.Tests
             descriptor.Lifetime.Should().Be(ServiceLifetime.Singleton);
         }
 
-        /// <inheritdoc cref="AddValidator_PromotesASafeValidator_ByDefault"/>
         [Fact]
         public void AddValidator_WithoutPromotion_RegistersScoped_ByDefault()
         {
@@ -516,10 +491,6 @@ namespace NValidation.DependencyInjection.Tests
             descriptor.Lifetime.Should().Be(ServiceLifetime.Scoped);
         }
 
-        /// <summary>
-        /// A validator declares its rules once and never changes, so a host whose validators have
-        /// nothing scoped to capture can pay for that construction once for the process.
-        /// </summary>
         [Fact]
         public void ValidatorLifetime_Singleton_BuildsTheValidatorOnceForEveryScope()
         {
@@ -591,9 +562,6 @@ namespace NValidation.DependencyInjection.Tests
                 .Lifetime.Should().Be(ServiceLifetime.Scoped);
         }
 
-        /// <summary>
-        /// A scan follows the default like an explicit registration, and can be told otherwise.
-        /// </summary>
         [Fact]
         public void AddValidatorsFromAssembly_WithALifetime_RegistersEveryValidatorWithIt()
         {
@@ -669,10 +637,6 @@ namespace NValidation.DependencyInjection.Tests
             act.Should().Throw<ArgumentException>().WithParameterName("MessageProvider");
         }
 
-        /// <summary>
-        /// The provider is built by the container, so it may take what it needs through its
-        /// constructor rather than being handed over already built.
-        /// </summary>
         [Fact]
         public async Task MessageProvider_IsBuiltByTheContainer()
         {
@@ -730,8 +694,9 @@ namespace NValidation.DependencyInjection.Tests
         /// </summary>
         /// <remarks>
         /// The registration hands its provider to every validator it constructs, and a host which
-        /// configured none still has one handed to it. Both used to land in the slot a validator's own
-        /// declaration uses, which left nothing for these options to outrank.
+        /// configured none still has one handed to it. It lands in the registration's own slot, not
+        /// the one a validator's own declaration uses, which is what leaves these options something
+        /// to outrank.
         /// </remarks>
         [Fact]
         public async Task ValidateAsync_WithOptions_OutranksTheRegisteredMessageProvider()
@@ -836,7 +801,6 @@ namespace NValidation.DependencyInjection.Tests
             result.ShouldReport(expectedCodes.Select(ExpectedError.Any));
         }
 
-        /// <inheritdoc cref="ValidationBehaviors_Class_ReachesTheValidator" path="/summary"/>
         [Theory]
         [InlineData(null, "Name", "CountryCode")] // one message per property, so the blank name reports NotEmpty alone
         [InlineData(ValidationBehavior.All, "Name", "CountryCode", "CountryCode")] // the blank country code also fails its exact length

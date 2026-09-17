@@ -34,10 +34,6 @@ namespace NValidation
             set => this.rules.ValidationBehaviors = value;
         }
 
-        /// <summary>
-        /// Whether judging an entry never awaits: the inline rules judge, and the entry's own validator,
-        /// if any, does too. Asked once, when the <c>ForEach</c> is declared.
-        /// </summary>
         internal bool IsSynchronous =>
             ((IValidationRunAware<TElement>)this.rules).IsSynchronous &&
             (this.elementValidator is null || this.elementValidator is IValidationRunAware<TElement> { IsSynchronous: true });
@@ -109,15 +105,6 @@ namespace NValidation
             return this;
         }
 
-        /// <summary>
-        /// Judges every element, reporting into the composer's pass under the element's position.
-        /// </summary>
-        /// <remarks>
-        /// The twin of <see cref="ValidateElementsAsync"/>, for a <c>ForEach</c> whose entries never
-        /// await. One error list and one <see cref="ElementScope"/> serve the whole collection: what an
-        /// entry reports is copied out under the entry's own name straight away, so nothing has to be
-        /// kept between entries, and an entry is only named when it has something to report.
-        /// </remarks>
         internal void ValidateElements(IEnumerable<TElement> elements, string propertyName, ValidationFrame frame)
         {
             var run = frame.Run;
@@ -156,7 +143,6 @@ namespace NValidation
             }
         }
 
-        /// <inheritdoc cref="ValidateElements"/>
         internal async ValueTask ValidateElementsAsync(IEnumerable<TElement> elements, string propertyName, ValidationFrame frame)
         {
             var run = frame.Run;
@@ -195,19 +181,11 @@ namespace NValidation
             }
         }
 
-        /// <summary>
-        /// A null entry has no properties to judge, and an entry the condition rejects is not judged;
-        /// both still spend their position, so an index points at the row the caller sent. Whether
-        /// entries have to be there at all is a question about the collection, which its own rules answer.
-        /// </summary>
         private bool IsSkipped(TElement element)
         {
             return element is null || (this.condition != null && !this.condition(element));
         }
 
-        /// <summary>
-        /// Copies what one entry reported into the composer's pass, under the entry's own name.
-        /// </summary>
         private static void Report(ValidationFrame frame, ElementScope scope, List<ValidationError> elementErrors)
         {
             if (elementErrors.Count == 0)
@@ -227,20 +205,11 @@ namespace NValidation
             }
         }
 
-        /// <summary>
-        /// The property name a failure is reported under. A rule about the element itself carries no
-        /// property, so the element's position is the whole property name.
-        /// </summary>
         private static string Compose(string elementPropertyName, string propertyName)
         {
             return propertyName.Length == 0 ? elementPropertyName : $"{elementPropertyName}.{propertyName}";
         }
 
-        /// <summary>
-        /// The rules an entry has to satisfy, as an ordinary validator. Held rather than inherited: an
-        /// element builder that <em>was</em> a validator ignored <see cref="Where"/>,
-        /// <see cref="SetValidator"/> and <see cref="WithIndexer"/> when run directly.
-        /// </summary>
         private sealed class ElementRules : Validator<TElement>
         {
             public PropertyRuleBuilder<TElement, TProperty?> Declare<TProperty>(Expression<Func<TElement, TProperty>> expression)

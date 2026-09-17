@@ -10,11 +10,9 @@ namespace NValidation.AspNetCore
     /// marked here is a decision, not an oversight. State a <see cref="Reason"/> wherever the next reader
     /// would otherwise have to reconstruct which decision it was; leave it out where the action says so
     /// itself.
-    /// <para>
     /// Named for the library rather than for the act, because .NET 10's shared framework ships
     /// <c>Microsoft.Extensions.Validation.SkipValidationAttribute</c>. A consumer importing both
     /// namespaces could not write the shorter name at all: that is a CS0104 ambiguity, not a warning.
-    /// </para>
     /// </remarks>
     /// <example>
     /// <code>
@@ -33,9 +31,9 @@ namespace NValidation.AspNetCore
         }
 
         /// <summary>
-        /// Creates the attribute, stating why this payload is not validated by the filter.
+        /// Creates the attribute, stating in <paramref name="reason"/> why this payload is not
+        /// validated by the filter.
         /// </summary>
-        /// <param name="reason">Why this payload is not validated by the filter.</param>
         /// <exception cref="ArgumentException"><paramref name="reason"/> is null, empty or whitespace.</exception>
         public SkipNValidationAttribute(string reason)
         {
@@ -49,7 +47,7 @@ namespace NValidation.AspNetCore
         }
 
         /// <summary>
-        /// Why this payload is not validated by the filter, or <c>null</c> where none was stated.
+        /// What the constructor was told, or <c>null</c> where no reason was stated.
         /// </summary>
         public string? Reason { get; }
     }

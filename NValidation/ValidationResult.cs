@@ -50,13 +50,8 @@ namespace NValidation
         }
 
         /// <summary>
-        /// A failed result over a list the caller is finished with, which this takes rather than copies.
+        /// A failed result over a list the caller is finished with: it is taken, not copied.
         /// </summary>
-        /// <remarks>
-        /// Internal, and the contract is the reason: the list must not be touched again afterwards, and
-        /// that is only knowable where the list was built. <see cref="FromValidationErrors(IEnumerable{ValidationError})"/>
-        /// copies, because a caller handing one in keeps it.
-        /// </remarks>
         internal static ValidationResult FromValidationErrorsInternal(List<ValidationError> errors)
         {
             return errors.Count == 0 ? Success : new ValidationResult(errors);

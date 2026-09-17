@@ -49,7 +49,6 @@ namespace NValidation.Benchmark
             return scope.ServiceProvider.GetRequiredService<IValidator<Car>>();
         }
 
-        /// <inheritdoc cref="Scoped"/>
         [Benchmark]
         public IValidator<Car> Singleton()
         {

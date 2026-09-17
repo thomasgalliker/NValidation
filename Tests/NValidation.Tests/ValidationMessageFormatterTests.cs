@@ -169,9 +169,6 @@ namespace NValidation.Tests
             message.Should().Be("Name");
         }
 
-        /// <summary>
-        /// And a genuine numeric format is still a numeric format.
-        /// </summary>
         [Fact]
         public void Format_StillAppliesAnOrdinaryNumericFormat()
         {

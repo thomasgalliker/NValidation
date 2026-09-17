@@ -22,7 +22,6 @@ namespace NValidation.Tests
             act.Should().Throw<InvalidOperationException>().WithMessage("*'Vin'*already been used*");
         }
 
-        /// <inheritdoc cref="Add_AfterTheFirstValidation_Throws" path="/summary"/>
         [Fact]
         public async Task WithMessage_AfterTheFirstValidation_Throws()
         {

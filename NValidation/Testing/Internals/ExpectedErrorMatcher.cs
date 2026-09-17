@@ -1,16 +1,9 @@
 namespace NValidation.Testing.Internals
 {
     /// <summary>
-    /// Pairs what a test expected with what a validator reported, one expectation to one error.
+    /// Pairs expected errors with reported ones. A wildcard expectation can fit several errors, so this
+    /// searches for a complete pairing by augmenting paths rather than pairing greedily.
     /// </summary>
-    /// <remarks>
-    /// An expectation whose message is a wildcard can fit several of the errors, so pairing greedily
-    /// would report a failure where a different pairing fits — <c>["Vin", ("Vin", "*required*")]</c>
-    /// against a required-VIN failure and a too-long-VIN failure is the case that breaks. This searches
-    /// for a complete pairing instead, by the standard augmenting-path walk: whenever an expectation
-    /// finds only errors that are taken, it asks each of those errors' holders to move, and moves in if
-    /// one of them can.
-    /// </remarks>
     internal static class ExpectedErrorMatcher
     {
         /// <summary>
@@ -97,10 +90,6 @@ namespace NValidation.Testing.Internals
             return false;
         }
 
-        /// <summary>
-        /// <c>true</c> when <paramref name="error"/> is one the <paramref name="expectation"/> asked for:
-        /// the same property name, and a message the expectation's pattern matches.
-        /// </summary>
         private static bool Satisfies(ExpectedError expectation, ValidationError error)
         {
             if (!string.Equals(expectation.PropertyName, error.PropertyName, StringComparison.Ordinal))

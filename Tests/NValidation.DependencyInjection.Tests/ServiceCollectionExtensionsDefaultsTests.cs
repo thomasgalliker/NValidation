@@ -69,8 +69,8 @@ namespace NValidation.DependencyInjection.Tests
         }
 
         /// <summary>
-        /// A validator the container built answers through the defaults, which is what the registration
-        /// used to overwrite.
+        /// A validator the container built answers through the defaults where the registration
+        /// configured nothing of its own.
         /// </summary>
         [Fact]
         public async Task AddValidator_WithoutAConfiguredProvider_AnswersThroughTheDefault()
@@ -91,9 +91,6 @@ namespace NValidation.DependencyInjection.Tests
             result.Errors.Should().AllSatisfy(error => error.Message.Should().Be("message from the default provider"));
         }
 
-        /// <summary>
-        /// The registration is the more specific level, so what it names wins.
-        /// </summary>
         [Fact]
         public void MessageProvider_OfTheRegistration_OutranksTheDefault()
         {
@@ -182,9 +179,6 @@ namespace NValidation.DependencyInjection.Tests
                 new("Name", "Name must be spelled out.")]);
         }
 
-        /// <summary>
-        /// And a registration which did name an axis outranks the default on that axis.
-        /// </summary>
         [Fact]
         public async Task ValidationBehaviors_OfTheRegistration_OutrankTheDefault()
         {

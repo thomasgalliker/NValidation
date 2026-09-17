@@ -1,9 +1,5 @@
 namespace NValidation.Internals
 {
-    /// <summary>
-    /// Turns the result of <see cref="IComparable{T}.CompareTo"/> into a verdict, and names the message
-    /// each verdict reports under.
-    /// </summary>
     internal static class Comparison
     {
         public static bool IsSatisfied(int comparison, ComparisonKind kind)
@@ -18,9 +14,6 @@ namespace NValidation.Internals
             };
         }
 
-        /// <summary>
-        /// The key for the form which compares against a fixed value.
-        /// </summary>
         public static string ValueErrorCode(ComparisonKind kind)
         {
             return kind switch
@@ -33,10 +26,6 @@ namespace NValidation.Internals
             };
         }
 
-        /// <summary>
-        /// The key for the form which compares against another property, whose message names that
-        /// property instead of a value.
-        /// </summary>
         public static string OtherPropertyErrorCode(ComparisonKind kind)
         {
             return kind switch

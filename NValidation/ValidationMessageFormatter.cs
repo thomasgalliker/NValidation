@@ -16,6 +16,11 @@ namespace NValidation
     /// </remarks>
     public static class ValidationMessageFormatter
     {
+        /// <summary>
+        /// Substitutes the placeholders <paramref name="template"/> names from
+        /// <paramref name="arguments"/>. A placeholder neither side knows is left as written.
+        /// </summary>
+        /// <exception cref="ArgumentNullException">Either argument is <c>null</c>.</exception>
         public static string Format(string template, IReadOnlyDictionary<string, object?> arguments)
         {
             ArgumentNullException.ThrowIfNull(template);
@@ -70,10 +75,6 @@ namespace NValidation
             return builder.ToString();
         }
 
-        /// <summary>
-        /// Reads <c>{Name}</c> or <c>{Name:format}</c> at the start of <paramref name="text"/>: a name
-        /// of letters, digits and underscores, and a format of anything up to the closing brace.
-        /// </summary>
         private static bool TryReadPlaceholder(ReadOnlySpan<char> text, out ReadOnlySpan<char> name, out ReadOnlySpan<char> format, out int length)
         {
             name = default;
@@ -120,16 +121,9 @@ namespace NValidation
         }
 
         /// <summary>
-        /// One argument, rendered the way the template asked for it where the value can honour that.
+        /// One argument, rendered the way the template asked. A specifier the value cannot honour renders it
+        /// unformatted rather than throwing.
         /// </summary>
-        /// <remarks>
-        /// The format specifier belongs to the message, which a host writes and translates, while the
-        /// value it lands on comes from whichever rule reported the key — and one key serves several CLR
-        /// types, so <c>{OtherValue:d}</c> is a date over a <see cref="DateTime"/> and a
-        /// <see cref="FormatException"/> over a <see cref="decimal"/>. A host cannot tell those apart by
-        /// reading its own resource file, so a specifier the value cannot honour falls back to the plain
-        /// rendering rather than turning a bad request into a server error.
-        /// </remarks>
         private static string RenderValue(object? value, ReadOnlySpan<char> format)
         {
             if (!format.IsEmpty && TrySelectPluralForm(value, format, out var pluralForm))
@@ -157,21 +151,9 @@ namespace NValidation
         }
 
         /// <summary>
-        /// A format holding a single bar is not a format at all: it names the two forms a count selects
-        /// between, as in <c>{MinCount:entry|entries}</c>.
+        /// Selects between the two forms of <c>{Count:entry|entries}</c>. Two forms only; a language with more
+        /// supplies its own provider.
         /// </summary>
-        /// <remarks>
-        /// Two-form selection, which is enough for English and for most of the Germanic and Romance
-        /// languages. It is deliberately not an implementation of the CLDR plural rules: a language with
-        /// three or more forms — Polish, Russian, Arabic — supplies its own
-        /// <see cref="IValidationMessageProvider"/> and decides there, which the seam already allows.
-        /// <para>
-        /// Only a whole number selects; a bar is a legal literal in a custom numeric or date format
-        /// string, so anything else falls through to being formatted as written. A bar over a whole
-        /// number naming more than two forms is malformed, and renders the number alone rather than
-        /// echoing the forms into the message.
-        /// </para>
-        /// </remarks>
         private static bool TrySelectPluralForm(object? value, ReadOnlySpan<char> format, out string form)
         {
             form = string.Empty;
@@ -194,9 +176,6 @@ namespace NValidation
             return true;
         }
 
-        /// <summary>
-        /// The whole number a rule supplied, where it supplied one.
-        /// </summary>
         private static bool TryGetCount(object? value, out long count)
         {
             switch (value)

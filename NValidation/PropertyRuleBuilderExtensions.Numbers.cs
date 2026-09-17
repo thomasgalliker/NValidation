@@ -6,6 +6,8 @@ namespace NValidation
         /// Requires an exact multiple of <paramref name="step"/>, e.g. a price in five-cent increments.
         /// </summary>
         /// <remarks>
+        /// Reports <see cref="ValidationErrorCodes.MultipleOf"/> with
+        /// <see cref="ValidationMessagePlaceholders.Step"/>.
         /// Decimal arithmetic is exact for these values, so the remainder needs no epsilon.
         /// </remarks>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="step"/> is zero or negative.</exception>
@@ -23,8 +25,9 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The form for a property which may be absent. A missing value passes.
+        /// Requires an exact multiple of <paramref name="step"/>. A missing value passes.
         /// </summary>
+        /// <inheritdoc cref="MultipleOf{T}(PropertyRuleBuilder{T, System.Decimal}, System.Decimal)" path="/remarks"/>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="step"/> is zero or negative.</exception>
         public static PropertyRuleBuilder<T, decimal?> MultipleOf<T>(this PropertyRuleBuilder<T, decimal?> builder, decimal step)
         {
@@ -40,8 +43,13 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The whole-number form, e.g. a quantity which may only be ordered by the dozen.
+        /// Requires an exact multiple of <paramref name="step"/>, e.g. a quantity which may only be
+        /// ordered by the dozen.
         /// </summary>
+        /// <remarks>
+        /// Reports <see cref="ValidationErrorCodes.MultipleOf"/> with
+        /// <see cref="ValidationMessagePlaceholders.Step"/>.
+        /// </remarks>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="step"/> is zero or negative.</exception>
         public static PropertyRuleBuilder<T, int> MultipleOf<T>(this PropertyRuleBuilder<T, int> builder, int step)
         {
@@ -57,8 +65,12 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The form for a whole number which may be absent. A missing value passes.
+        /// Requires an exact multiple of <paramref name="step"/>. A missing value passes.
         /// </summary>
+        /// <remarks>
+        /// Reports <see cref="ValidationErrorCodes.MultipleOf"/> with
+        /// <see cref="ValidationMessagePlaceholders.Step"/>.
+        /// </remarks>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="step"/> is zero or negative.</exception>
         public static PropertyRuleBuilder<T, int?> MultipleOf<T>(this PropertyRuleBuilder<T, int?> builder, int step)
         {
@@ -74,14 +86,15 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Caps how many digits a number carries: at most <paramref name="precision"/> in total, of
-        /// which at most <paramref name="scale"/> follow the decimal point — typically the shape of the
+        /// Caps how many digits a number carries: at most <paramref name="precision"/> in total,
+        /// of which at most <paramref name="scale"/> follow the decimal point — typically the shape of the
         /// column behind it.
         /// </summary>
         /// <remarks>
-        /// Trailing zeros are representation rather than value: <c>1.50m</c> and <c>1.5m</c> are the
-        /// same number, and the column accepts both. They are normalised away, so there is one
-        /// behaviour rather than a flag to choose between two.
+        /// Reports <see cref="ValidationErrorCodes.PrecisionScale"/> with
+        /// <see cref="ValidationMessagePlaceholders.Precision"/> and <see cref="ValidationMessagePlaceholders.Scale"/>.
+        /// Trailing zeros are representation rather than value — <c>1.50m</c> and <c>1.5m</c> are the same
+        /// number, and the column accepts both — so they are normalised away rather than left to a flag.
         /// </remarks>
         /// <exception cref="ArgumentOutOfRangeException">
         /// <paramref name="precision"/> is zero or negative, <paramref name="scale"/> is negative, or
@@ -101,10 +114,11 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The form for a property which may be absent. A missing value passes.
+        /// Caps how many digits a number carries: at most <paramref name="precision"/> in total,
+        /// of which at most <paramref name="scale"/> follow the decimal point. A missing value passes.
         /// </summary>
-        /// <inheritdoc cref="PrecisionScale{T}(PropertyRuleBuilder{T, decimal}, int, int)" path="/remarks"/>
-        /// <inheritdoc cref="PrecisionScale{T}(PropertyRuleBuilder{T, decimal}, int, int)" path="/exception"/>
+        /// <inheritdoc cref="PrecisionScale{T}(PropertyRuleBuilder{T, System.Decimal}, System.Int32, System.Int32)" path="/remarks"/>
+        /// <inheritdoc cref="PrecisionScale{T}(PropertyRuleBuilder{T, System.Decimal}, System.Int32, System.Int32)" path="/exception"/>
         public static PropertyRuleBuilder<T, decimal?> PrecisionScale<T>(this PropertyRuleBuilder<T, decimal?> builder, int precision, int scale)
         {
             RequirePrecisionAndScale(precision, scale);
@@ -119,10 +133,11 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Requires a real number. <see cref="double.NaN"/> is what a measurement carries when it was
-        /// never taken, so it counts as missing rather than as a value out of range — a comparison
+        /// Requires a real number. <see cref="double.NaN"/> is what a measurement carries when it
+        /// was never taken, so it counts as missing rather than as a value out of range — a comparison
         /// against <see cref="double.NaN"/> is false either way and would let it pass a range rule.
         /// </summary>
+        /// <remarks>Reports <see cref="ValidationErrorCodes.NotNaN"/>.</remarks>
         public static PropertyRuleBuilder<T, double> NotNaN<T>(this PropertyRuleBuilder<T, double> builder)
         {
             return builder.Add(context =>
@@ -134,7 +149,7 @@ namespace NValidation
             });
         }
 
-        /// <inheritdoc cref="NotNaN{T}(PropertyRuleBuilder{T, double})"/>
+        /// <inheritdoc cref="NotNaN{T}(PropertyRuleBuilder{T, System.Double})"/>
         public static PropertyRuleBuilder<T, double?> NotNaN<T>(this PropertyRuleBuilder<T, double?> builder)
         {
             return builder.Add(context =>
@@ -146,7 +161,7 @@ namespace NValidation
             });
         }
 
-        /// <inheritdoc cref="NotNaN{T}(PropertyRuleBuilder{T, double})"/>
+        /// <inheritdoc cref="NotNaN{T}(PropertyRuleBuilder{T, System.Double})"/>
         public static PropertyRuleBuilder<T, float> NotNaN<T>(this PropertyRuleBuilder<T, float> builder)
         {
             return builder.Add(context =>
@@ -158,7 +173,7 @@ namespace NValidation
             });
         }
 
-        /// <inheritdoc cref="NotNaN{T}(PropertyRuleBuilder{T, double})"/>
+        /// <inheritdoc cref="NotNaN{T}(PropertyRuleBuilder{T, System.Double})"/>
         public static PropertyRuleBuilder<T, float?> NotNaN<T>(this PropertyRuleBuilder<T, float?> builder)
         {
             return builder.Add(context =>
@@ -170,9 +185,6 @@ namespace NValidation
             });
         }
 
-        /// <summary>
-        /// Whether the value needs more digits than the contract allows.
-        /// </summary>
         private static bool Exceeds(decimal value, int precision, int scale)
         {
             // Dividing by one at full scale is the documented way to drop trailing zeros: 1.50m becomes
@@ -184,9 +196,9 @@ namespace NValidation
             return actualScale > scale || DigitsBeforeThePoint(normalized) > precision - scale;
         }
 
-        /// <remarks>
-        /// Zero has none, so <c>0.5m</c> against <c>PrecisionScale(2, 2)</c> passes.
-        /// </remarks>
+        /// <summary>
+        /// Zero has none, so 0.5m against PrecisionScale(2, 2) passes.
+        /// </summary>
         private static int DigitsBeforeThePoint(decimal value)
         {
             var whole = decimal.Truncate(Math.Abs(value));
@@ -216,18 +228,15 @@ namespace NValidation
             ArgumentOutOfRangeException.ThrowIfGreaterThan(scale, precision);
         }
 
-        /// <remarks>
-        /// A negative step tests for the same multiples its absolute value does, so allowing one would
-        /// only add a way of writing the rule that reads as if it meant something else. Rejecting it
-        /// also keeps the remainder away from <c>int.MinValue % -1</c>, which the ECMA spec leaves free
-        /// to throw.
-        /// </remarks>
+        /// <summary>
+        /// A negative step tests the same multiples its absolute value does, so it is refused rather than
+        /// accepted as a second spelling of one rule.
+        /// </summary>
         private static void RequirePositiveStep(decimal step)
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(step);
         }
 
-        /// <inheritdoc cref="RequirePositiveStep(decimal)"/>
         private static void RequirePositiveStep(int step)
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(step);

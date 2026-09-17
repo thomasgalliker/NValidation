@@ -39,7 +39,8 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Adds validation.
+        /// Registers validation with nothing configured: no validators, and the built-in English and
+        /// behaviors. For a host which registers its validators itself.
         /// </summary>
         public static IServiceCollection AddNValidation(this IServiceCollection services)
         {
@@ -71,12 +72,10 @@ namespace NValidation
         /// is how <c>AddValidationFilter</c> takes one too. A key which is absent leaves that setting
         /// alone; a key whose value is not one of the permitted ones is refused here rather than being
         /// ignored, so a typo in appsettings.json fails at startup.
-        /// <para>
         /// Which validators are registered stays in code: a scan names an assembly, and naming one in
         /// configuration would turn a typo into a payload that is silently never validated. The message
         /// provider stays in code for the same reason — a type name in a settings file is a refactor
         /// waiting to break.
-        /// </para>
         /// </remarks>
         /// <exception cref="InvalidOperationException">
         /// A key in <paramref name="configuration"/> carries a value the setting does not permit.
@@ -89,8 +88,9 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, and then <paramref name="configure"/> — which runs afterwards, so what it names
-        /// outranks what configuration said and what only code can express is still expressible.
+        /// Registers validation, reading the settings from <paramref name="configuration"/> and then applying
+        /// <paramref name="configure"/> — which runs afterwards, so what it names outranks what configuration
+        /// said, and what only code can express is still expressible.
         /// </summary>
         /// <inheritdoc cref="AddNValidation(IServiceCollection, IConfiguration)" path="/remarks"/>
         /// <inheritdoc cref="AddNValidation(IServiceCollection, IConfiguration)" path="/exception"/>
@@ -128,13 +128,9 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Takes the settings which configuration has a value for, leaving the rest alone.
+        /// Reads the settings key by key. <c>IConfiguration.Bind</c> is <c>RequiresUnreferencedCode</c> and
+        /// would warn in a trimmed consumer's build.
         /// </summary>
-        /// <remarks>
-        /// Read key by key rather than through <c>IConfiguration.Bind</c>, which is annotated
-        /// <c>RequiresUnreferencedCode</c> and would surface as a trimming warning in the build of every
-        /// consumer publishing ahead of time. It also lets a bad value name itself.
-        /// </remarks>
         private static void Bind(NValidationBuilder builder, IConfiguration configuration)
         {
             if (ParseEnum<ServiceLifetime>(configuration, "ValidatorLifetime") is { } validatorLifetime)

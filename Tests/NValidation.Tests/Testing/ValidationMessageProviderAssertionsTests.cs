@@ -21,7 +21,6 @@ namespace NValidation.Tests.Testing
             listed.Should().BeEquivalentTo(DeclaredConstants(typeof(ValidationErrorCodes)));
         }
 
-        /// <inheritdoc cref="CoreErrorCodes_ListsEveryCodeTheCoreDeclares" path="/summary"/>
         [Fact]
         public void CoreMessagePlaceholders_ListsEveryPlaceholderTheCoreDeclares()
         {

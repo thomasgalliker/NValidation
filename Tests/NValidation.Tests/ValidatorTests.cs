@@ -42,9 +42,6 @@ namespace NValidation.Tests
             result.ShouldReport("Vin", "Vin is required.");
         }
 
-        /// <summary>
-        /// A nested path becomes a dotted propertyName, which is the convention callers bind to.
-        /// </summary>
         [Fact]
         public async Task ValidateAsync_TakesTheErrorCode_FromANestedPropertyExpression()
         {
@@ -61,9 +58,6 @@ namespace NValidation.Tests
             result.ShouldReport("Model.Name", "Model.Name is required.");
         }
 
-        /// <summary>
-        /// A property reports at most one message: once a rule fails, the rest of its chain is skipped.
-        /// </summary>
         [Fact]
         public async Task ValidateAsync_StopsTheChain_AtTheFirstFailingRule()
         {
@@ -124,10 +118,6 @@ namespace NValidation.Tests
             result.ShouldReport(expectedCodes.Select(ExpectedError.Any));
         }
 
-        /// <summary>
-        /// A run told to stop at the first error reports exactly one, whatever the other axis says.
-        /// Anything else would make a setting by that name a trap.
-        /// </summary>
         [Fact]
         public async Task ValidateAsync_StoppingAtTheFirstError_OverridesTheChainAxis()
         {
@@ -172,7 +162,6 @@ namespace NValidation.Tests
             reached.Should().BeFalse("a run that stopped does not go on to judge the rest");
         }
 
-        /// <inheritdoc cref="ValidateAsync_StoppingAtTheFirstError_NeverReachesTheNextProperty" path="/summary"/>
         [Fact]
         public async Task ValidateAsync_ReportingEverything_ReachesTheNextProperty()
         {
@@ -238,9 +227,7 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// The override works in both directions. Its stopping direction is the half the old boolean
-        /// could not express, and it is the only way to hold one chain back in a validator that reports
-        /// everything else.
+        /// The only way to hold one chain back in a validator that reports everything else.
         /// </summary>
         [Fact]
         public async Task ValidateAsync_AChainAskingToStop_ReportsOnceInAValidatorThatReportsAll()
@@ -268,10 +255,6 @@ namespace NValidation.Tests
                 ExpectedError.Any("RegistrationPlate")]);            // still reports both
         }
 
-        /// <summary>
-        /// An axis left unset takes what the level above settled, so naming one never silently changes
-        /// the other.
-        /// </summary>
         [Theory]
         [InlineData(ValidationBehavior.All, null, "Vin", "RegistrationPlate")] // the chain axis keeps its default of one message per property
         [InlineData(null, ValidationBehavior.All, "Vin", "Vin", "RegistrationPlate", "RegistrationPlate")] // the run axis keeps its default of every property
@@ -443,9 +426,6 @@ namespace NValidation.Tests
             result.ShouldReport("Vin", message);
         }
 
-        /// <summary>
-        /// It belongs to one rule, not to the whole chain, so the other rules keep the shared wording.
-        /// </summary>
         [Fact]
         public async Task ValidateAsync_WithMessage_LeavesTheOtherRulesOfTheChainAlone()
         {
@@ -526,9 +506,6 @@ namespace NValidation.Tests
             result.ShouldReport("Vin", "Vin needs 17 characters.");
         }
 
-        /// <summary>
-        /// The display name is what a message calls the property, so an overridden message gets it too.
-        /// </summary>
         [Fact]
         public async Task ValidateAsync_WithMessage_SubstitutesTheDisplayName()
         {
@@ -629,9 +606,6 @@ namespace NValidation.Tests
             result.ShouldReportErrorCode("Vin", "MinimumLength");
         }
 
-        /// <summary>
-        /// The arguments the message was rendered from, for a caller which logs the failure in parts.
-        /// </summary>
         [Fact]
         public async Task ValidateAsync_CarriesTheArgumentsTheMessageWasRenderedFrom()
         {
@@ -672,10 +646,6 @@ namespace NValidation.Tests
             result.Errors.Single().Message.Should().Be("The plate must be Swiss.");
         }
 
-        /// <summary>
-        /// Where the failure is reported and which rule reported it are separate answers, so overriding
-        /// one leaves the other alone.
-        /// </summary>
         [Fact]
         public async Task ValidateAsync_WithPropertyName_MovesThePathAndLeavesTheCode()
         {
@@ -714,9 +684,6 @@ namespace NValidation.Tests
             result.ShouldReportErrorCode("Model.Name", "NotEmpty");
         }
 
-        /// <summary>
-        /// The same for an element of a collection, whose path also gains its position.
-        /// </summary>
         [Fact]
         public async Task ValidateAsync_WithElementRules_KeepsTheCodeOfTheRuleThatFailed()
         {
@@ -796,9 +763,6 @@ namespace NValidation.Tests
             act.Should().Throw<InvalidOperationException>().WithMessage("*composed validator*");
         }
 
-        /// <summary>
-        /// The escape hatch for a hot path: the same rule, without the expression tree behind it.
-        /// </summary>
         [Fact]
         public async Task Property_NamedAndReadDirectly_ReportsUnderThatName()
         {
@@ -967,9 +931,6 @@ namespace NValidation.Tests
             result.Succeeded.Should().Be(expectedToSucceed);
         }
 
-        /// <summary>
-        /// The condition covers the whole chain, not just the rule it happens to follow.
-        /// </summary>
         [Fact]
         public async Task ValidateAsync_WithWhen_AppliesToEveryRuleOfTheChain()
         {
@@ -1076,10 +1037,6 @@ namespace NValidation.Tests
             missingModel.Succeeded.Should().BeTrue();
         }
 
-        /// <summary>
-        /// The guard only decides whether the chain can run; a path that is reachable is judged exactly
-        /// as before.
-        /// </summary>
         [Fact]
         public async Task ValidateAsync_WithANestedPath_ReportsTheFailure_WhenThePathIsReachable()
         {
@@ -1340,7 +1297,6 @@ namespace NValidation.Tests
             result.ShouldReport("Vin", "the options answered");
         }
 
-        /// <inheritdoc cref="ValidateAsync_ThroughTheNonGenericInterface_RefusesAnInstanceOfAnotherType" path="/summary"/>
         [Fact]
         public async Task ValidateAsync_ThroughTheNonGenericInterfaceWithOptions_RefusesAnInstanceOfAnotherType()
         {

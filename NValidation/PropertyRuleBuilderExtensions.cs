@@ -40,7 +40,8 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, for a rule which needs another property of the same object to decide.
+        /// A one-off rule which needs another property of the same object to decide, whose
+        /// message the host resolves like a shipped rule's.
         /// </summary>
         /// <inheritdoc cref="Must{T, TProperty}(PropertyRuleBuilder{T, TProperty}, Func{TProperty, bool})" path="/remarks"/>
         public static PropertyRuleBuilder<T, TProperty> Must<T, TProperty>(
@@ -85,7 +86,7 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, for a rule which needs the rest of the object to decide.
+        /// A one-off rule which has to await something and needs the rest of the object to decide.
         /// </summary>
         /// <inheritdoc cref="MustAsync{T, TProperty}(PropertyRuleBuilder{T, TProperty}, Func{TProperty, CancellationToken, ValueTask{bool}})" path="/remarks"/>
         public static PropertyRuleBuilder<T, TProperty> MustAsync<T, TProperty>(
@@ -137,9 +138,6 @@ namespace NValidation
             });
         }
 
-        /// <summary>
-        /// Reports what a nested validator found under this property's name, as that validator judged it.
-        /// </summary>
         private static void Merge<T, TProperty>(in RuleContext<T, TProperty> context, ValidationResult result)
         {
             foreach (var error in result.Errors)

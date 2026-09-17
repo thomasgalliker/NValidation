@@ -60,10 +60,6 @@ namespace NValidation.Tests
             result.ShouldReport("Name", "NotEmpty");
         }
 
-        /// <summary>
-        /// Resolved while validating, so a default set after the validator was constructed still
-        /// reaches it.
-        /// </summary>
         [Fact]
         public async Task MessageProvider_SetAfterTheValidatorWasConstructed_StillReachesIt()
         {
@@ -148,9 +144,6 @@ namespace NValidation.Tests
             result.ShouldReport("Name", "Name must be Aurora.");
         }
 
-        /// <summary>
-        /// Naming one axis leaves the other inheriting, exactly as it does on every other level.
-        /// </summary>
         [Fact]
         public async Task ValidationBehaviors_NamingOneAxis_LeavesTheOtherInheriting()
         {

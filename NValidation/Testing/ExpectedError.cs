@@ -62,9 +62,6 @@ namespace NValidation.Testing
         /// </summary>
         public string? Message { get; }
 
-        /// <summary>
-        /// How <see cref="Message"/> is compared against what was reported.
-        /// </summary>
         internal ExpectedMessage Match { get; }
 
         private static string RequireMessage(string message)
@@ -75,9 +72,6 @@ namespace NValidation.Testing
         }
     }
 
-    /// <summary>
-    /// How an <see cref="ExpectedError"/> compares its message.
-    /// </summary>
     internal enum ExpectedMessage
     {
         Exact,

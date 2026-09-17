@@ -4,23 +4,14 @@ using System.Linq.Expressions;
 namespace NValidation.Internals
 {
     /// <summary>
-    /// Whether the objects on the way to a property are there to be read through.
+    /// Whether the objects on the way to a property are there to be read through, so a chain declared
+    /// through something the payload omitted is skipped rather than throwing.
     /// </summary>
-    /// <remarks>
-    /// A chain declared for <c>c =&gt; c.Model.Manufacturer.Name</c> compiles to an accessor that
-    /// dereferences <c>Model</c> and <c>Manufacturer</c>. Left alone it would throw a
-    /// <see cref="NullReferenceException"/> for a payload that simply omitted one of them, turning a bad
-    /// request into a server error. So the chain is skipped instead, which is what the rest of the
-    /// library already does with something absent — a null nested object is skipped by
-    /// <c>SetValidator</c>, a missing collection by its rules, an absent value by a comparison. Whether
-    /// the object in between has to be there at all is a question for a rule of its own,
-    /// <c>Property(c =&gt; c.Model).NotNull()</c>.
-    /// </remarks>
     internal static class ReachabilityGuard
     {
         /// <summary>
-        /// A predicate that is <c>false</c> when something on the way to the property is <c>null</c>, or
-        /// <c>null</c> where the path dereferences nothing and so can always be read.
+        /// A predicate that is false when something on the way to the property is null, or null where the
+        /// path dereferences nothing and so can always be read.
         /// </summary>
         public static Func<T, bool>? For<T, TProperty>(string propertyName, Expression<Func<T, TProperty>> expression)
         {
@@ -30,15 +21,10 @@ namespace NValidation.Internals
                 expression);
         }
 
-        /// <inheritdoc cref="PropertyAccessor" path="/remarks"/>
         /// <summary>
-        /// The guards of one owner-and-property-type pair, keyed by the property name alone. A
-        /// <c>null</c> entry is an answer, not a miss: it records that the path dereferences nothing.
+        /// A <c>null</c> entry is an answer, not a miss: it records that the path dereferences nothing. Held
+        /// per closed generic, so a collectible <c>AssemblyLoadContext</c> is not rooted.
         /// </summary>
-        /// <remarks>
-        /// Held per closed generic rather than under a <see cref="Type"/> key, so a validator declared
-        /// for a type from a collectible <c>AssemblyLoadContext</c> does not root that context forever.
-        /// </remarks>
         private static class Guards<T, TProperty>
         {
             public static readonly ConcurrentDictionary<string, Func<T, bool>?> ByPropertyName =

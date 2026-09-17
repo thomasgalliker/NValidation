@@ -11,14 +11,12 @@ namespace NValidation.AspNetCore
     /// Only <c>errors</c> is filled in. Title, Detail, Type and the trace identifier are deliberately
     /// left to the host, so a response built here is indistinguishable from the ones its own problem
     /// details pipeline produces.
-    /// <para>
     /// The concrete type is <see cref="HttpValidationProblemDetails"/> rather than a
     /// <see cref="ProblemDetails"/> carrying a dictionary under <c>Extensions["errors"]</c>. The two
     /// serialize alike through the reflection-based serializer, but an extension member is typed
     /// <see cref="object"/>, so writing one needs the runtime type resolved at serialization time —
     /// which a published-ahead-of-time host, serializing through a source-generated context, cannot do.
     /// <see cref="HttpValidationProblemDetails"/> is a framework type its own context already knows.
-    /// </para>
     /// </remarks>
     public static class ValidationProblemDetailsExtensions
     {

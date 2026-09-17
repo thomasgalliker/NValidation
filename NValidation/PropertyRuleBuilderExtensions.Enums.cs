@@ -9,9 +9,10 @@ namespace NValidation
         /// sending one no member has.
         /// </summary>
         /// <remarks>
-        /// For an enum marked <see cref="FlagsAttribute"/> a combination of members is a legitimate
-        /// value even though it is not itself a declared member, so such a value is accepted when every
-        /// bit it sets belongs to some member.
+        /// Reports <see cref="ValidationErrorCodes.IsInEnum"/>.
+        /// For an enum marked <see cref="FlagsAttribute"/> a combination of members is
+        /// a legitimate value even though it is not itself a declared member, so such a value is accepted
+        /// when every bit it sets belongs to some member.
         /// </remarks>
         public static PropertyRuleBuilder<T, TEnum> IsInEnum<T, TEnum>(this PropertyRuleBuilder<T, TEnum> builder)
             where TEnum : struct, Enum
@@ -26,7 +27,7 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The form for a property which may be absent. A missing value passes; use <c>NotNull()</c> to
+        /// Requires the value to be a member of its enum. A missing value passes; use <c>NotNull()</c> to
         /// require one.
         /// </summary>
         /// <inheritdoc cref="IsInEnum{T, TEnum}(PropertyRuleBuilder{T, TEnum})" path="/remarks"/>
@@ -42,10 +43,6 @@ namespace NValidation
             });
         }
 
-        /// <summary>
-        /// What counts as a valid value of <typeparamref name="TEnum"/>, worked out once per enum rather
-        /// than on every validation.
-        /// </summary>
         private static class EnumInfo<TEnum>
             where TEnum : struct, Enum
         {

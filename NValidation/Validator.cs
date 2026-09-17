@@ -13,16 +13,14 @@ namespace NValidation
     {
         private readonly List<IPropertyRule<T>> rules = [];
 
-        // The rules as an array, taken on the first validation and never re-read: the loop walks an
-        // array rather than a list enumerator, and a rule declared afterwards is refused.
+        /// <summary>
+        /// The rules as an array, taken on the first validation and never re-read: the loop walks an array
+        /// rather than a list enumerator, and a rule declared afterwards is refused.
+        /// </summary>
         private IPropertyRule<T>[]? frozenRules;
 
-        // What this validator declared for itself. A setting left null falls through to what the pass
-        // inherits — the options of the call, or the composer's settings — then to what the registration
-        // configured, then to NValidationOptions.Default.
         private NValidationOptions options = NValidationOptions.None;
 
-        // What the registration configured, for a validator the container built; null for one it did not.
         private NValidationOptions? registeredOptions;
 
         private bool? isSynchronous;
@@ -65,8 +63,8 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Whether every chain of this validator judges rather than awaits, so a validation can run
-        /// without an async state machine anywhere in it. Settled by the rules on first use.
+        /// Whether every chain of this validator judges rather than awaits, so a validation can run without
+        /// an async state machine anywhere in it. Settled by the rules on first use.
         /// </summary>
         private bool IsSynchronous
         {
@@ -130,8 +128,8 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, naming the property and reading it with a plain delegate, for a value that is not a
-        /// member path: a computed value, a dictionary entry, an indexer.
+        /// Starts a rule chain for a value that is not a member path — a computed value, a dictionary entry,
+        /// an indexer — naming the property and reading it with a plain delegate:
         /// <code>this.Property("Lines.Total", static o => o.Lines.Sum(l => l.Amount)).GreaterThan(0m);</code>
         /// </summary>
         /// <remarks>
@@ -156,7 +154,7 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, for a value reached through something the payload may have omitted:
+        /// Starts a rule chain for a value reached through something the payload may have omitted:
         /// <code>this.Property("Model.Name", static c => c.Model!.Name, static c => c.Model != null).NotEmpty();</code>
         /// A chain whose <paramref name="isReachable"/> says no is skipped, exactly as a chain declared
         /// through an absent object is.
@@ -174,10 +172,6 @@ namespace NValidation
             return builder.When(isReachable);
         }
 
-        /// <summary>
-        /// Starts a rule chain for the instance itself rather than for one of its properties. Used for
-        /// the elements of a collection of scalars, which have no property to name.
-        /// </summary>
         internal PropertyRuleBuilder<T, T?> RuleForSelf()
         {
             this.ThrowIfFrozen();
@@ -204,10 +198,6 @@ namespace NValidation
             return this.ValidateAsync(instance, new ValidationRun(InheritedSettings.From(options), Scope: null, cancellationToken));
         }
 
-        /// <summary>
-        /// Validates as part of <paramref name="run"/>, so a validator composed into another inherits its
-        /// composer's settings and knows the collection entry it is inside.
-        /// </summary>
         internal ValueTask<ValidationResult> ValidateAsync(T instance, ValidationRun run)
         {
             var frame = this.CreateFrame(instance, errors: null, run, out var settings);
@@ -222,7 +212,6 @@ namespace NValidation
             return this.ValidateAwaitingAsync(frame, settings);
         }
 
-        /// <inheritdoc cref="ValidateAsync(T, ValidationRun)"/>
         private async ValueTask<ValidationResult> ValidateAwaitingAsync(ValidationFrame<T> frame, PassSettings settings)
         {
             await this.ValidateFrameAsync(frame, settings);
@@ -230,10 +219,6 @@ namespace NValidation
             return Result(frame);
         }
 
-        /// <summary>
-        /// The synchronous form of <see cref="ValidateAsync(T, ValidationRun)"/>, for a composer which
-        /// knows that every rule here judges rather than awaits.
-        /// </summary>
         internal ValidationResult Validate(T instance, ValidationRun run)
         {
             this.RequireSynchronous();
@@ -245,10 +230,6 @@ namespace NValidation
             return Result(frame);
         }
 
-        /// <summary>
-        /// Reports into a list the caller owns, for a caller running this validator once per entry of a
-        /// collection, where a list and a result per entry would be the bulk of what the entry costs.
-        /// </summary>
         internal ValueTask ValidateIntoAsync(T instance, List<ValidationError> errors, ValidationRun run)
         {
             var frame = this.CreateFrame(instance, errors, run, out var settings);
@@ -263,7 +244,6 @@ namespace NValidation
             return this.ValidateFrameAsync(frame, settings);
         }
 
-        /// <inheritdoc cref="ValidateIntoAsync"/>
         internal void ValidateInto(T instance, List<ValidationError> errors, ValidationRun run)
         {
             this.RequireSynchronous();
@@ -273,10 +253,6 @@ namespace NValidation
             this.ValidateFrame(frame, settings);
         }
 
-        /// <summary>
-        /// What a finished pass amounts to: the failures it collected, or the shared successful result
-        /// where it collected none.
-        /// </summary>
         private static ValidationResult Result(ValidationFrame<T> frame)
         {
             return frame.TryTakeErrors(out var errors)
@@ -284,10 +260,6 @@ namespace NValidation
                 : ValidationResult.Success;
         }
 
-        /// <summary>
-        /// The state this validator's pass over one object works against, with the settings the pass
-        /// resolved substituted into its run — so what this validator composes inherits them.
-        /// </summary>
         private ValidationFrame<T> CreateFrame(T instance, List<ValidationError>? errors, ValidationRun run, out PassSettings settings)
         {
             ArgumentNullException.ThrowIfNull(instance);
@@ -302,13 +274,6 @@ namespace NValidation
             return new ValidationFrame<T>(instance, errors, resolvedRun);
         }
 
-        /// <summary>
-        /// The provider and the two behavior axes this pass runs with, resolved once from the most
-        /// specific level that names each: this validator, then what the pass inherits — the options of
-        /// the call, or the composer's settings — then what the registration configured, then
-        /// <see cref="NValidationOptions.Default"/>, then the built-in values. <c>Default</c> is read
-        /// once, so the three settings come from the same options even if it is reassigned meanwhile.
-        /// </summary>
         private PassSettings Resolve(InheritedSettings inherited)
         {
             var defaults = NValidationOptions.Default;
@@ -340,14 +305,6 @@ namespace NValidation
             return new PassSettings(messageProvider, classBehavior, propertyBehavior);
         }
 
-        /// <summary>
-        /// Runs every chain against a pass which has already been set up, where no chain awaits.
-        /// </summary>
-        /// <remarks>
-        /// The twin of <see cref="ValidateFrameAsync"/>, for the same reason
-        /// <see cref="PropertyRule{T, TProperty}.Validate"/> is the twin of its awaiting form: a body
-        /// shared between them would have to be an async method, which is the cost this avoids.
-        /// </remarks>
         private void ValidateFrame(ValidationFrame<T> frame, PassSettings settings)
         {
             var cancellationToken = frame.Run.CancellationToken;
@@ -371,7 +328,6 @@ namespace NValidation
             }
         }
 
-        /// <inheritdoc cref="ValidateFrame"/>
         private async ValueTask ValidateFrameAsync(ValidationFrame<T> frame, PassSettings settings)
         {
             var cancellationToken = frame.Run.CancellationToken;
@@ -393,12 +349,6 @@ namespace NValidation
             }
         }
 
-        /// <summary>
-        /// The rules as an array, and every chain told that it is now in use and which display names the
-        /// validator's properties carry. Done once, on the first validation; the race between two first
-        /// calls is benign, because both compute the same thing. From then on a rule declared late is
-        /// refused rather than silently ignored.
-        /// </summary>
         private IPropertyRule<T>[] FreezeRules()
         {
             var frozen = this.rules.ToArray();
@@ -412,7 +362,6 @@ namespace NValidation
             return frozen;
         }
 
-        /// <exception cref="InvalidOperationException">This validator has already validated something.</exception>
         private void ThrowIfFrozen()
         {
             if (this.frozenRules != null)
@@ -459,9 +408,6 @@ namespace NValidation
             this.ValidateInto(instance, errors, run);
         }
 
-        /// <summary>
-        /// What one pass runs with, resolved once rather than per chain.
-        /// </summary>
         private readonly record struct PassSettings(
             IValidationMessageProvider MessageProvider,
             ValidationBehavior ClassBehavior,

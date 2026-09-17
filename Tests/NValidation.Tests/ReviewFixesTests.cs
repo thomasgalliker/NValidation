@@ -163,9 +163,8 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// A missing value passes, as it does for every other rule about a string. It used to fail,
-        /// because <c>string.Equals(null, "x")</c> is false — which made this the one rule in the
-        /// library that treated absence as a failure of its own.
+        /// A missing value passes, as it does for every other rule about a string, even though
+        /// <c>string.Equals(null, "x")</c> is false.
         /// </summary>
         [Theory]
         [InlineData(null, true)]
@@ -209,8 +208,7 @@ namespace NValidation.Tests
 
         /// <summary>
         /// A chain of collection rules asks one question each, so it walks the sequence once per rule.
-        /// The README used to promise one walk for the whole chain; this is the number it actually
-        /// costs, pinned so the promise and the behaviour cannot drift apart again.
+        /// The count is pinned here so the documented cost and the behaviour cannot drift apart.
         /// </summary>
         [Fact]
         public async Task CollectionRules_WalkTheSequence_OncePerRule()

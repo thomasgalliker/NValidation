@@ -26,10 +26,9 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// The same for a collection of a reference type. Declaring it at all is the point: the element
-        /// chain used to be built for the element's non-nullable type, so every rule written on one
-        /// warned at its call site — an error in a host which treats warnings as errors, as this
-        /// repository does.
+        /// The element chain is built for the element's nullable type, so a rule written on a
+        /// collection of a reference type does not warn at its call site — which would be an error in
+        /// a host that treats warnings as errors, as this repository does.
         /// </summary>
         [Fact]
         public async Task Element_OnACollectionOfReferenceTypes_NamesTheElement_InTheMessage()

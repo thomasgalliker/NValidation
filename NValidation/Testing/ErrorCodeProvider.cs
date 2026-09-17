@@ -13,14 +13,9 @@ namespace NValidation.Testing
     /// </remarks>
     public sealed class ErrorCodeProvider : IValidationMessageProvider
     {
-        /// <summary>
-        /// The shared instance. It holds no state, so one serves every test.
-        /// </summary>
         public static ErrorCodeProvider Instance { get; } = new ErrorCodeProvider();
 
-        /// <summary>
-        /// Returns <paramref name="errorCode"/> unchanged, ignoring <paramref name="arguments"/>.
-        /// </summary>
+        /// <inheritdoc/>
         public string GetMessage(string errorCode, IReadOnlyDictionary<string, object?> arguments)
         {
             return errorCode;

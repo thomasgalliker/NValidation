@@ -1,9 +1,5 @@
 namespace NValidation.Testing.Internals
 {
-    /// <summary>
-    /// What <see cref="ExpectedErrorMatcher"/> could not pair: the expectations nothing satisfied and the
-    /// errors nothing asked for. Both empty means the result is exactly what the test expected.
-    /// </summary>
     internal sealed class MatchResult
     {
         public MatchResult(
@@ -16,9 +12,6 @@ namespace NValidation.Testing.Internals
             this.UnmatchedErrors = unmatchedErrors;
         }
 
-        /// <summary>
-        /// The expectations no error satisfied.
-        /// </summary>
         public IReadOnlyList<ExpectedError> UnmatchedExpectations { get; }
 
         /// <summary>
@@ -28,14 +21,8 @@ namespace NValidation.Testing.Internals
         /// </summary>
         public IReadOnlyList<bool> NearMisses { get; }
 
-        /// <summary>
-        /// The errors no expectation asked for.
-        /// </summary>
         public IReadOnlyList<ValidationError> UnmatchedErrors { get; }
 
-        /// <summary>
-        /// <c>true</c> when every expectation was paired with an error and no error was left over.
-        /// </summary>
         public bool Succeeded => this.UnmatchedExpectations.Count == 0 && this.UnmatchedErrors.Count == 0;
     }
 }

@@ -474,7 +474,6 @@ namespace NValidation.Tests
             result.Succeeded.Should().Be(expectedToSucceed);
         }
 
-        /// <inheritdoc cref="GreaterThan_WorksWithALong" path="/summary"/>
         [Theory]
         [InlineData(24, true)]
         [InlineData(25, false)]
@@ -494,7 +493,6 @@ namespace NValidation.Tests
             result.Succeeded.Should().Be(expectedToSucceed);
         }
 
-        /// <inheritdoc cref="GreaterThan_WorksWithALong" path="/summary"/>
         [Theory]
         [InlineData(2019, false)]
         [InlineData(2020, true)] // the bound itself

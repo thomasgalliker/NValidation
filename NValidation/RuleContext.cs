@@ -37,14 +37,8 @@ namespace NValidation
             this.errorCountAtStart = errorCountAtStart;
         }
 
-        /// <summary>
-        /// The run this chain belongs to, for a rule which composes another validator and passes it on.
-        /// </summary>
         internal ValidationRun Run => this.frame.Run;
 
-        /// <summary>
-        /// The pass this chain belongs to, for a composed rule which runs other validators into it.
-        /// </summary>
         internal ValidationFrame Frame => this.frame;
 
         /// <summary>
@@ -158,11 +152,6 @@ namespace NValidation
             return this.rule.DisplayNames.Resolve(propertyName);
         }
 
-        /// <summary>
-        /// Reports a failure a validator this chain composed produced, under the property name that
-        /// validator chose and with the message it chose: what a composed validator found is its own
-        /// judgement, so <c>WithMessage</c> does not apply.
-        /// </summary>
         internal void AddComposedError(ValidationError error)
         {
             this.frame.Errors.Add(error);

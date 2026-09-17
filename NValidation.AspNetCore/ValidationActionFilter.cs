@@ -17,13 +17,11 @@ namespace NValidation.AspNetCore
     /// <see cref="SkipNValidationAttribute"/> is skipped outright.
     /// </summary>
     /// <remarks>
-    /// <para>
     /// Failures of every parameter are collected into one <see cref="ValidationResult"/> and thrown as a
     /// single <see cref="ValidationException"/>, so the response reports everything that is wrong with the
     /// request at once. Register <see cref="ValidationExceptionHandler"/>, or read
     /// <see cref="ValidationException.Errors"/> in the host's own exception handler, to turn that into a
     /// 400 problem details response.
-    /// </para>
     /// <para>
     /// Register it as a global filter, which also settles the order: authorization filters run first, so an
     /// unauthorized request is still rejected before its payload is looked at.
@@ -39,23 +37,14 @@ namespace NValidation.AspNetCore
     public sealed partial class ValidationActionFilter : IAsyncActionFilter
     {
         /// <summary>
-        /// What has already been worked out about an action, by the action it was worked out for.
+        /// Held weakly, so an entry lives exactly as long as the action descriptor it describes.
         /// </summary>
-        /// <remarks>
-        /// Held weakly, so an entry lives exactly as long as the action descriptor it describes: a host
-        /// which rebuilds its application model — an application part added at run time, say — leaves
-        /// the answers about the old actions to be collected rather than keeping them for the life of
-        /// the process.
-        /// </remarks>
         private static readonly ConditionalWeakTable<ActionDescriptor, ActionCache> Actions = new();
 
         private readonly ValidationFilterOptions options;
         private readonly IModelMetadataProvider modelMetadataProvider;
         private readonly ILogger<ValidationActionFilter> logger;
 
-        /// <summary>
-        /// Creates the filter.
-        /// </summary>
         public ValidationActionFilter(
             IOptions<ValidationFilterOptions> options,
             IModelMetadataProvider modelMetadataProvider,
@@ -99,9 +88,6 @@ namespace NValidation.AspNetCore
             await next();
         }
 
-        /// <summary>
-        /// The result of validating one parameter, or <c>null</c> when there was nothing to validate.
-        /// </summary>
         private async Task<ValidationResult?> ValidateParameterAsync(ActionExecutingContext context, ParameterDescriptor parameter)
         {
             if (!this.IsRequestPayload(parameter) || IsSkipped(context, parameter))
@@ -133,18 +119,9 @@ namespace NValidation.AspNetCore
         }
 
         /// <summary>
-        /// Whether the parameter carries what the caller sent, rather than where it was addressed. Route
-        /// and query values are excluded: a complex type bound from them is the application's own
-        /// plumbing — paging, filtering — and not a payload a client composed.
+        /// Whether the parameter carries what the caller sent rather than where it was addressed. Outside
+        /// <c>[ApiController]</c> the binding source is not filled in, so a complex type with none counts.
         /// </summary>
-        /// <remarks>
-        /// A parameter can also carry no binding source at all. Inside <c>[ApiController]</c> that does
-        /// not happen — binding-source inference fills it in — but outside it a complex parameter with no
-        /// <c>[FromBody]</c> is bound from whatever the caller sent, and treating that as "not a payload"
-        /// would leave it silently unvalidated and out of reach of
-        /// <see cref="ValidationFilterOptions.MissingValidatorBehavior"/>. MVC's own notion of a complex
-        /// type is what separates such a payload from an addressing value like a route id.
-        /// </remarks>
         private bool IsRequestPayload(ParameterDescriptor parameter)
         {
             var bindingSource = parameter.BindingInfo?.BindingSource;
@@ -215,20 +192,8 @@ namespace NValidation.AspNetCore
         [LoggerMessage(EventId = 1, Level = LogLevel.Warning, Message = "No validator is registered for parameter '{ParameterName}' of type '{ParameterType}' on action '{ActionDisplayName}'.")]
         private partial void LogMissingValidator(string parameterName, Type parameterType, string? actionDisplayName);
 
-        /// <summary>
-        /// The answers about one action, keyed by parameter name.
-        /// </summary>
         private sealed class ActionCache
         {
-            /// <summary>
-            /// Whether a parameter is excluded from validation.
-            /// </summary>
-            /// <remarks>
-            /// The answer comes from attributes on the parameter, the action and the controller, none of
-            /// which change once the application model is built — but finding it is reflection, and the
-            /// endpoint metadata is walked once per parameter even though the answer does not depend on
-            /// the parameter. Asked once per action instead of on every request.
-            /// </remarks>
             public ConcurrentDictionary<string, bool> SkipDecisions { get; } = new(StringComparer.Ordinal);
 
             /// <summary>
@@ -238,15 +203,6 @@ namespace NValidation.AspNetCore
             /// </summary>
             public ConcurrentDictionary<string, byte> ReportedMissingValidators { get; } = new(StringComparer.Ordinal);
 
-            /// <summary>
-            /// The closed <see cref="IValidator{T}"/> to resolve for each parameter.
-            /// </summary>
-            /// <remarks>
-            /// <see cref="Type.MakeGenericType"/> is the one piece of reflection this filter cannot
-            /// avoid: the service to resolve is only known from a parameter's runtime <see cref="Type"/>.
-            /// Held here rather than in a process-static keyed by that type, so the entry dies with the
-            /// action descriptor instead of rooting the parameter's assembly for the life of the process.
-            /// </remarks>
             public ConcurrentDictionary<string, Type> ValidatorServiceTypes { get; } = new(StringComparer.Ordinal);
         }
     }

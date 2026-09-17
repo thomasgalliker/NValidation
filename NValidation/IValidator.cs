@@ -60,13 +60,9 @@ namespace NValidation
         /// The options are the layer under what a validator declared for itself, so one which named a
         /// setting keeps it and one which named nothing takes what this call asked for. They reach a
         /// nested validator and the element chain of a <c>ForEach</c> as well, which nothing configured
-        /// on a registration can. Using them freezes them, exactly as
-        /// <see cref="NValidationOptions.Default"/> is frozen when it is first used.
-        /// <para>
-        /// A validator written by hand against this interface brings its own configuration and is left
-        /// alone: the default implementation ignores <paramref name="options"/>, which is the same
-        /// position the library takes on a hand-written validator's messages.
-        /// </para>
+        /// on a registration can. A validator written by hand against this interface brings its own
+        /// configuration and is left alone: the default implementation ignores
+        /// <paramref name="options"/>.
         /// </remarks>
         /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
         ValueTask<ValidationResult> ValidateAsync(T instance, NValidationOptions options, CancellationToken cancellationToken = default)

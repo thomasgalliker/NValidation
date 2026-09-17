@@ -6,9 +6,13 @@ namespace NValidation
     public static partial class PropertyRuleBuilderExtensions
     {
         /// <summary>
-        /// Requires at least <paramref name="minimumCount"/> entries. A missing collection passes; use
-        /// <c>NotEmpty()</c> or <c>NotNull()</c> to require one.
+        /// Requires at least <paramref name="minimumCount"/> entries. A missing collection passes;
+        /// use <c>NotEmpty()</c> or <c>NotNull()</c> to require one.
         /// </summary>
+        /// <remarks>
+        /// Reports <see cref="ValidationErrorCodes.MinimumCount"/> with
+        /// <see cref="ValidationMessagePlaceholders.MinCount"/>.
+        /// </remarks>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="minimumCount"/> is negative.</exception>
         public static PropertyRuleBuilder<T, TCollection> MinimumCount<T, TCollection>(this PropertyRuleBuilder<T, TCollection> builder, int minimumCount)
             where TCollection : IEnumerable?
@@ -25,8 +29,12 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Caps the number of entries. A missing collection passes.
+        /// Caps the number of entries at <paramref name="maximumCount"/>. A missing collection passes.
         /// </summary>
+        /// <remarks>
+        /// Reports <see cref="ValidationErrorCodes.MaximumCount"/> with
+        /// <see cref="ValidationMessagePlaceholders.MaxCount"/>.
+        /// </remarks>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="maximumCount"/> is negative.</exception>
         public static PropertyRuleBuilder<T, TCollection> MaximumCount<T, TCollection>(this PropertyRuleBuilder<T, TCollection> builder, int maximumCount)
             where TCollection : IEnumerable?
@@ -43,24 +51,15 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Requires every entry to be distinct — a list of ids a client assembled from a multi-select,
-        /// typically.
+        /// Requires every entry to be distinct — a list of ids a client assembled from a
+        /// multi-select, typically.
         /// </summary>
         /// <remarks>
-        /// Entries are compared by their own <see cref="object.Equals(object)"/>. Where a collection
-        /// needs a comparison of its own — case-insensitive property names, or entries matched on one field —
-        /// write it as a <c>Must(...)</c>, which sees the property at its declared type.
-        /// <para>
-        /// Declared for any <see cref="IEnumerable"/>, so it works whatever the property is typed as.
-        /// The element type is therefore not known here, and a collection of value types has each entry
-        /// boxed on the way into the set. A typed overload cannot fix that:
-        /// <see cref="PropertyRuleBuilder{T, TProperty}"/> is a struct and so invariant, so a chain for
-        /// an <c>ICollection&lt;int&gt;</c> — which is how a collection is usually declared — would not
-        /// bind to one taking an <c>IEnumerable&lt;int&gt;</c>. Reaching the entries at their own type would mean inferring it
-        /// from the property, which C# cannot do from a constraint — so the rule that works everywhere
-        /// is the one that ships, and a hot path over a large collection of value types is a
-        /// <c>Must(...)</c> with a <see cref="HashSet{T}"/> of that type.
-        /// </para>
+        /// Reports <see cref="ValidationErrorCodes.NoDuplicates"/>.
+        /// Entries are compared by their own <see cref="object.Equals(object)"/>, and a collection of value
+        /// types has each entry boxed on the way into the set. Where a collection needs a comparison of its
+        /// own, or a hot path needs the entries at their declared type, write it as a <c>Must(...)</c> over
+        /// a <see cref="HashSet{T}"/>.
         /// </remarks>
         public static PropertyRuleBuilder<T, TCollection> NoDuplicates<T, TCollection>(this PropertyRuleBuilder<T, TCollection> builder)
             where TCollection : IEnumerable?
@@ -98,13 +97,10 @@ namespace NValidation
         /// bind it to the row it came from.
         /// </summary>
         /// <remarks>
-        /// Declare it last in the chain: it answers about the elements rather than about the collection,
-        /// so it returns nothing to chain further rules onto. Rules about the collection itself — how
-        /// many entries, whether they are distinct — go before it.
-        /// <para>
-        /// A missing collection is skipped, as is a <c>null</c> element, and the collection is enumerated
-        /// once.
-        /// </para>
+        /// Declare it last in the chain: it answers about the elements rather than about the collection, so
+        /// it returns nothing to chain further rules onto. Rules about the collection itself — how many
+        /// entries, whether they are distinct — go before it. A missing collection is skipped, as is a
+        /// <c>null</c> element, and the collection is enumerated once.
         /// </remarks>
         public static void ForEach<TElement>(
             this IPropertyRuleTarget<IEnumerable<TElement>> target,

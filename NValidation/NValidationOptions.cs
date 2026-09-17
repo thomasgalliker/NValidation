@@ -21,20 +21,17 @@ namespace NValidation
     /// the container built; then <see cref="Default"/>; then the built-in English and the built-in
     /// behaviors. Everything a validator resolves is inherited by the validators it composes and by the
     /// element chain of a <c>ForEach</c>, unless they declared otherwise for themselves.
-    /// <para>
     /// <see cref="Default"/> is for an application to set, not a library: a package which assigns it
     /// changes the wording every one of its consumers sees.
-    /// </para>
     /// </remarks>
     public sealed record NValidationOptions
     {
-        // Volatile: read on whatever thread a validation runs on, and a host which assigns at startup
-        // has to be sure every later run sees it.
+        /// <summary>
+        /// Volatile: read on whatever thread a validation runs on, and a host which assigns at startup has to
+        /// be sure every later run sees it.
+        /// </summary>
         private static volatile NValidationOptions current = new();
 
-        /// <summary>
-        /// Options naming nothing, so every setting is left to the level below.
-        /// </summary>
         internal static NValidationOptions None { get; } = new();
 
         /// <summary>

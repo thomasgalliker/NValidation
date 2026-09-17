@@ -29,6 +29,7 @@ namespace NValidation.AspNetCore
             this.problemDetailsService = problemDetailsService;
         }
 
+        /// <inheritdoc/>
         public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(httpContext);

@@ -125,9 +125,6 @@ namespace NValidation.AspNetCore.Tests
             AllValidationFiltersOf(services).Should().Be(1);
         }
 
-        /// <summary>
-        /// The configuration overload still binds what it was given.
-        /// </summary>
         [Fact]
         public void AddValidationFilter_WithConfiguration_BindsTheOptions()
         {

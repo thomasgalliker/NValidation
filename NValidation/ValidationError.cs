@@ -16,7 +16,8 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, naming the rule that produced it.
+        /// Creates a failure for the property named by <paramref name="propertyName"/>, naming the rule that
+        /// produced it.
         /// </summary>
         public ValidationError(string propertyName, string message, string? errorCode)
             : this(propertyName, message, errorCode, arguments: null)
@@ -24,7 +25,8 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, carrying the arguments the message was rendered from.
+        /// Creates a failure for the property named by <paramref name="propertyName"/>, naming the rule that
+        /// produced it and carrying the arguments its message was rendered from.
         /// </summary>
         public ValidationError(
             string propertyName,

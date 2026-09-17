@@ -39,8 +39,10 @@ namespace NValidation.AspNetCore
         }
 
         /// <summary>
-        /// The same, leaving <see cref="ValidationFilterOptions"/> at its defaults.
+        /// Validates every controller payload that has a validator, leaving
+        /// <see cref="ValidationFilterOptions"/> at its defaults.
         /// </summary>
+        /// <inheritdoc cref="AddValidationFilter(NValidationBuilder, System.Action{ValidationFilterOptions})" path="/remarks"/>
         public static NValidationBuilder AddValidationFilter(this NValidationBuilder options)
         {
             return AddValidationFilterCore(options, configure: null);
@@ -70,9 +72,11 @@ namespace NValidation.AspNetCore
         }
 
         /// <summary>
-        /// The same, binding <see cref="ValidationFilterOptions"/> from configuration so the behaviour
-        /// can be changed without a rebuild.
+        /// Validates every controller payload that has a validator, binding
+        /// <see cref="ValidationFilterOptions"/> from configuration so the behaviour can be changed without a
+        /// rebuild.
         /// </summary>
+        /// <inheritdoc cref="AddValidationFilter(NValidationBuilder, System.Action{ValidationFilterOptions})" path="/remarks"/>
         public static NValidationBuilder AddValidationFilter(
             this NValidationBuilder options,
             IConfiguration configuration)
@@ -85,9 +89,6 @@ namespace NValidation.AspNetCore
             return options.AddValidationFilter();
         }
 
-        /// <summary>
-        /// Keeps the first <see cref="ValidationActionFilter"/> in the pipeline and drops the rest.
-        /// </summary>
         private static void RemoveDuplicateValidationFilters(MvcOptions mvcOptions)
         {
             var first = -1;
@@ -116,11 +117,10 @@ namespace NValidation.AspNetCore
             }
         }
 
-        /// <remarks>
-        /// Covers the three shapes a host can register the filter in: by type
-        /// (<c>Filters.Add&lt;ValidationActionFilter&gt;()</c>), through the container
-        /// (<c>Filters.Add(new ServiceFilterAttribute(...))</c>), or as an instance.
-        /// </remarks>
+        /// <summary>
+        /// Covers the three shapes a host can register the filter in: by type, through the container, or as
+        /// an instance.
+        /// </summary>
         private static bool IsValidationFilter(IFilterMetadata filter)
         {
             return filter switch

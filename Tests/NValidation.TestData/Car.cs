@@ -76,7 +76,6 @@ namespace NValidation.TestData
         /// </summary>
         public string? RegistrationPlate { get; set; }
 
-        /// <inheritdoc cref="RegistrationPlate"/>
         public string? PreviousRegistrationPlate { get; set; }
 
         public ICollection<int>? FeatureIds { get; set; }

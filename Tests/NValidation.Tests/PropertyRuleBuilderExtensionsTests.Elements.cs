@@ -144,10 +144,6 @@ namespace NValidation.Tests
             result.Succeeded.Should().BeTrue();
         }
 
-        /// <summary>
-        /// A null entry has no properties to judge, and requiring entries to be there at all is a
-        /// question about the collection rather than about one of its elements.
-        /// </summary>
         [Fact]
         public async Task ForEach_SkipsANullElement_WithoutDisturbingTheIndexes()
         {
@@ -254,10 +250,6 @@ namespace NValidation.Tests
             sequence.Enumerated.Should().Be(3);
         }
 
-        /// <summary>
-        /// A message about one entry can name the row it is about, which is the only way the reader
-        /// learns the position without reading the property name.
-        /// </summary>
         [Fact]
         public async Task ForEach_OffersTheElementsPosition_AsAMessagePlaceholder()
         {
@@ -309,10 +301,6 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// Resolves every message to one template, so a test can prove which placeholders a rule makes
-        /// available.
-        /// </summary>
-        /// <summary>
         /// The position is what the entry knows, not what the provider knows: an element validator with
         /// a provider of its own is told it too.
         /// </summary>
@@ -344,10 +332,6 @@ namespace NValidation.Tests
             }
         }
 
-        /// <summary>
-        /// A condition on an element's rule chain is asked about the element, not about the object the
-        /// collection hangs off.
-        /// </summary>
         [Fact]
         public async Task ForEach_WhenOnAnElementChain_JudgesOnlyTheElementsTheConditionAccepts()
         {
@@ -371,9 +355,6 @@ namespace NValidation.Tests
             result.ShouldReport("ServiceHistory[0].Cost", "Cost must be greater than 0.");
         }
 
-        /// <summary>
-        /// The inverse reads the other way round but reaches the same element.
-        /// </summary>
         [Fact]
         public async Task ForEach_UnlessOnAnElementChain_SkipsTheElementsTheConditionAccepts()
         {
@@ -397,10 +378,6 @@ namespace NValidation.Tests
             result.ShouldReport("ServiceHistory[1].Cost", "Cost must be greater than 0.");
         }
 
-        /// <summary>
-        /// A condition narrows one property of the entry, not the entry as a whole: the other properties
-        /// are still judged.
-        /// </summary>
         [Fact]
         public async Task ForEach_WhenOnOnePropertyOfAnElement_LeavesTheOtherPropertiesAlone()
         {
@@ -423,9 +400,6 @@ namespace NValidation.Tests
             result.ShouldReport("ServiceHistory[0].Workshop", "Workshop is required.");
         }
 
-        /// <summary>
-        /// Every property of an entry that breaks a rule is reported, each under its own path.
-        /// </summary>
         [Fact]
         public async Task ForEach_ReportsEveryBrokenPropertyOfAnElement()
         {
@@ -543,9 +517,6 @@ namespace NValidation.Tests
             result.ShouldReport("ServiceHistory[Northgate].Cost", "Cost must be greater than 0.");
         }
 
-        /// <summary>
-        /// Only the propertyName changes: a message about the entry still names its position.
-        /// </summary>
         [Fact]
         public async Task WithIndexer_LeavesTheCollectionIndexPlaceholderAlone()
         {
@@ -739,11 +710,10 @@ namespace NValidation.Tests
                 new("ServiceHistory[0].Cost", "Cost must be greater than 0.")]);
         }
 
-        /// <inheritdoc cref="ValidatorTests.ValidateAsync_StoppingAtTheFirstError_DoesNotTruncateWhatOneRuleReported" path="/summary"/>
-        /// <remarks>
-        /// The collection case of the same thing: ForEach is one rule, so every entry it walked is
-        /// reported even by a run which stops at the first error.
-        /// </remarks>
+        /// <summary>
+        /// ForEach is one rule, so every entry it walked is reported even by a run which stops at the
+        /// first error.
+        /// </summary>
         [Fact]
         public async Task ForEach_UnderAStoppingRun_StillReportsOnEveryEntry()
         {
