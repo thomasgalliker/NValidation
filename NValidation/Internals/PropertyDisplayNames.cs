@@ -5,13 +5,16 @@ namespace NValidation.Internals
     /// <c>WithDisplayName(...)</c>, or — the default — its property name, i.e. its C# member name.
     /// </summary>
     /// <remarks>
-    /// Built per validation rather than per validator, because a localized display name has to be
-    /// resolved in the culture of the current request. Where the same property is declared more than
-    /// once, the display name written last wins.
+    /// Built once per validator, when its rules freeze; a display name is stored as a <see cref="Func{TResult}"/>
+    /// and resolved while the message is produced, so the culture of the current request is accounted
+    /// for. Where the same property is declared more than once, the display name written last wins.
     /// </remarks>
     internal sealed class PropertyDisplayNames
     {
-        private static readonly PropertyDisplayNames None = new(new Dictionary<string, Func<string>>(0, StringComparer.Ordinal));
+        /// <summary>
+        /// No property opted into a display name, so every message names its property by its name.
+        /// </summary>
+        public static PropertyDisplayNames None { get; } = new(new Dictionary<string, Func<string>>(0, StringComparer.Ordinal));
 
         private readonly IReadOnlyDictionary<string, Func<string>> displayNames;
 

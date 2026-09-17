@@ -22,6 +22,7 @@
   <Folder Name="/Tests/">
     <Project Path="Tests/NValidation.AspNetCore.Tests/NValidation.AspNetCore.Tests.csproj" />
     <Project Path="Tests/NValidation.Benchmark/NValidation.Benchmark.csproj" />
+    <Project Path="Tests/NValidation.DependencyInjection.Tests/NValidation.DependencyInjection.Tests.csproj" />
     <Project Path="Tests/NValidation.TestData/NValidation.TestData.csproj" />
     <Project Path="Tests/NValidation.TestData.Ambiguous/NValidation.TestData.Ambiguous.csproj" />
     <Project Path="Tests/NValidation.Tests/NValidation.Tests.csproj" />

@@ -87,8 +87,8 @@ namespace NValidation.Tests
             var validator = new TestValidator<Car>();
             validator.Property(c => c.Vin)
                 .WithValidationBehavior(ValidationBehavior.All)
-                .Must(vin => vin != "wrong", "first")
-                .Must(vin => vin != "wrong", "second");
+                .Must(vin => vin != "wrong").WithMessage("first")
+                .Must(vin => vin != "wrong").WithMessage("second");
 
             var car = new Car { Vin = "wrong" };
 
@@ -153,17 +153,17 @@ namespace NValidation.Tests
             var reached = false;
 
             var validator = new TestValidator<Car>();
-            validator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+            validator.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError };
 
             validator.Property(c => c.Vin).NotEmpty();
 
-            validator.Property(c => c.RegistrationPlate).Must(
-                _ =>
+            validator.Property(c => c.RegistrationPlate)
+                .Must(_ =>
                 {
                     reached = true;
                     return true;
-                },
-                ProbeNeverReports);
+                })
+                .WithMessage(ProbeNeverReports);
 
             // Act
             await validator.ValidateAsync(new Car());
@@ -180,17 +180,17 @@ namespace NValidation.Tests
             var reached = false;
 
             var validator = new TestValidator<Car>();
-            validator.ValidationBehaviors.Class = ValidationBehavior.All;
+            validator.ValidationBehaviors = new() { Class = ValidationBehavior.All };
 
             validator.Property(c => c.Vin).NotEmpty();
 
-            validator.Property(c => c.RegistrationPlate).Must(
-                _ =>
+            validator.Property(c => c.RegistrationPlate)
+                .Must(_ =>
                 {
                     reached = true;
                     return true;
-                },
-                ProbeNeverReports);
+                })
+                .WithMessage(ProbeNeverReports);
 
             // Act
             await validator.ValidateAsync(new Car());
@@ -211,20 +211,20 @@ namespace NValidation.Tests
             var reached = false;
 
             var validator = new TestValidator<Car>();
-            validator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+            validator.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError };
 
             validator.Property(c => c.Vin)
                 .WithValidationBehavior(ValidationBehavior.All)
                 .NotEmpty()
                 .MaximumLength(TwoFailingPropertiesValidator.MaximumLength);
 
-            validator.Property(c => c.RegistrationPlate).Must(
-                _ =>
+            validator.Property(c => c.RegistrationPlate)
+                .Must(_ =>
                 {
                     reached = true;
                     return true;
-                },
-                ProbeNeverReports);
+                })
+                .WithMessage(ProbeNeverReports);
 
             // Act
             var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
@@ -247,7 +247,7 @@ namespace NValidation.Tests
         {
             // Arrange
             var validator = new TestValidator<Car>();
-            validator.ValidationBehaviors.Property = ValidationBehavior.All;
+            validator.ValidationBehaviors = new() { Property = ValidationBehavior.All };
 
             validator.Property(c => c.Vin)
                 .WithValidationBehavior(ValidationBehavior.StopAtFirstError)
@@ -302,7 +302,7 @@ namespace NValidation.Tests
             validator.Property(c => c.Vin).NotEmpty().MaximumLength(TwoFailingPropertiesValidator.MaximumLength);
             validator.Property(c => c.RegistrationPlate).NotEmpty();
 
-            validator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+            validator.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError };
 
             // Act
             var result = await validator.ValidateAsync(TwoFailingPropertiesValidator.BrokenCar());
@@ -325,7 +325,7 @@ namespace NValidation.Tests
         {
             // Arrange
             var validator = new TestValidator<Car>();
-            validator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+            validator.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError };
 
             validator.Property(c => c.Vin).NotEmpty().When(c => c.SoldDate != null);
             validator.Property(c => c.RegistrationPlate).NotEmpty();
@@ -340,12 +340,11 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// Stopping caps how far a run goes, not how many messages it may carry back. A run is stopped
-        /// between rules, and one rule can report several at once — so a composed validator's findings
-        /// are passed on whole rather than truncated to make the count come out at one.
+        /// A nested validator which declared nothing inherits the stopping run, so it too stops at its
+        /// first error: the whole graph answers with the first thing that is wrong.
         /// </summary>
         [Fact]
-        public async Task ValidateAsync_StoppingAtTheFirstError_DoesNotTruncateWhatOneRuleReported()
+        public async Task ValidateAsync_StoppingAtTheFirstError_IsInheritedByANestedValidatorWhichDeclaredNothing()
         {
             // Arrange
             var modelValidator = new TestValidator<CarModel>();
@@ -353,7 +352,38 @@ namespace NValidation.Tests
             modelValidator.Property(m => m.SeatCount).GreaterThan(0);
 
             var validator = new TestValidator<Car>();
-            validator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+            validator.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError };
+
+            validator.Property(c => c.Model).SetValidator(modelValidator);
+            validator.Property(c => c.Vin).NotEmpty();
+
+            var car = new Car { Model = new CarModel() };
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            // Vin is absent too: the run stopped once the nested validator had reported
+            result.ShouldReport("Model.Name", "Name is required.");
+        }
+
+        /// <summary>
+        /// Stopping caps how far a run goes, not how many messages it may carry back. A run is stopped
+        /// between rules, and one rule can report several at once — so what a nested validator which
+        /// decided for itself found is passed on whole rather than truncated to make the count come out
+        /// at one.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_StoppingAtTheFirstError_DoesNotTruncateWhatOneRuleReported()
+        {
+            // Arrange
+            var modelValidator = new TestValidator<CarModel>();
+            modelValidator.ValidationBehaviors = new() { Class = ValidationBehavior.All };
+            modelValidator.Property(m => m.Name).NotEmpty();
+            modelValidator.Property(m => m.SeatCount).GreaterThan(0);
+
+            var validator = new TestValidator<Car>();
+            validator.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError };
 
             validator.Property(c => c.Model).SetValidator(modelValidator);
             validator.Property(c => c.Vin).NotEmpty();
@@ -379,7 +409,7 @@ namespace NValidation.Tests
         {
             // Arrange
             var modelValidator = new TestValidator<CarModel>();
-            modelValidator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+            modelValidator.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError };
 
             modelValidator.Property(m => m.Name).NotEmpty();
             modelValidator.Property(m => m.SeatCount).GreaterThan(0);
@@ -522,7 +552,7 @@ namespace NValidation.Tests
             // Arrange
             var validator = new TestValidator<Car>();
             validator.Property(c => c.Vin)
-                .Must(vin => vin == null, "replaced below")
+                .Must(vin => vin == null).WithMessage("replaced below")
                 .WithMessage(car => $"The VIN {car.Vin} is already registered.");
 
             var car = Cars.Car();
@@ -1134,16 +1164,43 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// A validator constructed without the DI registration still produces readable messages.
+        /// The property holds what the validator declared for itself, and a validator constructed without
+        /// the DI registration declared nothing; the built-in English is what it falls back to while
+        /// validating.
         /// </summary>
         [Fact]
-        public void Messages_DefaultToTheBuiltInProvider()
+        public async Task ValidationMessageProvider_LeftUnset_IsNullAndFallsBackToTheBuiltInEnglish()
         {
-            // Act
+            // Arrange
             var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty();
+
+            // Act
+            var result = await validator.ValidateAsync(new Car());
 
             // Assert
-            validator.Messages.Should().BeOfType<DefaultValidationMessageProvider>();
+            validator.ValidationMessageProvider.Should().BeNull();
+            result.ShouldReport("Vin", "Vin is required.");
+        }
+
+        /// <summary>
+        /// Declaring rules is for the constructor: the first validation freezes them, and a rule declared
+        /// afterwards is refused rather than silently ignored.
+        /// </summary>
+        [Fact]
+        public async Task Property_AfterTheFirstValidation_Throws()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty();
+
+            await validator.ValidateAsync(Cars.Car());
+
+            // Act
+            var act = () => validator.Property(c => c.RegistrationPlate).NotEmpty();
+
+            // Assert
+            act.Should().Throw<InvalidOperationException>().WithMessage("*already validated*Declare every rule before*");
         }
 
         /// <summary>
@@ -1206,27 +1263,25 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// The provider is the seam the DI registration writes through, so a null would only surface
-        /// much later, while validating.
+        /// Null means "nothing declared here", so writing it takes a declaration back and the validator
+        /// inherits again.
         /// </summary>
         [Fact]
-        public void Messages_CannotBeSetToNull()
+        public async Task ValidationMessageProvider_SetToNull_InheritsAgain()
         {
             // Arrange
-            var validator = new TestValidator<Car>();
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
+            validator.Property(c => c.Vin).NotEmpty();
+
+            validator.ValidationMessageProvider = null;
 
             // Act
-            var act = () => validator.Messages = null!;
+            var result = await validator.ValidateAsync(new Car());
 
             // Assert
-            act.Should().Throw<ArgumentNullException>();
+            result.ShouldReport("Vin", "Vin is required.");
         }
 
-        /// <summary>
-        /// Two properties which each break two rules, so a run can be told apart both by how many messages
-        /// it reports and by which properties they name. Both axes are taken through the constructor
-        /// because what is under test is the setting rather than the rules.
-        /// </summary>
         /// <summary>
         /// The non-generic entry point is what the ASP.NET Core filter calls, having resolved a validator
         /// by a parameter's runtime type.
@@ -1243,27 +1298,6 @@ namespace NValidation.Tests
 
             // Assert
             result.ShouldReport("Vin", "Vin is required.");
-        }
-
-        /// <summary>
-        /// A validator may serve more than one payload — <c>ValidatorTypeInfo</c> says so and the
-        /// registration registers every closed interface it finds. Before the base class declared the
-        /// non-generic member, such a type inherited two equally specific defaults and did not compile
-        /// at all (CS8705), so the shape the registration supports could not be written.
-        /// </summary>
-        [Fact]
-        public async Task ValidateAsync_ThroughTheNonGenericInterface_DispatchesOnTheInstanceType()
-        {
-            // Arrange
-            IValidator validator = new CarAndManufacturerValidator();
-
-            // Act
-            var car = await validator.ValidateAsync(new Car());
-            var manufacturer = await validator.ValidateAsync(new Manufacturer());
-
-            // Assert
-            car.ShouldReport("Vin", "Vin is required.");
-            manufacturer.ShouldReport("Name", "Name is required.");
         }
 
         /// <summary>
@@ -1285,38 +1319,68 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// Validates a <see cref="Car"/> through the base class and a <see cref="Manufacturer"/> by hand.
-        /// It re-implements the non-generic member because only it knows about both payloads.
+        /// The untyped entry point takes options too, so the pipeline which resolved its validator by
+        /// runtime type is not the one caller that cannot ask for a wording of its own.
         /// </summary>
-        private sealed class CarAndManufacturerValidator : Validator<Car>, IValidator<Manufacturer>
+        [Fact]
+        public async Task ValidateAsync_ThroughTheNonGenericInterfaceWithOptions_UsesTheirMessageProvider()
         {
-            public CarAndManufacturerValidator()
+            // Arrange
+            IValidator validator = BuildVinValidator();
+
+            var options = new NValidationOptions
             {
-                this.Property(c => c.Vin).NotEmpty();
-            }
+                MessageProvider = new StubMessageProvider("NotEmpty", "the options answered")
+            };
 
-            public ValueTask<ValidationResult> ValidateAsync(Manufacturer instance, CancellationToken cancellationToken = default)
-            {
-                ArgumentNullException.ThrowIfNull(instance);
+            // Act
+            var result = await validator.ValidateAsync(new Car(), options);
 
-                return ValueTask.FromResult(string.IsNullOrWhiteSpace(instance.Name)
-                    ? ValidationResult.FromValidationErrors(new ValidationError("Name", "Name is required."))
-                    : ValidationResult.Success);
-            }
-
-            ValueTask<ValidationResult> IValidator.ValidateAsync(object instance, CancellationToken cancellationToken)
-            {
-                ArgumentNullException.ThrowIfNull(instance);
-
-                return instance switch
-                {
-                    Car car => this.ValidateAsync(car, cancellationToken),
-                    Manufacturer manufacturer => this.ValidateAsync(manufacturer, cancellationToken),
-                    _ => throw new InvalidCastException($"Cannot validate an instance of {instance.GetType()}."),
-                };
-            }
+            // Assert
+            result.ShouldReport("Vin", "the options answered");
         }
 
+        /// <inheritdoc cref="ValidateAsync_ThroughTheNonGenericInterface_RefusesAnInstanceOfAnotherType" path="/summary"/>
+        [Fact]
+        public async Task ValidateAsync_ThroughTheNonGenericInterfaceWithOptions_RefusesAnInstanceOfAnotherType()
+        {
+            // Arrange
+            IValidator validator = new TestValidator<Car>();
+
+            // Act
+            var act = async () => await validator.ValidateAsync(new Manufacturer(), new NValidationOptions());
+
+            // Assert
+            (await act.Should().ThrowAsync<InvalidCastException>())
+                .WithMessage("*validates*Car*cannot validate an instance of*Manufacturer*");
+        }
+
+        [Fact]
+        public async Task ValidateAsync_ThroughTheNonGenericInterfaceWithNullOptions_Throws()
+        {
+            // Arrange
+            IValidator validator = new TestValidator<Car>();
+
+            // Act
+            var act = async () => await validator.ValidateAsync(new Car(), null!);
+
+            // Assert
+            await act.Should().ThrowAsync<ArgumentNullException>();
+        }
+
+        private static TestValidator<Car> BuildVinValidator()
+        {
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty();
+
+            return validator;
+        }
+
+        /// <summary>
+        /// Two properties which each break two rules, so a run can be told apart both by how many messages
+        /// it reports and by which properties they name. Both axes are taken through the constructor
+        /// because what is under test is the setting rather than the rules.
+        /// </summary>
         private sealed class TwoFailingPropertiesValidator : Validator<Car>
         {
             /// <summary>
@@ -1329,8 +1393,7 @@ namespace NValidation.Tests
 
             public TwoFailingPropertiesValidator(ValidationBehavior? classBehavior, ValidationBehavior? propertyBehavior)
             {
-                this.ValidationBehaviors.Class = classBehavior;
-                this.ValidationBehaviors.Property = propertyBehavior;
+                this.ValidationBehaviors = new() { Class = classBehavior, Property = propertyBehavior };
 
                 this.Property(c => c.Vin).NotEmpty().MaximumLength(MaximumLength);
                 this.Property(c => c.RegistrationPlate).NotEmpty().MaximumLength(MaximumLength);

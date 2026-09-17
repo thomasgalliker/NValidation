@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace NValidation
 {
@@ -109,13 +108,9 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(services);
 
-            // The base layer, not a built-in English default written over the top of it: what this
-            // resolves to is whatever NValidationOptions.Default says the first time anything asks,
-            // which is the built-in provider until a host configures otherwise. Still TryAdd, so a host
-            // which registered its own provider before this call keeps it, and the Replace in
-            // NValidationBuilder.Apply still outranks both.
-            services.TryAddSingleton<IValidationMessageProvider>(_ => NValidationOptions.DefaultInUse().MessageProvider);
-
+            // No provider is registered on the host's behalf: a validator the container builds and was
+            // handed none falls through to the options passed to the call, then NValidationOptions.Default,
+            // read while validating — so a default assigned after the container was built still reaches it.
             var options = new NValidationBuilder(services);
 
             if (configuration != null)
@@ -154,12 +149,12 @@ namespace NValidation
 
             if (ParseEnum<ValidationBehavior>(configuration, "ValidationBehaviors:Class") is { } classBehavior)
             {
-                builder.ValidationBehaviors.Class = classBehavior;
+                builder.ValidationBehaviors = builder.ValidationBehaviors with { Class = classBehavior };
             }
 
             if (ParseEnum<ValidationBehavior>(configuration, "ValidationBehaviors:Property") is { } propertyBehavior)
             {
-                builder.ValidationBehaviors.Property = propertyBehavior;
+                builder.ValidationBehaviors = builder.ValidationBehaviors with { Property = propertyBehavior };
             }
         }
 

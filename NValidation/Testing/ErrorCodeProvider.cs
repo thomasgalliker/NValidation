@@ -4,7 +4,7 @@ namespace NValidation.Testing
     /// Reports every message as the key that asked for it, so a test can assert <em>which</em> message a
     /// rule reported without depending on any wording. Hand it to a validator through
     /// <see cref="TestValidator{T}(IValidationMessageProvider)"/> or
-    /// <see cref="Validator{T}.Messages"/>.
+    /// <see cref="Validator{T}.ValidationMessageProvider"/>.
     /// </summary>
     /// <remarks>
     /// Against the built-in English, several rules share a sentence and none of them names its key, so a

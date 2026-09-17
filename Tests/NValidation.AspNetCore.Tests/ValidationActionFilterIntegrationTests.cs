@@ -269,6 +269,7 @@ namespace NValidation.AspNetCore.Tests
                     ["basePrice"] = 32000,
                 },
                 ["mileage"] = 42000,
+                ["purchasePrice"] = 18500,
                 ["firstRegistration"] = "2019-03-01T00:00:00",
             };
         }

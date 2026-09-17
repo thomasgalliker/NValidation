@@ -9,7 +9,7 @@ namespace NValidation
     /// </summary>
     /// <remarks>
     /// Split across several files by subject — <c>.NullOrEmpty</c>, <c>.Text</c>, <c>.Comparison</c>,
-    /// <c>.Numbers</c>, <c>.Dates</c>, <c>.Collections</c>, <c>.Enums</c> — with the two rules that take
+    /// <c>.Numbers</c>, <c>.Dates</c>, <c>.Collections</c>, <c>.Enums</c> — with the rules that take
     /// the caller's own predicate or validator here.
     /// </remarks>
     public static partial class PropertyRuleBuilderExtensions
@@ -21,8 +21,8 @@ namespace NValidation
         /// <remarks>
         /// Reports <see cref="ValidationErrorCodes.Must"/> unless the chain names the rule with
         /// <c>WithErrorCode</c> — which is also what selects the text, so an application's own rule
-        /// localizes exactly as a shipped one does instead of carrying a literal. The overloads taking a
-        /// message are for the rule whose wording is genuinely a one-off.
+        /// localizes exactly as a shipped one does. A wording that is genuinely a one-off goes on
+        /// <c>WithMessage</c>.
         /// </remarks>
         public static PropertyRuleBuilder<T, TProperty> Must<T, TProperty>(
             this PropertyRuleBuilder<T, TProperty> builder,
@@ -54,75 +54,6 @@ namespace NValidation
                 if (!predicate(context.Instance, context.Value))
                 {
                     context.AddError(ValidationErrorCodes.Must);
-                }
-            });
-        }
-
-        /// <summary>
-        /// A one-off rule which does not deserve a shared one. The message is supplied by the caller,
-        /// already localized.
-        /// </summary>
-        public static PropertyRuleBuilder<T, TProperty> Must<T, TProperty>(
-            this PropertyRuleBuilder<T, TProperty> builder,
-            Func<TProperty, bool> predicate,
-            string message)
-        {
-            ArgumentNullException.ThrowIfNull(message);
-
-            return builder.Must(predicate, () => message);
-        }
-
-        /// <summary>
-        /// The same, for a message which has to be resolved while the rule runs rather than while it is
-        /// declared — a localized resource, for instance, depends on the culture of the current thread.
-        /// </summary>
-        public static PropertyRuleBuilder<T, TProperty> Must<T, TProperty>(
-            this PropertyRuleBuilder<T, TProperty> builder,
-            Func<TProperty, bool> predicate,
-            Func<string> message)
-        {
-            ArgumentNullException.ThrowIfNull(predicate);
-            ArgumentNullException.ThrowIfNull(message);
-
-            return builder.Add(context =>
-            {
-                if (!predicate(context.Value))
-                {
-                    context.AddError(new ValidationError(context.PropertyName, message(), ValidationErrorCodes.Must));
-                }
-            });
-        }
-
-        /// <summary>
-        /// A one-off rule which needs another property of the same object to decide, e.g. a discount
-        /// which may only be set on an order that has one.
-        /// </summary>
-        public static PropertyRuleBuilder<T, TProperty> Must<T, TProperty>(
-            this PropertyRuleBuilder<T, TProperty> builder,
-            Func<T, TProperty, bool> predicate,
-            string message)
-        {
-            ArgumentNullException.ThrowIfNull(message);
-
-            return builder.Must(predicate, () => message);
-        }
-
-        /// <summary>
-        /// The same, for a message which has to be resolved while the rule runs.
-        /// </summary>
-        public static PropertyRuleBuilder<T, TProperty> Must<T, TProperty>(
-            this PropertyRuleBuilder<T, TProperty> builder,
-            Func<T, TProperty, bool> predicate,
-            Func<string> message)
-        {
-            ArgumentNullException.ThrowIfNull(predicate);
-            ArgumentNullException.ThrowIfNull(message);
-
-            return builder.Add(context =>
-            {
-                if (!predicate(context.Instance, context.Value))
-                {
-                    context.AddError(new ValidationError(context.PropertyName, message(), ValidationErrorCodes.Must));
                 }
             });
         }
@@ -175,7 +106,8 @@ namespace NValidation
         /// <summary>
         /// Validates a nested object with its own validator and merges the result, prefixing each error
         /// with this property's name (so <c>Street</c> is reported as <c>Address.Street</c>). The child
-        /// keeps its own flat property names and stays independently testable.
+        /// keeps its own flat property names and stays independently testable. A null nested object is
+        /// skipped; requiring it is <c>NotNull()</c>'s job.
         /// </summary>
         public static PropertyRuleBuilder<T, TProperty?> SetValidator<T, TProperty>(
             this PropertyRuleBuilder<T, TProperty?> builder,
@@ -184,22 +116,37 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(validator);
 
-            return builder.AddComposed(async (context, cancellationToken) =>
+            // A nested validator whose every rule judges keeps this chain synchronous.
+            if (validator is IValidationRunAware<TProperty> { IsSynchronous: true } synchronous)
             {
-                if (context.Value == null)
+                return builder.AddComposed(context =>
                 {
-                    return;
-                }
+                    if (context.Value is { } value)
+                    {
+                        Merge(context, synchronous.Validate(value, context.Run));
+                    }
+                });
+            }
 
-                var result = await NestedValidation.ValidateAsync(
-                    validator, context.Value, context.Messages, context.RequestedBehaviors, cancellationToken);
-
-                foreach (var error in result.Errors)
+            return builder.AddComposed(async (context, _) =>
+            {
+                if (context.Value is { } value)
                 {
-                    context.AddComposedError(new ValidationError(
-                        $"{context.PropertyName}.{error.PropertyName}", error.Message, error.ErrorCode, error.Arguments));
+                    Merge(context, await NestedValidation.ValidateAsync(validator, value, context.Run));
                 }
             });
+        }
+
+        /// <summary>
+        /// Reports what a nested validator found under this property's name, as that validator judged it.
+        /// </summary>
+        private static void Merge<T, TProperty>(in RuleContext<T, TProperty> context, ValidationResult result)
+        {
+            foreach (var error in result.Errors)
+            {
+                context.AddComposedError(new ValidationError(
+                    $"{context.PropertyName}.{error.PropertyName}", error.Message, error.ErrorCode, error.Arguments));
+            }
         }
     }
 }

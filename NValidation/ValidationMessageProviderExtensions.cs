@@ -14,14 +14,14 @@ namespace NValidation
             this IValidationMessageProvider provider,
             string errorCode,
             string propertyName,
-            params (string Name, object? Value)[] arguments)
+            params ReadOnlySpan<(string Name, object? Value)> arguments)
         {
             ArgumentNullException.ThrowIfNull(provider);
 
             return provider.GetMessage(errorCode, BuildArguments(propertyName, arguments));
         }
 
-        internal static IReadOnlyDictionary<string, object?> BuildArguments(string propertyName, params (string Name, object? Value)[] arguments)
+        internal static Dictionary<string, object?> BuildArguments(string propertyName, ReadOnlySpan<(string Name, object? Value)> arguments)
         {
             var result = new Dictionary<string, object?>(arguments.Length + 1, StringComparer.Ordinal)
             {

@@ -112,7 +112,7 @@ namespace NValidation.Tests
         {
             // Arrange
             var validator = new TestValidator<Car>();
-            validator.Property(c => c.Vin).Must(vin => vin != null && vin.Length == 17, VinMustBeSeventeenCharactersMessage);
+            validator.Property(c => c.Vin).Must(vin => vin != null && vin.Length == 17).WithMessage(VinMustBeSeventeenCharactersMessage);
 
             // Act
             var result = await validator.ValidateAsync(Cars.Car());
@@ -126,7 +126,7 @@ namespace NValidation.Tests
         {
             // Arrange
             var validator = new TestValidator<Car>();
-            validator.Property(c => c.Vin).Must(vin => vin != null && vin.Length == 17, VinMustBeSeventeenCharactersMessage);
+            validator.Property(c => c.Vin).Must(vin => vin != null && vin.Length == 17).WithMessage(VinMustBeSeventeenCharactersMessage);
 
             var car = Cars.Car();
             car.Vin = "TOOSHORT";
@@ -139,8 +139,9 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// The deferred overload exists for messages which depend on the current request, e.g. a
-        /// localized resource: it must be read while validating, not while the rule is declared.
+        /// The deferred form of <c>WithMessage</c> exists for messages which depend on the current
+        /// request, e.g. a localized resource: it must be read while validating, not while the rule is
+        /// declared.
         /// </summary>
         [Fact]
         public async Task Must_ResolvesADeferredMessage_WhileValidating()
@@ -148,7 +149,7 @@ namespace NValidation.Tests
             // Arrange
             var message = "first";
             var validator = new TestValidator<Car>();
-            validator.Property(c => c.Vin).Must(_ => false, () => message);
+            validator.Property(c => c.Vin).Must(_ => false).WithMessage(() => message);
 
             // Act
             message = "second";
@@ -166,7 +167,7 @@ namespace NValidation.Tests
         {
             // Arrange
             var validator = new TestValidator<Car>();
-            validator.Property(c => c.PurchasePrice).Must((c, price) => !c.IsListedForSale || price != 0m, "A car listed for sale must have a price.");
+            validator.Property(c => c.PurchasePrice).Must((c, price) => !c.IsListedForSale || price != 0m).WithMessage("A car listed for sale must have a price.");
 
             var car = Cars.Car();
             car.IsListedForSale = isListedForSale;
@@ -185,7 +186,7 @@ namespace NValidation.Tests
             // Arrange
             var message = "first";
             var validator = new TestValidator<Car>();
-            validator.Property(c => c.PurchasePrice).Must((_, _) => false, () => message);
+            validator.Property(c => c.PurchasePrice).Must((_, _) => false).WithMessage(() => message);
 
             // Act
             message = "second";
@@ -202,20 +203,7 @@ namespace NValidation.Tests
             var validator = new TestValidator<Car>();
 
             // Act
-            var act = () => validator.Property(c => c.Vin).Must((Func<string?, bool>)null!, "a message");
-
-            // Assert
-            act.Should().Throw<ArgumentNullException>();
-        }
-
-        [Fact]
-        public void Must_WithoutAMessage_Throws()
-        {
-            // Arrange
-            var validator = new TestValidator<Car>();
-
-            // Act
-            var act = () => validator.Property(c => c.Vin).Must(vin => vin != null, (string)null!);
+            var act = () => validator.Property(c => c.Vin).Must((Func<string?, bool>)null!);
 
             // Assert
             act.Should().Throw<ArgumentNullException>();

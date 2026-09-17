@@ -41,12 +41,25 @@ namespace NValidation
         /// <summary>
         /// Creates a failed result from the given errors, or <see cref="Success"/> when none are supplied.
         /// </summary>
-        public static ValidationResult FromValidationErrors(IEnumerable<ValidationError> errors)
+        public static ValidationResult FromValidationErrors(IEnumerable<ValidationError> validationErrors)
         {
-            ArgumentNullException.ThrowIfNull(errors);
+            ArgumentNullException.ThrowIfNull(validationErrors);
 
-            var array = errors.ToArray();
-            return array.Length == 0 ? Success : new ValidationResult(array);
+            var errors = validationErrors.ToArray();
+            return errors.Length == 0 ? Success : new ValidationResult(errors);
+        }
+
+        /// <summary>
+        /// A failed result over a list the caller is finished with, which this takes rather than copies.
+        /// </summary>
+        /// <remarks>
+        /// Internal, and the contract is the reason: the list must not be touched again afterwards, and
+        /// that is only knowable where the list was built. <see cref="FromValidationErrors(IEnumerable{ValidationError})"/>
+        /// copies, because a caller handing one in keeps it.
+        /// </remarks>
+        internal static ValidationResult FromValidationErrorsInternal(List<ValidationError> errors)
+        {
+            return errors.Count == 0 ? Success : new ValidationResult(errors);
         }
 
         /// <summary>

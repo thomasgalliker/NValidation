@@ -7,8 +7,9 @@ using Xunit;
 /// </summary>
 /// <remarks>
 /// Serializing them is only half of it: the defaults freeze the first time anything validates, so a
-/// test in this collection also has to call <c>Reset()</c> in its constructor — an earlier test in some
-/// other collection has already frozen them. A test which passes its own options needs neither.
+/// test in this collection also installs a fresh instance in its constructor and puts the original back
+/// in <c>Dispose</c> — an earlier test in some other collection has already frozen them, and there is no
+/// un-freeze. A test which passes its own options needs neither.
 /// </remarks>
 [CollectionDefinition(Collections.ValidationDefaults, DisableParallelization = true)]
 public class ValidationDefaultsCollection;

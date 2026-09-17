@@ -1,7 +1,7 @@
 using System.Reflection;
 using NValidation.TestData.Ambiguous;
 
-namespace NValidation.Tests.Extensions
+namespace NValidation.DependencyInjection.Tests
 {
     /// <summary>
     /// Covers how validation is wired up: the defaults, how a host replaces them, and — most
@@ -17,20 +17,6 @@ namespace NValidation.Tests.Extensions
         /// succeeds, and by the sample application.
         /// </summary>
         private static Assembly AmbiguousAssembly { get; } = typeof(AmbiguousPayload).Assembly;
-
-        [Fact]
-        public void AddNValidation_RegistersTheBuiltInMessageProvider()
-        {
-            // Arrange
-            var services = new ServiceCollection();
-            services.AddNValidation();
-
-            // Act
-            var messageProvider = Resolve<IValidationMessageProvider>(services);
-
-            // Assert
-            messageProvider.Should().BeOfType<DefaultValidationMessageProvider>();
-        }
 
         /// <summary>
         /// The defaults are registered with TryAdd, so a host which registered its own provider first
@@ -418,14 +404,36 @@ namespace NValidation.Tests.Extensions
         }
 
         /// <summary>
-        /// Off unless asked for, so the shipped default is unchanged.
+        /// On unless turned off: a validator which is provably safe to share is shared, because
+        /// rebuilding rules that never change is the largest cost this library imposes on a request.
         /// </summary>
         [Fact]
-        public void PromoteSafeValidatorsToSingleton_WhenNotAskedFor_LeavesTheLifetimeAlone()
+        public void PromoteSafeValidatorsToSingleton_ByDefault_PromotesASafeValidator()
         {
             // Arrange
             var services = new ServiceCollection();
             services.AddNValidation(o => o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly));
+
+            // Act
+            var descriptor = services.Single(service => service.ServiceType == typeof(IValidator<Car>));
+
+            // Assert
+            descriptor.Lifetime.Should().Be(ServiceLifetime.Singleton);
+        }
+
+        /// <summary>
+        /// And the opt-out puts it back, for a host which would rather decide this for itself.
+        /// </summary>
+        [Fact]
+        public void PromoteSafeValidatorsToSingleton_WhenTurnedOff_LeavesTheLifetimeAlone()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o =>
+            {
+                o.PromoteSafeValidatorsToSingleton = false;
+                o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly);
+            });
 
             // Act
             var descriptor = services.Single(service => service.ServiceType == typeof(IValidator<Car>));
@@ -471,17 +479,37 @@ namespace NValidation.Tests.Extensions
         }
 
         /// <summary>
-        /// Scoped by default, because a validator may depend on something that is itself scoped and a
-        /// longer-lived validator would capture it.
+        /// Scoped is what a validator falls back to, because it may depend on something that is itself
+        /// scoped and a longer-lived validator would capture it — but one that provably depends on no
+        /// such thing is promoted, so the fallback only shows where promotion declined.
         /// </summary>
         [Fact]
-        public void AddValidator_RegistersScoped_ByDefault()
+        public void AddValidator_PromotesASafeValidator_ByDefault()
         {
             // Arrange
             var services = new ServiceCollection();
 
             // Act
             services.AddNValidation(o => o.AddValidator<ManufacturerValidator>());
+
+            // Assert
+            var descriptor = services.Single(service => service.ServiceType == typeof(IValidator<Manufacturer>));
+            descriptor.Lifetime.Should().Be(ServiceLifetime.Singleton);
+        }
+
+        /// <inheritdoc cref="AddValidator_PromotesASafeValidator_ByDefault"/>
+        [Fact]
+        public void AddValidator_WithoutPromotion_RegistersScoped_ByDefault()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+
+            // Act
+            services.AddNValidation(o =>
+            {
+                o.PromoteSafeValidatorsToSingleton = false;
+                o.AddValidator<ManufacturerValidator>();
+            });
 
             // Assert
             var descriptor = services.Single(service => service.ServiceType == typeof(IValidator<Manufacturer>));
@@ -697,6 +725,89 @@ namespace NValidation.Tests.Extensions
         }
 
         /// <summary>
+        /// Options given to one call are the level above the registration, so a request answered in its
+        /// own language gets its own wording even from a validator the container built.
+        /// </summary>
+        /// <remarks>
+        /// The registration hands its provider to every validator it constructs, and a host which
+        /// configured none still has one handed to it. Both used to land in the slot a validator's own
+        /// declaration uses, which left nothing for these options to outrank.
+        /// </remarks>
+        [Fact]
+        public async Task ValidateAsync_WithOptions_OutranksTheRegisteredMessageProvider()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o =>
+            {
+                o.MessageProvider = typeof(TestMessageProvider);
+                o.AddValidator<Manufacturer, ManufacturerValidator>();
+            });
+
+            var validator = Resolve<IValidator<Manufacturer>>(services);
+
+            var options = new NValidationOptions { MessageProvider = new PerCallMessageProvider() };
+
+            // Act
+            var result = await validator.ValidateAsync(new Manufacturer(), options);
+
+            // Assert
+            result.ShouldReport([
+                new("Name", "message from the options passed to the call"),
+                new("CountryCode", "message from the options passed to the call")]);
+        }
+
+        /// <summary>
+        /// And options which named only a behavior leave the messages to the level below, rather than
+        /// putting the built-in English back over the provider the registration configured.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_WithOptionsNamingOnlyBehaviors_KeepsTheRegisteredMessageProvider()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o =>
+            {
+                o.MessageProvider = typeof(TestMessageProvider);
+                o.AddValidator<Manufacturer, ManufacturerValidator>();
+            });
+
+            var validator = Resolve<IValidator<Manufacturer>>(services);
+
+            var options = new NValidationOptions { ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError } };
+
+            // Act
+            var result = await validator.ValidateAsync(new Manufacturer(), options);
+
+            // Assert
+            result.ShouldReport("Name", "message from the configured provider");
+        }
+
+        /// <summary>
+        /// A validator which declared a provider for itself keeps it, exactly as it keeps an axis it
+        /// declared: what the registration hands over is the level underneath, not a replacement.
+        /// </summary>
+        [Fact]
+        public async Task AddValidator_DoesNotOverwriteTheValidatorsOwnMessageProvider()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(o =>
+            {
+                o.MessageProvider = typeof(TestMessageProvider);
+                o.AddValidator<Manufacturer, OwnMessagesManufacturerValidator>();
+            });
+
+            var validator = Resolve<IValidator<Manufacturer>>(services);
+
+            // Act
+            var result = await validator.ValidateAsync(new Manufacturer());
+
+            // Assert
+            result.ShouldReport("Name", "message from the validator's own provider");
+        }
+
+        /// <summary>
         /// The registration's setting reaches a validator which declared nothing of its own, on each
         /// axis independently — a validator built by the container is handed it exactly as it is handed
         /// the configured message provider.
@@ -712,7 +823,7 @@ namespace NValidation.Tests.Extensions
             var services = new ServiceCollection();
             services.AddNValidation(o =>
             {
-                o.ValidationBehaviors.Class = classBehavior;
+                o.ValidationBehaviors = new() { Class = classBehavior };
                 o.AddValidator<Manufacturer, ManufacturerValidator>();
             });
 
@@ -737,7 +848,7 @@ namespace NValidation.Tests.Extensions
             var services = new ServiceCollection();
             services.AddNValidation(o =>
             {
-                o.ValidationBehaviors.Property = propertyBehavior;
+                o.ValidationBehaviors = new() { Property = propertyBehavior };
                 o.AddValidator<Manufacturer, ManufacturerValidator>();
             });
 
@@ -762,8 +873,7 @@ namespace NValidation.Tests.Extensions
             services.AddNValidation(o =>
             {
                 // Both stopping, so a validator which overrules only one of them is visible.
-                o.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
-                o.ValidationBehaviors.Property = ValidationBehavior.StopAtFirstError;
+                o.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError, Property = ValidationBehavior.StopAtFirstError };
 
                 o.AddValidator<Car, ReportsEveryPropertyCarValidator>();
             });
@@ -780,26 +890,18 @@ namespace NValidation.Tests.Extensions
         }
 
         /// <summary>
-        /// An element builder is built where it is declared rather than by the container, so — like a
-        /// validator constructed with <c>new</c> — the registration's setting is never <em>handed</em>
-        /// to it. Pinned because it is a boundary a caller can be surprised by: the same setting governs
-        /// the payload's own properties.
-        /// <para>
-        /// Handed is the distinction, not reached. What is <em>read</em> does arrive: see
-        /// <c>NValidationDefaultsTests.ValidationBehaviors_ReachAnElementChain</c> and
-        /// <c>NValidationOptionsTests.ValidateAsync_WithOptions_ReachAnElementChain</c>. The three
-        /// together are the contract, and this one alone would misread as "nothing reaches an element
-        /// builder".
-        /// </para>
+        /// An element builder is built where it is declared rather than by the container, so the
+        /// registration hands it nothing directly — but the validator it was declared in was handed the
+        /// setting, resolved it, and what a validator resolves is inherited by what it composes.
         /// </summary>
         [Fact]
-        public async Task ValidationBehaviors_DoNotReachAnElementBuilder()
+        public async Task ValidationBehaviors_ReachAnElementBuilder_ThroughTheValidatorTheyWereHandedTo()
         {
             // Arrange
             var services = new ServiceCollection();
             services.AddNValidation(o =>
             {
-                o.ValidationBehaviors.Property = ValidationBehavior.All;
+                o.ValidationBehaviors = new() { Property = ValidationBehavior.All };
                 o.AddValidator<Car, ServiceHistoryPlainElementChainValidator>();
             });
 
@@ -812,8 +914,9 @@ namespace NValidation.Tests.Extensions
             var result = await validator.ValidateAsync(car);
 
             // Assert
-            // one message only: the element chain keeps the built-in default of one per property
-            result.ShouldReport("ServiceHistory[0].Workshop", "Workshop is required.");
+            result.ShouldReport([
+                new("ServiceHistory[0].Workshop", "Workshop is required."),
+                new("ServiceHistory[0].Workshop", "Workshop must not exceed 3 characters.")]);
         }
 
         /// <summary>
@@ -828,7 +931,7 @@ namespace NValidation.Tests.Extensions
             var services = new ServiceCollection();
             services.AddNValidation(o =>
             {
-                o.ValidationBehaviors.Property = ValidationBehavior.All;
+                o.ValidationBehaviors = new() { Property = ValidationBehavior.All };
                 o.AddValidator<Car, StopsItsChainsCarValidator>();
             });
 
@@ -863,7 +966,7 @@ namespace NValidation.Tests.Extensions
                 o.AddValidator<Car, StopsItsChainsCarValidator>();
             });
 
-            kept!.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+            kept!.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError };
 
             var validator = Resolve<IValidator<Car>>(services);
 
@@ -883,7 +986,7 @@ namespace NValidation.Tests.Extensions
         {
             public StopsItsChainsCarValidator()
             {
-                this.ValidationBehaviors.Property = ValidationBehavior.StopAtFirstError;
+                this.ValidationBehaviors = new() { Property = ValidationBehavior.StopAtFirstError };
 
                 this.Property(c => c.Vin).NotEmpty().MaximumLength(3);
                 this.Property(c => c.RegistrationPlate).NotEmpty();
@@ -898,7 +1001,7 @@ namespace NValidation.Tests.Extensions
         {
             public ReportsEveryPropertyCarValidator()
             {
-                this.ValidationBehaviors.Class = ValidationBehavior.All;
+                this.ValidationBehaviors = new() { Class = ValidationBehavior.All };
 
                 this.Property(c => c.Vin).NotEmpty().MaximumLength(3);
                 this.Property(c => c.RegistrationPlate).NotEmpty();
@@ -906,8 +1009,8 @@ namespace NValidation.Tests.Extensions
         }
 
         /// <summary>
-        /// Element rules with nothing declared about their behaviour, so a test can prove what an element
-        /// builder falls back to when the registration configured something the parent did receive.
+        /// Element rules with nothing declared about their behaviour, so a test can prove that an element
+        /// builder inherits what the registration configured on the validator it was declared in.
         /// </summary>
         /// <remarks>
         /// A named class rather than an inline one because the container constructs it by type: there is
@@ -986,6 +1089,35 @@ namespace NValidation.Tests.Extensions
             public string GetMessage(string errorCode, IReadOnlyDictionary<string, object?> arguments)
             {
                 return Message;
+            }
+        }
+
+        private sealed class PerCallMessageProvider : IValidationMessageProvider
+        {
+            public string GetMessage(string errorCode, IReadOnlyDictionary<string, object?> arguments)
+            {
+                return "message from the options passed to the call";
+            }
+        }
+
+        private sealed class OwnMessageProvider : IValidationMessageProvider
+        {
+            public string GetMessage(string errorCode, IReadOnlyDictionary<string, object?> arguments)
+            {
+                return "message from the validator's own provider";
+            }
+        }
+
+        /// <summary>
+        /// Named rather than declared inline because the container constructs it by type.
+        /// </summary>
+        private sealed class OwnMessagesManufacturerValidator : Validator<Manufacturer>
+        {
+            public OwnMessagesManufacturerValidator()
+            {
+                this.ValidationMessageProvider = new OwnMessageProvider();
+
+                this.Property(m => m.Name).NotEmpty();
             }
         }
     }

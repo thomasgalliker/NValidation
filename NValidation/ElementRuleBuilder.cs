@@ -6,12 +6,9 @@ namespace NValidation
     /// <summary>
     /// Declares the rules that every element of a collection has to satisfy. Obtained from
     /// <see cref="PropertyRuleBuilderExtensions.ForEach{TElement}(IPropertyRuleTarget{IEnumerable{TElement}}, Action{ElementRuleBuilder{TElement}})"/>.
+    /// The rules are declared with <see cref="Property{TProperty}"/> and extended by exactly the same
+    /// rule methods as anywhere else, so nothing has to be written twice for elements.
     /// </summary>
-    /// <remarks>
-    /// A validator in its own right: the rules are declared with <see cref="Property{TProperty}"/> and
-    /// extended by exactly the same rule methods as anywhere else, so nothing has to be written twice
-    /// for elements.
-    /// </remarks>
     public sealed class ElementRuleBuilder<TElement>
     {
         private readonly ElementRules rules = new();
@@ -27,18 +24,25 @@ namespace NValidation
         }
 
         /// <summary>
-        /// How much one entry reports: across its properties, and within one property's chain.
+        /// How much one entry reports: across its properties, and within one property's chain. An axis
+        /// left <c>null</c> inherits from the validator the <c>ForEach</c> was declared in. Every entry is
+        /// still walked whatever this says; it governs what one entry reports.
         /// </summary>
-        /// <remarks>
-        /// Built where it is declared rather than by the container, so — like a validator constructed
-        /// with <c>new</c> — what <c>AddNValidation</c> configured is never handed to it. What is
-        /// <em>read</em> still reaches it: an axis left unset here takes what the options passed to the
-        /// call asked for, then <see cref="NValidationOptions.Default"/>, then the built-in default.
-        /// Every entry is still walked whatever this says; it governs what one entry reports.
-        /// </remarks>
-        public ValidationBehaviors ValidationBehaviors => this.rules.ValidationBehaviors;
+        public ValidationBehaviors ValidationBehaviors
+        {
+            get => this.rules.ValidationBehaviors;
+            set => this.rules.ValidationBehaviors = value;
+        }
 
-        /// <inheritdoc cref="Validator{T}.Property{TProperty}(System.Linq.Expressions.Expression{System.Func{T, TProperty}})"/>
+        /// <summary>
+        /// Whether judging an entry never awaits: the inline rules judge, and the entry's own validator,
+        /// if any, does too. Asked once, when the <c>ForEach</c> is declared.
+        /// </summary>
+        internal bool IsSynchronous =>
+            ((IValidationRunAware<TElement>)this.rules).IsSynchronous &&
+            (this.elementValidator is null || this.elementValidator is IValidationRunAware<TElement> { IsSynchronous: true });
+
+        /// <inheritdoc cref="Validator{T}.Property{TProperty}(Expression{System.Func{T, TProperty}})"/>
         public PropertyRuleBuilder<TElement, TProperty?> Property<TProperty>(Expression<Func<TElement, TProperty>> expression)
         {
             return this.rules.Declare(expression);
@@ -91,15 +95,10 @@ namespace NValidation
         /// reports <c>ServiceHistory[INV-9912].Workshop</c>.
         /// </summary>
         /// <remarks>
-        /// The position is still passed, for an identity which reads better one-based, or which falls
-        /// back to it. Only the reported property name changes; <see cref="ValidationMessagePlaceholders.CollectionIndex"/>
-        /// keeps reporting the position.
-        /// <para>
-        /// Whatever this returns becomes part of the property name, which a host renders straight into its
-        /// response — as a JSON member name, for a problem details body. Identify an element by
-        /// something short and of the application's own choosing; a value the caller sent is echoed back
-        /// at whatever length the caller chose.
-        /// </para>
+        /// Only the reported property name changes; <see cref="ValidationMessagePlaceholders.CollectionIndex"/>
+        /// keeps reporting the position. Whatever this returns is rendered straight into the response as
+        /// part of the property name, so identify an element by something short and of the
+        /// application's own choosing.
         /// </remarks>
         public ElementRuleBuilder<TElement> WithIndexer(Func<TElement, int, string> indexer)
         {
@@ -110,70 +109,118 @@ namespace NValidation
             return this;
         }
 
-        internal async ValueTask ValidateElementsAsync(
-            IEnumerable<TElement> elements,
-            string propertyName,
-            Action<ValidationError> report,
-            IValidationMessageProvider messages,
-            ValidationBehaviors? requested,
-            CancellationToken cancellationToken)
+        /// <summary>
+        /// Judges every element, reporting into the composer's pass under the element's position.
+        /// </summary>
+        /// <remarks>
+        /// The twin of <see cref="ValidateElementsAsync"/>, for a <c>ForEach</c> whose entries never
+        /// await. One error list and one <see cref="ElementScope"/> serve the whole collection: what an
+        /// entry reports is copied out under the entry's own name straight away, so nothing has to be
+        /// kept between entries, and an entry is only named when it has something to report.
+        /// </remarks>
+        internal void ValidateElements(IEnumerable<TElement> elements, string propertyName, ValidationFrame frame)
         {
+            var run = frame.Run;
             var index = 0;
 
-            // One list for the whole collection, cleared per entry: what an entry reports is copied out
-            // under the entry's own propertyName straight away, so nothing has to be kept between entries. A
-            // list per entry was the bulk of what an entry cost.
             List<ValidationError>? elementErrors = null;
+            ElementScope<TElement>? scope = null;
 
             foreach (var element in elements)
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                run.CancellationToken.ThrowIfCancellationRequested();
 
                 var position = index++;
 
-                // A null entry has no properties to judge. Requiring entries to be there at all is a
-                // question about the collection, which its own rules answer. A skipped entry still
-                // spends its position, so an index points at the row the caller sent.
-                if (element is null || (this.condition != null && !this.condition(element)))
+                if (this.IsSkipped(element))
                 {
                     continue;
                 }
 
-                var elementMessages = new IndexedMessageProvider<TElement>(messages, propertyName, element, position, this.indexer);
+                scope ??= new ElementScope<TElement>(propertyName, this.indexer);
+                scope.MoveTo(element, position);
 
                 elementErrors ??= [];
                 elementErrors.Clear();
 
-                await this.AddErrorsAsync(element, report, elementMessages, elementErrors, requested, cancellationToken);
+                var elementRun = run with { Scope = scope };
+
+                this.rules.ValidateInto(element, elementErrors, elementRun);
+
+                if (this.elementValidator is IValidationRunAware<TElement> aware)
+                {
+                    aware.ValidateInto(element, elementErrors, elementRun);
+                }
+
+                Report(frame, scope, elementErrors);
             }
         }
 
-        private async ValueTask AddErrorsAsync(
-            TElement element,
-            Action<ValidationError> report,
-            IndexedMessageProvider<TElement> messages,
-            List<ValidationError> elementErrors,
-            ValidationBehaviors? requested,
-            CancellationToken cancellationToken)
+        /// <inheritdoc cref="ValidateElements"/>
+        internal async ValueTask ValidateElementsAsync(IEnumerable<TElement> elements, string propertyName, ValidationFrame frame)
         {
-            await this.rules.ValidateIntoAsync(element, elementErrors, messages, requested, cancellationToken);
+            var run = frame.Run;
+            var index = 0;
 
-            if (this.elementValidator != null)
+            List<ValidationError>? elementErrors = null;
+            ElementScope<TElement>? scope = null;
+
+            foreach (var element in elements)
             {
-                await NestedValidation.ValidateIntoAsync(
-                    this.elementValidator, element, elementErrors, messages, requested, cancellationToken);
-            }
+                run.CancellationToken.ThrowIfCancellationRequested();
 
+                var position = index++;
+
+                if (this.IsSkipped(element))
+                {
+                    continue;
+                }
+
+                scope ??= new ElementScope<TElement>(propertyName, this.indexer);
+                scope.MoveTo(element, position);
+
+                elementErrors ??= [];
+                elementErrors.Clear();
+
+                var elementRun = run with { Scope = scope };
+
+                await this.rules.ValidateIntoAsync(element, elementErrors, elementRun);
+
+                if (this.elementValidator != null)
+                {
+                    await NestedValidation.ValidateIntoAsync(this.elementValidator, element, elementErrors, elementRun);
+                }
+
+                Report(frame, scope, elementErrors);
+            }
+        }
+
+        /// <summary>
+        /// A null entry has no properties to judge, and an entry the condition rejects is not judged;
+        /// both still spend their position, so an index points at the row the caller sent. Whether
+        /// entries have to be there at all is a question about the collection, which its own rules answer.
+        /// </summary>
+        private bool IsSkipped(TElement element)
+        {
+            return element is null || (this.condition != null && !this.condition(element));
+        }
+
+        /// <summary>
+        /// Copies what one entry reported into the composer's pass, under the entry's own name.
+        /// </summary>
+        private static void Report(ValidationFrame frame, ElementScope scope, List<ValidationError> elementErrors)
+        {
             if (elementErrors.Count == 0)
             {
-                // The entry is only named on demand, and an entry with nothing to report never asks.
                 return;
             }
 
+            var elementPropertyName = scope.ElementPropertyName;
+
             foreach (var error in elementErrors)
             {
-                report(new ValidationError(
-                    Compose(messages.ElementPropertyName, error.PropertyName),
+                frame.Errors.Add(new ValidationError(
+                    Compose(elementPropertyName, error.PropertyName),
                     error.Message,
                     error.ErrorCode,
                     error.Arguments));
@@ -190,16 +237,10 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The rules an entry has to satisfy, as an ordinary validator.
+        /// The rules an entry has to satisfy, as an ordinary validator. Held rather than inherited: an
+        /// element builder that <em>was</em> a validator ignored <see cref="Where"/>,
+        /// <see cref="SetValidator"/> and <see cref="WithIndexer"/> when run directly.
         /// </summary>
-        /// <remarks>
-        /// Held rather than inherited. An element builder that <em>was</em> a validator was publicly an
-        /// <see cref="IValidator{T}"/> which ignored half of its own configuration: running it directly
-        /// applied the property rules but not <see cref="Where"/>, <see cref="SetValidator"/> or
-        /// <see cref="WithIndexer"/>, so it gave a different verdict than the <c>ForEach</c> it belongs
-        /// to — and, satisfying <see cref="IValidator{T}"/>, it could even be passed to its own
-        /// <see cref="SetValidator"/>.
-        /// </remarks>
         private sealed class ElementRules : Validator<TElement>
         {
             public PropertyRuleBuilder<TElement, TProperty?> Declare<TProperty>(Expression<Func<TElement, TProperty>> expression)

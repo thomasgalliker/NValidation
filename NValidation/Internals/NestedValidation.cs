@@ -1,21 +1,21 @@
 namespace NValidation.Internals
 {
     /// <summary>
-    /// Runs a validator that another validator composed, passing on the message provider of the run
-    /// where the composing validator can accept one.
+    /// Runs a validator that another validator composed, passing the <see cref="ValidationRun"/> on where
+    /// the composed validator can take one and the inherited settings as options where it cannot.
     /// </summary>
     internal static class NestedValidation
     {
-        public static ValueTask<ValidationResult> ValidateAsync<T>(
-            IValidator<T> validator,
-            T instance,
-            IValidationMessageProvider messages,
-            ValidationBehaviors? requested,
-            CancellationToken cancellationToken)
+        public static ValueTask<ValidationResult> ValidateAsync<T>(IValidator<T> validator, T instance, ValidationRun run)
         {
-            return validator is IValidationRunAware<T> aware
-                ? aware.ValidateAsync(instance, messages, requested, cancellationToken)
-                : validator.ValidateAsync(instance, cancellationToken);
+            if (validator is IValidationRunAware<T> aware)
+            {
+                return aware.ValidateAsync(instance, run);
+            }
+
+            return run.Inherited.AsOptions() is { } options
+                ? validator.ValidateAsync(instance, options, run.CancellationToken)
+                : validator.ValidateAsync(instance, run.CancellationToken);
         }
 
         /// <summary>
@@ -23,20 +23,15 @@ namespace NValidation.Internals
         /// with a result, so its errors are copied across.
         /// </summary>
         public static async ValueTask ValidateIntoAsync<T>(
-            IValidator<T> validator,
-            T instance,
-            List<ValidationError> errors,
-            IValidationMessageProvider messages,
-            ValidationBehaviors? requested,
-            CancellationToken cancellationToken)
+            IValidator<T> validator, T instance, List<ValidationError> errors, ValidationRun run)
         {
             if (validator is IValidationRunAware<T> aware)
             {
-                await aware.ValidateIntoAsync(instance, errors, messages, requested, cancellationToken);
+                await aware.ValidateIntoAsync(instance, errors, run);
                 return;
             }
 
-            var result = await validator.ValidateAsync(instance, cancellationToken);
+            var result = await ValidateAsync(validator, instance, run);
 
             errors.AddRange(result.Errors);
         }

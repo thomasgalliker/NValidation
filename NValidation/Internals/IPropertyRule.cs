@@ -1,6 +1,6 @@
 namespace NValidation.Internals
 {
-    internal interface IPropertyRule<in T>
+    internal interface IPropertyRule<T>
     {
         string PropertyName { get; }
 
@@ -10,20 +10,24 @@ namespace NValidation.Internals
         Func<string>? DisplayName { get; }
 
         /// <summary>
-        /// Runs this property's chain, reporting into the list the caller owns.
+        /// Whether every rule in this chain judges rather than awaits, so the chain can be run through
+        /// <see cref="Validate"/> without an async state machine. Settled while the chain is declared.
         /// </summary>
-        /// <remarks>
-        /// The behaviour is passed per call rather than read from the rule, because what a chain does
-        /// once one of its rules has failed is resolved by the validator while validating — the rule
-        /// only knows what it declared for itself.
-        /// </remarks>
-        ValueTask ValidateAsync(
-            T instance,
-            List<ValidationError> errors,
-            IValidationMessageProvider messages,
-            PropertyDisplayNames displayNames,
-            ValidationBehavior propertyBehavior,
-            ValidationBehaviors? requested,
-            CancellationToken cancellationToken);
+        bool IsSynchronous { get; }
+
+        /// <summary>
+        /// Runs this property's chain against one pass. The provider and the behaviour are resolved by
+        /// the validator per pass; the chain only knows what it declared for itself.
+        /// </summary>
+        ValueTask ValidateAsync(ValidationFrame<T> frame, IValidationMessageProvider messageProvider, ValidationBehavior propertyBehavior);
+
+        /// <inheritdoc cref="IsSynchronous"/>
+        void Validate(ValidationFrame<T> frame, IValidationMessageProvider messageProvider, ValidationBehavior propertyBehavior);
+
+        /// <summary>
+        /// Marks the chain as in use: its checks are taken as an array, every later change is refused,
+        /// and the display names of the validator's properties are what its messages resolve through.
+        /// </summary>
+        void Freeze(PropertyDisplayNames displayNames);
     }
 }

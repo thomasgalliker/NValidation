@@ -7,48 +7,50 @@ namespace NValidation
     /// compare against another property), the property name to report under, and the message provider.
     /// Rules add their failures here instead of returning them, so a chain can report several.
     /// </summary>
-    public sealed class RuleContext<T, TProperty>
+    /// <remarks>
+    /// A <c>readonly struct</c> of five references and a count, over the <see cref="ValidationFrame{T}"/>
+    /// of the pass, so running a chain allocates nothing. A fresh one is built for each rule rather than
+    /// one being mutated between them, which is what confines <c>WithMessage</c> and <c>WithErrorCode</c>
+    /// to the rule they follow.
+    /// </remarks>
+    public readonly struct RuleContext<T, TProperty>
     {
-        private readonly List<ValidationError> errors;
+        private readonly ValidationFrame<T> frame;
+        private readonly IValidationMessageProvider messageProvider;
+        private readonly PropertyRule<T, TProperty> rule;
+        private readonly PropertyRule<T, TProperty>.RuleCheck check;
         private readonly int errorCountAtStart;
-        private readonly PropertyDisplayNames displayNames;
-        private Func<T, TProperty, string>? messageOverride;
-
-        private string? errorCodeOverride;
-
-        private readonly string propertyPath;
 
         internal RuleContext(
-            T instance,
+            ValidationFrame<T> frame,
+            IValidationMessageProvider messageProvider,
+            PropertyRule<T, TProperty> rule,
+            PropertyRule<T, TProperty>.RuleCheck check,
             TProperty value,
-            string propertyPath,
-            string? propertyNameOverride,
-            IValidationMessageProvider messages,
-            PropertyDisplayNames displayNames,
-            List<ValidationError> errors,
-            ValidationBehaviors? requested)
+            int errorCountAtStart)
         {
-            this.RequestedBehaviors = requested;
-            this.Instance = instance;
+            this.frame = frame;
+            this.messageProvider = messageProvider;
+            this.rule = rule;
+            this.check = check;
             this.Value = value;
-            this.propertyPath = propertyPath;
-            this.PropertyName = propertyNameOverride ?? propertyPath;
-            this.Messages = messages;
-            this.displayNames = displayNames;
-            this.errors = errors;
-            this.errorCountAtStart = errors.Count;
+            this.errorCountAtStart = errorCountAtStart;
         }
 
         /// <summary>
-        /// What the run this chain belongs to was asked for, so a rule which composes another validator
-        /// can pass them on rather than letting the composed one fall straight to <see cref="NValidationOptions.Default"/>.
+        /// The run this chain belongs to, for a rule which composes another validator and passes it on.
         /// </summary>
-        internal ValidationBehaviors? RequestedBehaviors { get; }
+        internal ValidationRun Run => this.frame.Run;
+
+        /// <summary>
+        /// The pass this chain belongs to, for a composed rule which runs other validators into it.
+        /// </summary>
+        internal ValidationFrame Frame => this.frame;
 
         /// <summary>
         /// The object being validated. Rules which compare two properties read the other one from here.
         /// </summary>
-        public T Instance { get; }
+        public T Instance => this.frame.Instance;
 
         /// <summary>
         /// The value of the property this chain was declared for.
@@ -57,124 +59,113 @@ namespace NValidation
 
         /// <summary>
         /// What failures of this property are reported under: the property name it opted into with
-        /// <c>WithPropertyName(...)</c>, or — the default — the member path of the expression it was declared
-        /// with (<c>Name</c>, or <c>Address.Street</c> for a nested one).
+        /// <c>WithPropertyName(...)</c>, or — the default — the member path of the expression it was
+        /// declared with (<c>Name</c>, or <c>Address.Street</c> for a nested one).
         /// </summary>
-        public string PropertyName { get; }
+        public string PropertyName => this.rule.PropertyNameOverride ?? this.rule.PropertyName;
 
         /// <summary>
-        /// Where a rule takes its message texts from. A rule which reports through
-        /// <see cref="AddError(string, ValueTuple{string, object}[])"/> never needs this; one which
-        /// builds a <see cref="ValidationError"/> of its own resolves the wording here.
+        /// Where a rule takes its message texts from, resolved for this run. A rule which reports through
+        /// <see cref="AddError(string, ReadOnlySpan{ValueTuple{string, object}})"/> never needs this; one
+        /// which builds a <see cref="ValidationError"/> of its own resolves the wording here.
         /// </summary>
-        public IValidationMessageProvider Messages { get; }
+        public IValidationMessageProvider ValidationMessageProvider => this.messageProvider;
 
         /// <summary>
-        /// What a message calls this property: the display name it opted into with <c>WithDisplayName(...)</c>,
-        /// or its <see cref="PropertyName"/>. Only the message is affected — the error is always reported under
-        /// the property name.
+        /// The token the validation was started with, for a rule which does something cancellable.
         /// </summary>
-        public string DisplayName => this.displayNames.Resolve(this.propertyPath);
+        public CancellationToken CancellationToken => this.frame.Run.CancellationToken;
+
+        /// <summary>
+        /// What a message calls this property: the display name it opted into with
+        /// <c>WithDisplayName(...)</c>, or its <see cref="PropertyName"/>. Only the message is affected;
+        /// the error is always reported under the property name.
+        /// </summary>
+        public string DisplayName => this.rule.DisplayNames.Resolve(this.rule.PropertyName);
 
         /// <summary>
         /// <c>true</c> once a rule in this chain has failed. Used to stop the chain unless it opted out.
         /// </summary>
-        public bool HasFailed => this.errors.Count > this.errorCountAtStart;
+        public bool HasFailed => this.frame.ErrorCount > this.errorCountAtStart;
 
         /// <summary>
         /// Reports a failure of this property. The message is resolved from the property's
-        /// <see cref="DisplayName"/> — passed as <see cref="ValidationMessagePlaceholders.PropertyName"/>
-        /// — and the rule's own named
-        /// <paramref name="arguments"/>, unless the rule was given a message of its own with
-        /// <c>WithMessage</c>. The message uses whichever of them it names and ignores the rest.
+        /// <see cref="DisplayName"/>, passed as <see cref="ValidationMessagePlaceholders.PropertyName"/>,
+        /// and the rule's own named <paramref name="arguments"/>, unless the rule was given a message of
+        /// its own with <c>WithMessage</c>. Inside a <c>ForEach</c> the entry's position is added as
+        /// <see cref="ValidationMessagePlaceholders.CollectionIndex"/>.
         /// </summary>
-        public void AddError(string errorCode, params (string Name, object? Value)[] arguments)
+        public void AddError(string errorCode, params ReadOnlySpan<(string Name, object? Value)> arguments)
         {
-            // A code of the chain's own replaces the rule's, and it is also what the message is resolved
-            // under: one token says which rule failed and which text says so, and a rule of the caller's
-            // own is localized by naming it rather than by carrying a literal.
-            var reportedErrorCode = this.errorCodeOverride ?? errorCode;
+            // A code of the chain's own replaces the rule's, and is also what the message is resolved
+            // under: one token says which rule failed and which text says so.
+            var reportedErrorCode = this.check.ErrorCodeOverride ?? errorCode;
             var messageArguments = ValidationMessageProviderExtensions.BuildArguments(this.DisplayName, arguments);
 
-            // Completed before the message is produced rather than inside the provider, because a
-            // message the chain wrote is formatted here and never reaches the provider at all.
-            if (this.Messages is IMessageArgumentEnricher enricher)
-            {
-                messageArguments = enricher.Enrich(messageArguments);
-            }
+            this.frame.Run.Scope?.Enrich(messageArguments);
 
             // A message of the rule's own is a template like any other, substituted against exactly the
-            // arguments the rule supplies. Handing it back unsubstituted would render its braces into
-            // the response, and writing {PropertyName} is the first thing anyone tries.
-            var message = this.messageOverride == null
-                ? this.Messages.GetMessage(reportedErrorCode, messageArguments)
-                : ValidationMessageFormatter.Format(this.messageOverride(this.Instance, this.Value), messageArguments);
+            // arguments the rule supplies.
+            var message = this.check.Message is { } messageOverride
+                ? ValidationMessageFormatter.Format(messageOverride(this.Instance, this.Value), messageArguments)
+                : this.messageProvider.GetMessage(reportedErrorCode, messageArguments);
 
-            this.errors.Add(new ValidationError(this.PropertyName, message, reportedErrorCode, messageArguments));
+            this.frame.Errors.Add(new ValidationError(this.PropertyName, message, reportedErrorCode, messageArguments));
         }
 
         /// <summary>
         /// Reports a failure with a property name of the rule's choosing — used by rules which report per
-        /// element (one error per item of a collection, say) or which merge the errors of a nested
-        /// validator. The property name is kept even when the rule was given a message of its own.
+        /// element, or which merge the errors of a nested validator. The property name is kept even when
+        /// the rule was given a message of its own.
         /// </summary>
         public void AddError(ValidationError error)
         {
             ArgumentNullException.ThrowIfNull(error);
 
-            if (this.messageOverride == null && this.errorCodeOverride == null)
+            var messageOverride = this.check.Message;
+            var errorCodeOverride = this.check.ErrorCodeOverride;
+
+            if (messageOverride == null && errorCodeOverride == null)
             {
-                this.errors.Add(error);
+                this.frame.Errors.Add(error);
                 return;
             }
 
-            var messageArguments = ValidationMessageProviderExtensions.BuildArguments(this.DisplayName);
+            var message = error.Message;
 
-            this.errors.Add(new ValidationError(
-                error.PropertyName,
-                this.messageOverride == null
-                    ? error.Message
-                    : ValidationMessageFormatter.Format(this.messageOverride(this.Instance, this.Value), messageArguments),
-                this.errorCodeOverride ?? error.ErrorCode,
-                error.Arguments));
+            if (messageOverride != null)
+            {
+                var messageArguments = ValidationMessageProviderExtensions.BuildArguments(this.DisplayName, arguments: default);
+
+                this.frame.Run.Scope?.Enrich(messageArguments);
+
+                message = ValidationMessageFormatter.Format(messageOverride(this.Instance, this.Value), messageArguments);
+            }
+
+            this.frame.Errors.Add(new ValidationError(
+                error.PropertyName, message, errorCodeOverride ?? error.ErrorCode, error.Arguments));
         }
 
         /// <summary>
         /// What a message calls another property of the same object — the one a value is compared
-        /// against, typically. Falls back to <paramref name="propertyName"/> when that property declared no
-        /// display name.
+        /// against, typically. Falls back to <paramref name="propertyName"/> when that property declared
+        /// no display name.
         /// </summary>
         public string GetDisplayName(string propertyName)
         {
             ArgumentNullException.ThrowIfNull(propertyName);
 
-            return this.displayNames.Resolve(propertyName);
+            return this.rule.DisplayNames.Resolve(propertyName);
         }
 
         /// <summary>
         /// Reports a failure a validator this chain composed produced, under the property name that
-        /// validator chose.
+        /// validator chose and with the message it chose: what a composed validator found is its own
+        /// judgement, so <c>WithMessage</c> does not apply.
         /// </summary>
-        /// <remarks>
-        /// Not subject to <c>WithMessage</c>: what a composed validator found is its own judgement, and
-        /// one replacement wording copied across every failure it reported would say the same sentence
-        /// under each of their property names. A chain which wants its own wording puts it on its own rules.
-        /// </remarks>
         internal void AddComposedError(ValidationError error)
         {
-            ArgumentNullException.ThrowIfNull(error);
-
-            this.errors.Add(error);
-        }
-
-        /// <summary>
-        /// Applied by the rule chain before each rule runs, so a message or a code set with
-        /// <c>WithMessage</c> or <c>WithErrorCode</c> only affects the rule it was written after.
-        /// </summary>
-        internal void UseOverrides(Func<T, TProperty, string>? messageOverride, string? errorCodeOverride)
-        {
-            this.messageOverride = messageOverride;
-            this.errorCodeOverride = errorCodeOverride;
+            this.frame.Errors.Add(error);
         }
     }
 }

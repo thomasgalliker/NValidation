@@ -1,9 +1,21 @@
+using System.Runtime.CompilerServices;
+
 namespace NValidation.Internals
 {
     internal sealed class PropertyRule<T, TProperty> : IPropertyRule<T>
     {
         private readonly Func<T, TProperty> accessor;
         private readonly List<RuleCheck> checks = [];
+
+        // The checks as an array, taken when the validator freezes and never re-read.
+        private RuleCheck[]? frozenChecks;
+
+
+        private Func<string>? displayName;
+
+        private string? propertyNameOverride;
+
+        private ValidationBehavior? validationBehaviorOverride;
 
         public PropertyRule(string propertyName, Func<T, TProperty> accessor)
         {
@@ -14,53 +26,111 @@ namespace NValidation.Internals
         public string PropertyName { get; }
 
         /// <summary>
+        /// The display names of every property of the validator, handed over when it freezes.
+        /// </summary>
+        public PropertyDisplayNames DisplayNames { get; private set; } = PropertyDisplayNames.None;
+
+        /// <summary>
         /// What messages call this property instead of its property name. <c>null</c> until the chain opts in.
         /// </summary>
-        public Func<string>? DisplayName { get; set; }
+        public Func<string>? DisplayName
+        {
+            get => this.displayName;
+
+            set
+            {
+                this.ThrowIfFrozen();
+
+                this.displayName = value;
+            }
+        }
 
         /// <summary>
         /// What failures of this property are reported under instead of its member path. <c>null</c>
         /// until the chain opts in.
         /// </summary>
-        public string? PropertyNameOverride { get; set; }
+        public string? PropertyNameOverride
+        {
+            get => this.propertyNameOverride;
+
+            set
+            {
+                this.ThrowIfFrozen();
+
+                this.propertyNameOverride = value;
+            }
+        }
 
         /// <summary>
         /// What this chain does once one of its rules has failed, where the chain declared it for
         /// itself. <c>null</c> — the default — means it takes whatever the validator resolved.
         /// </summary>
-        public ValidationBehavior? ValidationBehaviorOverride { get; set; }
+        public ValidationBehavior? ValidationBehaviorOverride
+        {
+            get => this.validationBehaviorOverride;
+
+            set
+            {
+                this.ThrowIfFrozen();
+
+                this.validationBehaviorOverride = value;
+            }
+        }
 
         /// <summary>
         /// Decides whether this property is validated at all. <c>null</c> means always.
         /// </summary>
         private Func<T, bool>? Condition { get; set; }
 
+        /// <inheritdoc/>
+        public bool IsSynchronous { get; private set; } = true;
+
+        private RuleCheck[] Checks => this.frozenChecks ??= [.. this.checks];
+
+        /// <summary>
+        /// Appends a rule which has something to await.
+        /// </summary>
         public void Add(Func<RuleContext<T, TProperty>, CancellationToken, ValueTask> check)
         {
-            this.checks.Add(new RuleCheck(check));
+            this.ThrowIfFrozen();
+
+            this.IsSynchronous = false;
+            this.checks.Add(new RuleCheck(check, isComposed: false));
         }
 
         /// <summary>
-        /// The same, for a rule which has nothing to await.
+        /// Appends a rule which judges the value without awaiting. Kept as written rather than wrapped
+        /// in a lambda returning a completed <see cref="ValueTask"/>, because almost every rule is one of
+        /// these and the wrapper would cost a delegate call and a <see cref="ValueTask"/> per rule per run.
         /// </summary>
-        /// <remarks>
-        /// Kept as it was written rather than wrapped in a lambda returning a completed
-        /// <see cref="ValueTask"/>. The wrapper cost a closure and a delegate for every rule of every
-        /// validator built, and a delegate call plus a <see cref="ValueTask"/> round trip for every rule
-        /// of every validation — and almost every rule this library ships is synchronous.
-        /// </remarks>
         public void Add(Action<RuleContext<T, TProperty>> check)
         {
-            this.checks.Add(new RuleCheck(check));
+            this.ThrowIfFrozen();
+
+            this.checks.Add(new RuleCheck(check, isComposed: false));
         }
 
         /// <summary>
-        /// The same, for a check which runs a validator this chain composed rather than judging the
-        /// value itself.
+        /// Appends a check which runs a validator this chain composed rather than judging the value
+        /// itself; the composed validator awaits something.
         /// </summary>
         public void AddComposed(Func<RuleContext<T, TProperty>, CancellationToken, ValueTask> check)
         {
-            this.checks.Add(new RuleCheck(check) { IsComposed = true });
+            this.ThrowIfFrozen();
+
+            this.IsSynchronous = false;
+            this.checks.Add(new RuleCheck(check, isComposed: true));
+        }
+
+        /// <summary>
+        /// The same, for a composed validator whose every rule judges rather than awaits, so this chain
+        /// stays synchronous.
+        /// </summary>
+        public void AddComposed(Action<RuleContext<T, TProperty>> check)
+        {
+            this.ThrowIfFrozen();
+
+            this.checks.Add(new RuleCheck(check, isComposed: true));
         }
 
         /// <summary>
@@ -69,6 +139,8 @@ namespace NValidation.Internals
         /// </summary>
         public void SetMessageOfLastCheck(Func<T, TProperty, string> message)
         {
+            this.ThrowIfFrozen();
+
             if (this.checks.Count == 0)
             {
                 throw new InvalidOperationException(
@@ -92,6 +164,8 @@ namespace NValidation.Internals
         /// </summary>
         public void SetErrorCodeOfLastCheck(string errorCode)
         {
+            this.ThrowIfFrozen();
+
             if (this.checks.Count == 0)
             {
                 throw new InvalidOperationException(
@@ -115,6 +189,8 @@ namespace NValidation.Internals
         /// </summary>
         public void AddCondition(Func<T, bool> condition)
         {
+            this.ThrowIfFrozen();
+
             var existingCondition = this.Condition;
 
             this.Condition = existingCondition == null
@@ -122,34 +198,85 @@ namespace NValidation.Internals
                 : instance => existingCondition(instance) && condition(instance);
         }
 
-        public async ValueTask ValidateAsync(
-            T instance,
-            List<ValidationError> errors,
-            IValidationMessageProvider messages,
-            PropertyDisplayNames displayNames,
-            ValidationBehavior propertyBehavior,
-            ValidationBehaviors? requested,
-            CancellationToken cancellationToken)
+        public void Freeze(PropertyDisplayNames displayNames)
         {
-            var context = this.CreateContext(instance, errors, messages, displayNames, requested);
+            this.DisplayNames = displayNames;
+            this.frozenChecks ??= [.. this.checks];
+        }
 
-            if (context == null)
+        public ValueTask ValidateAsync(ValidationFrame<T> frame, IValidationMessageProvider messageProvider, ValidationBehavior propertyBehavior)
+        {
+            if (this.IsSynchronous)
+            {
+                this.Validate(frame, messageProvider, propertyBehavior);
+
+                return default;
+            }
+
+            return this.ValidateAwaitingAsync(frame, messageProvider, propertyBehavior);
+        }
+
+        /// <summary>
+        /// Runs a chain whose every rule judges rather than awaits.
+        /// </summary>
+        /// <remarks>
+        /// The twin of <see cref="ValidateAwaitingAsync"/>: the same loop with the one branch that can
+        /// suspend. Two loops because sharing the body would make this an async method, which is the
+        /// state machine it exists to avoid. A change to the cascade rule is made to both.
+        /// </remarks>
+        public void Validate(ValidationFrame<T> frame, IValidationMessageProvider messageProvider, ValidationBehavior propertyBehavior)
+        {
+            if (!this.TryReadValue(frame, out var value))
             {
                 return;
             }
 
-            var behavior = this.ValidationBehaviorOverride ?? propertyBehavior;
+            var cancellationToken = frame.Run.CancellationToken;
+            var errorCountAtStart = frame.ErrorCount;
+            var behavior = this.validationBehaviorOverride ?? propertyBehavior;
 
-            foreach (var ruleCheck in this.checks)
+            var checks = this.Checks;
+
+            for (var i = 0; i < checks.Length; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (behavior == ValidationBehavior.StopAtFirstError && context.HasFailed)
+                if (behavior == ValidationBehavior.StopAtFirstError && frame.ErrorCount > errorCountAtStart)
                 {
                     return;
                 }
 
-                context.UseOverrides(ruleCheck.Message, ruleCheck.ErrorCodeOverride);
+                var ruleCheck = checks[i];
+
+                ruleCheck.SyncCheck!(this.CreateContext(frame, messageProvider, value, errorCountAtStart, ruleCheck));
+            }
+        }
+
+        /// <inheritdoc cref="Validate"/>
+        private async ValueTask ValidateAwaitingAsync(ValidationFrame<T> frame, IValidationMessageProvider messageProvider, ValidationBehavior propertyBehavior)
+        {
+            if (!this.TryReadValue(frame, out var value))
+            {
+                return;
+            }
+
+            var cancellationToken = frame.Run.CancellationToken;
+            var errorCountAtStart = frame.ErrorCount;
+            var behavior = this.validationBehaviorOverride ?? propertyBehavior;
+
+            var checks = this.Checks;
+
+            for (var i = 0; i < checks.Length; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (behavior == ValidationBehavior.StopAtFirstError && frame.ErrorCount > errorCountAtStart)
+                {
+                    return;
+                }
+
+                var ruleCheck = checks[i];
+                var context = this.CreateContext(frame, messageProvider, value, errorCountAtStart, ruleCheck);
 
                 if (ruleCheck.SyncCheck is { } syncCheck)
                 {
@@ -163,40 +290,58 @@ namespace NValidation.Internals
         }
 
         /// <summary>
-        /// The state one run of this chain works against, or <c>null</c> where a condition says the
-        /// chain does not apply.
+        /// The property's value, or <c>false</c> where a condition says the chain does not apply. The
+        /// condition is asked before the property is read: it is what guards a chain whose path is only
+        /// reachable when the condition holds.
         /// </summary>
-        /// <remarks>
-        /// The condition is asked before the property is read: it is what guards a chain whose path is
-        /// only reachable in the first place when the condition holds (e.g. a nested property of an
-        /// object which may be absent).
-        /// </remarks>
-        private RuleContext<T, TProperty>? CreateContext(
-            T instance,
-            List<ValidationError> errors,
-            IValidationMessageProvider messages,
-            PropertyDisplayNames displayNames,
-            ValidationBehaviors? requested)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryReadValue(ValidationFrame<T> frame, out TProperty value)
         {
-            if (this.Condition != null && !this.Condition(instance))
+            if (this.Condition != null && !this.Condition(frame.Instance))
             {
-                return null;
+                value = default!;
+
+                return false;
             }
 
-            return new RuleContext<T, TProperty>(
-                instance, this.accessor(instance), this.PropertyName, this.PropertyNameOverride, messages, displayNames, errors, requested);
+            value = this.accessor(frame.Instance);
+
+            return true;
         }
 
-        private sealed class RuleCheck
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private RuleContext<T, TProperty> CreateContext(
+            ValidationFrame<T> frame, IValidationMessageProvider messageProvider, TProperty value, int errorCountAtStart, RuleCheck ruleCheck)
         {
-            public RuleCheck(Func<RuleContext<T, TProperty>, CancellationToken, ValueTask> check)
+            return new RuleContext<T, TProperty>(frame, messageProvider, this, ruleCheck, value, errorCountAtStart);
+        }
+
+        /// <exception cref="InvalidOperationException">The chain has already been used to validate.</exception>
+        private void ThrowIfFrozen()
+        {
+            if (this.frozenChecks != null)
+            {
+                throw new InvalidOperationException(
+                    $"The rules for '{this.PropertyName}' have already been used to validate, so they can no " +
+                    "longer change. Declare every rule before the first validation, typically in the constructor.");
+            }
+        }
+
+        /// <summary>
+        /// One rule of the chain: what it runs, and the message and code the chain gave it.
+        /// </summary>
+        internal sealed class RuleCheck
+        {
+            public RuleCheck(Func<RuleContext<T, TProperty>, CancellationToken, ValueTask> check, bool isComposed)
             {
                 this.Check = check;
+                this.IsComposed = isComposed;
             }
 
-            public RuleCheck(Action<RuleContext<T, TProperty>> syncCheck)
+            public RuleCheck(Action<RuleContext<T, TProperty>> syncCheck, bool isComposed)
             {
                 this.SyncCheck = syncCheck;
+                this.IsComposed = isComposed;
             }
 
             /// <summary>
@@ -216,9 +361,10 @@ namespace NValidation.Internals
             public string? ErrorCodeOverride { get; set; }
 
             /// <summary>
-            /// Whether this check runs a validator the chain composed, whose failures are its own.
+            /// Whether this check runs a validator the chain composed, whose failures are its own and
+            /// which <c>WithMessage</c> and <c>WithErrorCode</c> therefore cannot follow.
             /// </summary>
-            public bool IsComposed { get; init; }
+            public bool IsComposed { get; }
         }
     }
 }

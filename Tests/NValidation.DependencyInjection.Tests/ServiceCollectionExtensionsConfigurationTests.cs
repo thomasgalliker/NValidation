@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Primitives;
 
-namespace NValidation.Tests.Extensions
+namespace NValidation.DependencyInjection.Tests
 {
     /// <summary>
     /// Covers the <see cref="IConfiguration"/> overloads of <c>AddNValidation</c>: which settings a host
@@ -74,8 +74,9 @@ namespace NValidation.Tests.Extensions
             // Act
             services.AddNValidation(Configuration(), b => b.AddValidator<Manufacturer, ManufacturerValidator>());
 
-            // Assert
-            Descriptor<IValidator<Manufacturer>>(services).Lifetime.Should().Be(ServiceLifetime.Scoped);
+            // Assert — nothing was reset: no lifetime was named anywhere, so the validator is promoted,
+            // which is what naming nothing means.
+            Descriptor<IValidator<Manufacturer>>(services).Lifetime.Should().Be(ServiceLifetime.Singleton);
         }
 
         /// <summary>
@@ -189,8 +190,8 @@ namespace NValidation.Tests.Extensions
             public TwoRuleValidator()
             {
                 this.Property(m => m.Name)
-                    .Must(name => name == "Aurora", "Name must be Aurora.")
-                    .Must(name => name == "Northgate", "Name must be spelled out.");
+                    .Must(name => name == "Aurora").WithMessage("Name must be Aurora.")
+                    .Must(name => name == "Northgate").WithMessage("Name must be spelled out.");
             }
         }
     }

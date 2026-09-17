@@ -1,4 +1,4 @@
-namespace NValidation.Tests.Extensions
+namespace NValidation.DependencyInjection.Tests
 {
     /// <summary>
     /// Covers where <see cref="NValidationOptions.Default"/> sits relative to <c>AddNValidation</c>: it
@@ -6,38 +6,66 @@ namespace NValidation.Tests.Extensions
     /// registration which configured something outranks it.
     /// </summary>
     /// <remarks>
-    /// The registration used to write the built-in English over whatever the defaults said, because it
-    /// registered a provider unconditionally. It now registers one which resolves through the defaults,
-    /// which is what makes the two levels compose rather than collide.
+    /// The registration hands a provider over only where the host registered one, so a validator it
+    /// built otherwise reads the defaults while validating — including a default assigned after the
+    /// container was built.
     /// </remarks>
     [Trait(Traits.Category, Traits.UnitTests)]
     [Collection(Collections.ValidationDefaults)]
     public class ServiceCollectionExtensionsDefaultsTests : IDisposable
     {
+        private readonly NValidationOptions original = NValidationOptions.Default;
+
         public ServiceCollectionExtensionsDefaultsTests()
         {
-            NValidationOptions.Default.Reset();
+            NValidationOptions.Default = new NValidationOptions();
         }
 
         public void Dispose()
         {
-            NValidationOptions.Default.Reset();
+            NValidationOptions.Default = this.original;
         }
 
+        /// <summary>
+        /// Nothing is registered on the host's behalf: a provider the container hands over would outrank
+        /// the options a call is given, and capturing the default at resolution would hide a default
+        /// assigned afterwards.
+        /// </summary>
         [Fact]
-        public void AddNValidation_WithoutAConfiguredProvider_ResolvesTheDefault()
+        public void AddNValidation_WithoutAConfiguredProvider_RegistersNoProvider()
         {
             // Arrange
-            NValidationOptions.Default.MessageProvider = new StubMessageProvider();
-
             var services = new ServiceCollection();
             services.AddNValidation();
 
             // Act
-            var messageProvider = Resolve<IValidationMessageProvider>(services);
+            var messageProvider = services.BuildServiceProvider().GetService<IValidationMessageProvider>();
 
             // Assert
-            messageProvider.Should().BeOfType<StubMessageProvider>();
+            messageProvider.Should().BeNull();
+        }
+
+        /// <summary>
+        /// The defaults are read while validating, so a default assigned after the container built the
+        /// validator still reaches it.
+        /// </summary>
+        [Fact]
+        public async Task AddValidator_WithoutAConfiguredProvider_AnswersThroughADefaultAssignedLater()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddNValidation(b => b.AddValidator<Manufacturer, ManufacturerValidator>());
+
+            var validator = Resolve<IValidator<Manufacturer>>(services);
+
+            NValidationOptions.Default = new() { MessageProvider = new StubMessageProvider() };
+
+            // Act
+            var result = await validator.ValidateAsync(new Manufacturer());
+
+            // Assert
+            result.Errors.Should().NotBeEmpty();
+            result.Errors.Should().AllSatisfy(error => error.Message.Should().Be("message from the default provider"));
         }
 
         /// <summary>
@@ -48,7 +76,7 @@ namespace NValidation.Tests.Extensions
         public async Task AddValidator_WithoutAConfiguredProvider_AnswersThroughTheDefault()
         {
             // Arrange
-            NValidationOptions.Default.MessageProvider = new StubMessageProvider();
+            NValidationOptions.Default = new() { MessageProvider = new StubMessageProvider() };
 
             var services = new ServiceCollection();
             services.AddNValidation(b => b.AddValidator<Manufacturer, ManufacturerValidator>());
@@ -70,7 +98,7 @@ namespace NValidation.Tests.Extensions
         public void MessageProvider_OfTheRegistration_OutranksTheDefault()
         {
             // Arrange
-            NValidationOptions.Default.MessageProvider = new StubMessageProvider();
+            NValidationOptions.Default = new() { MessageProvider = new StubMessageProvider() };
 
             var services = new ServiceCollection();
             services.AddNValidation(b => b.MessageProvider = typeof(RegisteredMessageProvider));
@@ -90,7 +118,7 @@ namespace NValidation.Tests.Extensions
         public void AddNValidation_KeepsAProviderTheHostRegisteredFirst_EvenWithADefault()
         {
             // Arrange
-            NValidationOptions.Default.MessageProvider = new StubMessageProvider();
+            NValidationOptions.Default = new() { MessageProvider = new StubMessageProvider() };
 
             var services = new ServiceCollection();
             services.AddSingleton<IValidationMessageProvider, RegisteredMessageProvider>();
@@ -104,13 +132,41 @@ namespace NValidation.Tests.Extensions
         }
 
         /// <summary>
+        /// And through a validator, not only through the resolved service: the registration's provider
+        /// is the rung above the defaults, so a validator the container built answers with it.
+        /// </summary>
+        [Fact]
+        public async Task AddValidator_WithAConfiguredProvider_OutranksTheDefault()
+        {
+            // Arrange
+            NValidationOptions.Default = new() { MessageProvider = new StubMessageProvider() };
+
+            var services = new ServiceCollection();
+            services.AddNValidation(b =>
+            {
+                b.MessageProvider = typeof(RegisteredMessageProvider);
+                b.AddValidator<Manufacturer, ManufacturerValidator>();
+            });
+
+            var validator = Resolve<IValidator<Manufacturer>>(services);
+
+            // Act
+            var result = await validator.ValidateAsync(new Manufacturer());
+
+            // Assert
+            result.ShouldReport([
+                new("Name", "message from the registered provider"),
+                new("CountryCode", "message from the registered provider")]);
+        }
+
+        /// <summary>
         /// A registration which named neither axis leaves both inheriting, so the defaults are reached.
         /// </summary>
         [Fact]
         public async Task ValidationBehaviors_OfTheDefault_ReachAValidatorTheContainerBuilt()
         {
             // Arrange
-            NValidationOptions.Default.ValidationBehaviors.Property = ValidationBehavior.All;
+            NValidationOptions.Default = new() { ValidationBehaviors = new() { Property = ValidationBehavior.All } };
 
             var services = new ServiceCollection();
             services.AddNValidation(b => b.AddValidator<Manufacturer, TwoRuleValidator>());
@@ -133,12 +189,12 @@ namespace NValidation.Tests.Extensions
         public async Task ValidationBehaviors_OfTheRegistration_OutrankTheDefault()
         {
             // Arrange
-            NValidationOptions.Default.ValidationBehaviors.Property = ValidationBehavior.All;
+            NValidationOptions.Default = new() { ValidationBehaviors = new() { Property = ValidationBehavior.All } };
 
             var services = new ServiceCollection();
             services.AddNValidation(b =>
             {
-                b.ValidationBehaviors.Property = ValidationBehavior.StopAtFirstError;
+                b.ValidationBehaviors = new() { Property = ValidationBehavior.StopAtFirstError };
                 b.AddValidator<Manufacturer, TwoRuleValidator>();
             });
 
@@ -181,8 +237,8 @@ namespace NValidation.Tests.Extensions
             public TwoRuleValidator()
             {
                 this.Property(m => m.Name)
-                    .Must(name => name == "Aurora", "Name must be Aurora.")
-                    .Must(name => name == "Northgate", "Name must be spelled out.");
+                    .Must(name => name == "Aurora").WithMessage("Name must be Aurora.")
+                    .Must(name => name == "Northgate").WithMessage("Name must be spelled out.");
             }
         }
     }

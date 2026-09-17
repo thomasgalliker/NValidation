@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -19,102 +18,82 @@ namespace NValidation
     /// </remarks>
     public sealed class NValidationBuilder
     {
-        /// <summary>
-        /// What each <c>AddValidator</c> and each scan asked for, resolved and applied once the delegate
-        /// has run. A <c>null</c> lifetime means "whatever <see cref="ValidatorLifetime"/> ends up being".
-        /// </summary>
         private readonly List<Registration> registrations = [];
-
         private Type? messageProvider;
+        private ServiceLifetime? validatorLifetime;
+        private bool? promoteSafeValidatorsToSingleton;
 
         internal NValidationBuilder(IServiceCollection services)
         {
             this.Services = services;
         }
 
-        /// <summary>
-        /// The collection being configured, for a registration this type has no method for — and what an
-        /// integration package extends to add its own configuration here.
-        /// </summary>
         internal IServiceCollection Services { get; }
 
         /// <summary>
-        /// The lifetime validators are registered with unless one is named on the call itself.
-        /// <see cref="ServiceLifetime.Scoped"/> by default, because a validator may take a dependency
-        /// that is itself scoped — the database an async uniqueness rule asks — and a longer-lived
-        /// validator would capture it.
+        /// The lifetime a validator is registered with unless one is named on its own call.
+        /// <see cref="ServiceLifetime.Scoped"/> unless set, because a validator may depend on something
+        /// that is itself scoped and a longer-lived validator would capture it.
         /// </summary>
         /// <remarks>
-        /// A validator built on <see cref="Validator{T}"/> declares its rules in its constructor and
-        /// never changes afterwards, so where its dependencies allow it,
-        /// <see cref="ServiceLifetime.Singleton"/> pays for that construction once for the process
-        /// rather than once per scope. Choose it when the validators being registered are safe to
-        /// share: no scoped dependencies, no mutable state. A single validator that cannot follow it
-        /// still names its own lifetime on its own call.
+        /// A lifetime set here is registered as written, unless promotion was asked for by name. Left
+        /// unset, a validator which provably depends on nothing scoped is promoted to a singleton — see
+        /// <see cref="PromoteSafeValidatorsToSingleton"/>.
         /// </remarks>
-        public ServiceLifetime ValidatorLifetime { get; set; } = ServiceLifetime.Scoped;
+        public ServiceLifetime ValidatorLifetime
+        {
+            get => this.validatorLifetime ?? ServiceLifetime.Scoped;
+            set => this.validatorLifetime = value;
+        }
 
         /// <summary>
-        /// Registers a validator as a singleton where that is provably safe, whatever
-        /// <see cref="ValidatorLifetime"/> says. Off by default.
+        /// Registers a validator as a singleton where that is provably safe. On by default.
         /// </summary>
         /// <remarks>
         /// A validator declares its rules in its constructor and never changes afterwards, so rebuilding
-        /// them per scope is pure waste — measurably the largest cost this library imposes on a request,
-        /// an order of magnitude more than validating. The reason the default is nevertheless
-        /// <see cref="ServiceLifetime.Scoped"/> is that a validator may depend on something that is
-        /// itself scoped, and a singleton holding one of those is a bug that surfaces under load rather
-        /// than at startup.
+        /// them per scope is pure waste: building a validator graph costs over twenty times what using it
+        /// does. A validator is promoted only when every constructor parameter resolves to something
+        /// already registered as a singleton, or to another validator which itself qualifies; one with a
+        /// scoped dependency, or with more than one public constructor, is left where it was. The
+        /// decision is made once, from the service collection.
         /// <para>
-        /// This settles that case by case instead of globally: at registration, a validator is promoted
-        /// only when every constructor parameter resolves to something already registered as a singleton,
-        /// or to another validator which itself qualifies. One that takes a scoped dependency is left
-        /// exactly where it was. The decision is made once, from the service collection, and never
-        /// depends on what a request happens to do.
-        /// </para>
-        /// <para>
-        /// A validator with more than one public constructor is never promoted: which one is used is
-        /// then a choice this cannot make on the container's behalf.
+        /// A lifetime the host named — on a registration call, or through <see cref="ValidatorLifetime"/>
+        /// — is an instruction, and the default promotion leaves it alone. Setting this to <c>true</c>
+        /// yourself asks for promotion regardless, which lifts a named lifetime too.
         /// </para>
         /// </remarks>
-        public bool PromoteSafeValidatorsToSingleton { get; set; }
+        public bool PromoteSafeValidatorsToSingleton
+        {
+            get => this.promoteSafeValidatorsToSingleton ?? true;
+            set => this.promoteSafeValidatorsToSingleton = value;
+        }
 
         /// <summary>
-        /// How much every registered validator reports, unless it says otherwise for itself: across its
-        /// properties, and within one property's chain. Mutated rather than assigned —
-        /// <c>o.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;</c> — so naming one
-        /// axis leaves the other at its built-in default.
+        /// How much every validator the container builds reports, unless it says otherwise for itself:
+        /// <c>o.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError };</c>. An axis
+        /// left <c>null</c> falls through to the options passed to the call, then
+        /// <see cref="NValidationOptions.Default"/>.
         /// </summary>
         /// <remarks>
-        /// Handed to the validators this registration constructs, which is every validator resolved
-        /// from the container — but only those, so it reaches neither a validator built with <c>new</c>
-        /// nor one a validator composed for itself. Those read their defaults instead: the options
-        /// passed to the call, then <c>NValidationOptions.Default</c>, then the built-in ones.
+        /// Handed to the validators this registration constructs, and only those: it reaches neither a
+        /// validator built with <c>new</c> nor one a validator composed for itself. What every validator
+        /// reads is <see cref="NValidationOptions.Default"/>.
         /// </remarks>
-        public ValidationBehaviors ValidationBehaviors { get; } = new();
+        public ValidationBehaviors ValidationBehaviors { get; set; }
 
         /// <summary>
-        /// The <see cref="IValidationMessageProvider"/> rules take their message texts from — typically
-        /// the application's resources, served in the language of the current request. Left unset,
-        /// <c>NValidationOptions.Default.MessageProvider</c> is used, which is the built-in English
-        /// until a host configures otherwise.
-        /// <para>
+        /// The <see cref="IValidationMessageProvider"/> the validators the container builds take their
+        /// message texts from — typically the application's resources, served in the language of the
+        /// current request. Left unset, nothing is registered and those validators fall through to the
+        /// options passed to the call, then <see cref="NValidationOptions.Default"/>.
+        /// </summary>
+        /// <remarks>
         /// A <see cref="Type"/> rather than an instance, because the container builds it and a provider
-        /// may therefore take what it depends on through its constructor. A provider a host already
-        /// holds goes on <c>NValidationOptions.Default</c> instead.
-        /// </para>
-        /// </summary>
-        /// <remarks>
-        /// Built by the container, so a provider may take whatever it depends on through its
-        /// constructor, and registered as a singleton: a provider is a lookup asked for text, it has to
-        /// be thread-safe anyway because validators run concurrently, and being longer-lived than every
-        /// validator is what lets validators of any lifetime be handed it. Resolve the language while
-        /// the message is produced — a <see cref="Func{TResult}"/> over a resource — rather than in the
-        /// constructor.
-        /// <para>
-        /// A provider that genuinely cannot be shared is registered through <see cref="Services"/>
-        /// instead, at the cost of forcing every validator that uses it to be scoped as well.
-        /// </para>
+        /// may therefore take what it depends on through its constructor; a provider a host already
+        /// holds goes on <see cref="NValidationOptions.Default"/> instead. Registered as a singleton: a
+        /// provider has to be thread-safe anyway, and being longer-lived than every validator is what
+        /// lets validators of any lifetime be handed it. Resolve the language while the message is
+        /// produced rather than in the constructor.
         /// </remarks>
         /// <exception cref="ArgumentException">
         /// The type does not implement <see cref="IValidationMessageProvider"/>, or cannot be
@@ -234,15 +213,9 @@ namespace NValidation
         /// </summary>
         internal void Apply()
         {
-            // Copied rather than shared, so a delegate which kept hold of these options cannot change
-            // what already-registered validators will be handed. Captured by the factories below as a
-            // value of its own, so a factory roots this small object rather than these options — and
-            // through them the whole service collection.
-            var validationBehaviors = new ValidationBehaviors
-            {
-                Class = this.ValidationBehaviors.Class,
-                Property = this.ValidationBehaviors.Property,
-            };
+            // A value, captured by the factories below as it is now: a factory roots this small struct
+            // rather than the builder and, through it, the whole service collection.
+            var validationBehaviors = this.ValidationBehaviors;
 
             if (this.messageProvider != null)
             {
@@ -275,10 +248,16 @@ namespace NValidation
                     factories.Add(validatorType, factory);
                 }
 
-                var resolvedLifetime = lifetime ?? this.ValidatorLifetime;
+                // A lifetime someone wrote down — on the call, or through ValidatorLifetime — is an
+                // instruction: the default promotion leaves it alone, and only promotion asked for by
+                // name lifts it.
+                var namedLifetime = lifetime ?? this.validatorLifetime;
+                var resolvedLifetime = namedLifetime ?? ServiceLifetime.Scoped;
+                var askedForByName = this.promoteSafeValidatorsToSingleton == true;
 
                 if (this.PromoteSafeValidatorsToSingleton &&
                     resolvedLifetime != ServiceLifetime.Singleton &&
+                    (askedForByName || namedLifetime == null) &&
                     this.CanBeShared(validatorType, validatorsByService, []))
                 {
                     resolvedLifetime = ServiceLifetime.Singleton;
@@ -412,14 +391,15 @@ namespace NValidation
         {
             var validator = factory(serviceProvider, arguments: null);
 
-            if (validator is IMessageProviderTarget messageProviderTarget)
+            // The level beneath what the validator's constructor declared: a validator which named a
+            // setting for itself keeps it. A provider is handed over only where the host registered one.
+            if (validator is IValidationRegistrationTarget registrationTarget)
             {
-                messageProviderTarget.Messages = serviceProvider.GetRequiredService<IValidationMessageProvider>();
-            }
-
-            if (validator is IValidationBehaviorTarget validationBehaviorTarget)
-            {
-                validationBehaviorTarget.RegisteredValidationBehaviors = validationBehaviors;
+                registrationTarget.Options = new NValidationOptions
+                {
+                    MessageProvider = serviceProvider.GetService<IValidationMessageProvider>(),
+                    ValidationBehaviors = validationBehaviors,
+                };
             }
 
             return validator;

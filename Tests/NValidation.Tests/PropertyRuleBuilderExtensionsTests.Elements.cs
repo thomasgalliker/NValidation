@@ -264,7 +264,7 @@ namespace NValidation.Tests
             // Arrange
             var validator = new TestValidator<Car>
             {
-                Messages = new TemplateMessageProvider("Entry {CollectionIndex} is incomplete."),
+                ValidationMessageProvider = new TemplateMessageProvider("Entry {CollectionIndex} is incomplete."),
             };
             validator.Property(c => c.ServiceHistory)
                 .ForEach(record => record.Property(r => r.Workshop).NotEmpty());
@@ -280,20 +280,16 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// Resolves every message to one template, so a test can prove which placeholders a rule makes
-        /// available.
-        /// </summary>
-        /// <summary>
-        /// The entries' own validator answers through the run's provider, not its own — so a message
-        /// about an entry can name the entry's position whichever way the rules were declared.
+        /// The entries' own validator inherits the composer's provider where it declared none — so a
+        /// message about an entry can name the entry's position whichever way the rules were declared.
         /// </summary>
         [Fact]
-        public async Task ForEach_WithAnElementValidator_ResolvesMessagesThroughTheRunsProvider()
+        public async Task ForEach_WithAnElementValidator_ResolvesMessagesThroughTheComposersProvider()
         {
             // Arrange
             var validator = new TestValidator<Car>
             {
-                Messages = new TemplateMessageProvider("Entry {CollectionIndex} is incomplete."),
+                ValidationMessageProvider = new TemplateMessageProvider("Entry {CollectionIndex} is incomplete."),
             };
             validator.Property(c => c.ServiceHistory)
                 .ForEach(new ServiceRecordValidator());
@@ -304,6 +300,34 @@ namespace NValidation.Tests
                 new ServiceRecord { Workshop = "Aurora", Mileage = 1_000, Cost = 120m },
                 new ServiceRecord { Workshop = null, Mileage = 2_000, Cost = 90m },
             ];
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport("ServiceHistory[1].Workshop", "Entry 1 is incomplete.");
+        }
+
+        /// <summary>
+        /// Resolves every message to one template, so a test can prove which placeholders a rule makes
+        /// available.
+        /// </summary>
+        /// <summary>
+        /// The position is what the entry knows, not what the provider knows: an element validator with
+        /// a provider of its own is told it too.
+        /// </summary>
+        [Fact]
+        public async Task ForEach_WithAnElementValidatorOfItsOwnProvider_StillOffersTheElementsPosition()
+        {
+            // Arrange
+            var recordValidator = new TestValidator<ServiceRecord>(new TemplateMessageProvider("Entry {CollectionIndex} is incomplete."));
+            recordValidator.Property(r => r.Workshop).NotEmpty();
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory).ForEach(recordValidator);
+
+            var car = Cars.Car();
+            car.ServiceHistory = [new ServiceRecord { Workshop = "Aurora" }, new ServiceRecord { Workshop = null }];
 
             // Act
             var result = await validator.ValidateAsync(car);
@@ -474,7 +498,7 @@ namespace NValidation.Tests
             validator.Property(c => c.ServiceHistory)
                 .ForEach(record => record
                     .Property(r => r.Mileage)
-                    .Must((r, mileage) => r.Cost == 0m || mileage > 0, message));
+                    .Must((r, mileage) => r.Cost == 0m || mileage > 0).WithMessage(message));
 
             var car = Cars.Car();
             car.ServiceHistory =
@@ -528,7 +552,7 @@ namespace NValidation.Tests
             // Arrange
             var validator = new TestValidator<Car>
             {
-                Messages = new TemplateMessageProvider("Entry {CollectionIndex} is wrong."),
+                ValidationMessageProvider = new TemplateMessageProvider("Entry {CollectionIndex} is wrong."),
             };
             validator.Property(c => c.ServiceHistory)
                 .ForEach(record => record
@@ -658,7 +682,7 @@ namespace NValidation.Tests
             validator.Property(c => c.ServiceHistory)
                 .ForEach(record =>
                 {
-                    record.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+                    record.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError };
 
                     record.Property(r => r.Workshop).NotEmpty();
                     record.Property(r => r.Cost).GreaterThan(0m);
@@ -691,7 +715,7 @@ namespace NValidation.Tests
         {
             // Arrange
             var recordValidator = new TestValidator<ServiceRecord>();
-            recordValidator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+            recordValidator.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError };
             recordValidator.Property(r => r.Cost).GreaterThan(0m);
 
             var validator = new TestValidator<Car>();
@@ -725,7 +749,7 @@ namespace NValidation.Tests
         {
             // Arrange
             var validator = new TestValidator<Car>();
-            validator.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+            validator.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError };
 
             validator.Property(c => c.ServiceHistory)
                 .ForEach(record => record.Property(r => r.Workshop).NotEmpty());

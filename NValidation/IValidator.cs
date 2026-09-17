@@ -1,3 +1,5 @@
+using NValidation.Internals;
+
 namespace NValidation
 {
     /// <summary>
@@ -20,6 +22,19 @@ namespace NValidation
         /// <paramref name="instance"/> is not of the type this validator validates.
         /// </exception>
         ValueTask<ValidationResult> ValidateAsync(object instance, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Validates <paramref name="instance"/> against options supplied for this call — the untyped
+        /// form of <see cref="IValidator{T}.ValidateAsync(T, NValidationOptions, CancellationToken)"/>,
+        /// for the pipeline which resolved its validator by <see cref="Type"/> and therefore holds this
+        /// interface rather than the typed one.
+        /// </summary>
+        /// <exception cref="ArgumentNullException">
+        /// <paramref name="instance"/> or <paramref name="options"/> is <c>null</c>.
+        /// </exception>
+        /// <inheritdoc cref="ValidateAsync(object, CancellationToken)" path="/exception[@cref='T:System.InvalidCastException']"/>
+        ValueTask<ValidationResult> ValidateAsync(
+            object instance, NValidationOptions options, CancellationToken cancellationToken = default);
     }
 
     /// <summary>
@@ -64,11 +79,18 @@ namespace NValidation
         /// <inheritdoc />
         ValueTask<ValidationResult> IValidator.ValidateAsync(object instance, CancellationToken cancellationToken)
         {
-            ArgumentNullException.ThrowIfNull(instance);
-
             // Through the typed interface rather than through this, so the two overloads cannot resolve
             // to each other when T is object.
-            return ((IValidator<T>)this).ValidateAsync((T)instance, cancellationToken);
+            return ((IValidator<T>)this).ValidateAsync(Payload.Cast<T>(instance, this.GetType()), cancellationToken);
+        }
+
+        /// <inheritdoc />
+        ValueTask<ValidationResult> IValidator.ValidateAsync(
+            object instance, NValidationOptions options, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(options);
+
+            return ((IValidator<T>)this).ValidateAsync(Payload.Cast<T>(instance, this.GetType()), options, cancellationToken);
         }
     }
 }

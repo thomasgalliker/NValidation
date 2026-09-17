@@ -17,10 +17,8 @@ namespace NValidation.Testing
     /// here behaves exactly as the same rule declared in a validator an application ships. That is the
     /// point — what the test proves is what a caller gets.
     /// <para>
-    /// Declare every rule before validating. The rules are walked as a plain list, so one appended after
-    /// a run does take part in the next one — but the display names are resolved on the first run and
-    /// kept, so a <c>WithDisplayName</c> written afterwards never reaches a message: it falls back to the
-    /// property's name. Arrange-then-Act never does that.
+    /// Declare every rule before validating: the first run freezes the rules, and a rule declared after
+    /// it throws <see cref="InvalidOperationException"/> rather than being silently ignored.
     /// </para>
     /// </remarks>
     /// <typeparam name="T">The type being validated.</typeparam>
@@ -36,13 +34,13 @@ namespace NValidation.Testing
         }
 
         /// <summary>
-        /// A validator answering through <paramref name="messages"/>. Pass
+        /// A validator answering through <paramref name="validationMessageProvider"/>. Pass
         /// <see cref="ErrorCodeProvider.Instance"/> for a test about <em>which</em> rule reported, which
         /// then does not depend on any wording.
         /// </summary>
-        public TestValidator(IValidationMessageProvider messages)
+        public TestValidator(IValidationMessageProvider validationMessageProvider)
         {
-            this.Messages = messages;
+            this.ValidationMessageProvider = validationMessageProvider;
         }
 
         /// <inheritdoc cref="Validator{T}.Property{TProperty}(System.Linq.Expressions.Expression{System.Func{T, TProperty}})"/>

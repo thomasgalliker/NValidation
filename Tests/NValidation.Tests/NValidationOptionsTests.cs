@@ -5,9 +5,9 @@ namespace NValidation.Tests
     /// and what still outranks them.
     /// </summary>
     /// <remarks>
-    /// None of these touch <see cref="NValidationOptions.Default"/>, so unlike the tests of the process-wide
-    /// defaults they need neither a serialized collection nor a reset between them. That is the point
-    /// of passing options rather than configuring them.
+    /// None of these touch <see cref="NValidationOptions.Default"/>, so unlike the tests of the
+    /// process-wide defaults they need no serialized collection. That is the point of passing options
+    /// rather than configuring them.
     /// </remarks>
     [Trait(Traits.Category, Traits.UnitTests)]
     public class NValidationOptionsTests
@@ -20,8 +20,7 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithOptions_ReachANestedValidator()
         {
             // Arrange
-            var options = new NValidationOptions();
-            options.ValidationBehaviors.Property = ValidationBehavior.All;
+            var options = new NValidationOptions { ValidationBehaviors = new() { Property = ValidationBehavior.All } };
 
             var validator = new ComposingValidator(new TwoRuleValidator());
 
@@ -38,14 +37,13 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithOptions_ReachAnElementChain()
         {
             // Arrange
-            var options = new NValidationOptions();
-            options.ValidationBehaviors.Property = ValidationBehavior.All;
+            var options = new NValidationOptions { ValidationBehaviors = new() { Property = ValidationBehavior.All } };
 
             var validator = new TestValidator<Car>();
             validator.Property(c => c.ServiceHistory)
                 .ForEach(record => record.Property(r => r.Workshop)
-                    .Must(workshop => workshop == "Aurora", "Workshop must be Aurora.")
-                    .Must(workshop => workshop == "Northgate", "Workshop must be Northgate."));
+                    .Must(workshop => workshop == "Aurora").WithMessage("Workshop must be Aurora.")
+                    .Must(workshop => workshop == "Northgate").WithMessage("Workshop must be Northgate."));
 
             var car = Cars.Car();
             car.ServiceHistory = [new ServiceRecord { Workshop = "Elsewhere", Mileage = 10, Cost = 10m }];
@@ -67,11 +65,10 @@ namespace NValidation.Tests
         public async Task ValidateAsync_WithOptions_AreOutrankedByWhatANestedValidatorDeclared()
         {
             // Arrange
-            var options = new NValidationOptions();
-            options.ValidationBehaviors.Property = ValidationBehavior.All;
+            var options = new NValidationOptions { ValidationBehaviors = new() { Property = ValidationBehavior.All } };
 
             var nested = new TwoRuleValidator();
-            nested.ValidationBehaviors.Property = ValidationBehavior.StopAtFirstError;
+            nested.ValidationBehaviors = new() { Property = ValidationBehavior.StopAtFirstError };
 
             var validator = new ComposingValidator(nested);
 
@@ -118,30 +115,6 @@ namespace NValidation.Tests
             result.ShouldReport("Name", "NotEmpty");
         }
 
-        /// <summary>
-        /// Using them freezes them, exactly as reading <see cref="NValidationOptions.Default"/> does.
-        /// </summary>
-        [Fact]
-        public async Task ValidateAsync_WithOptions_FreezesThem()
-        {
-            // Arrange
-            var options = new NValidationOptions();
-
-            var validator = new TestValidator<Manufacturer>();
-            validator.Property(m => m.Name).NotEmpty();
-
-            // Act
-            var before = options.IsReadOnly;
-            await validator.ValidateAsync(new Manufacturer(), options);
-
-            // Assert
-            before.Should().BeFalse();
-            options.IsReadOnly.Should().BeTrue();
-
-            var act = () => options.ValidationBehaviors.Property = ValidationBehavior.All;
-            act.Should().Throw<InvalidOperationException>().WithMessage("*already been used*Reset()*");
-        }
-
         [Fact]
         public async Task ValidateAsync_WithNullOptions_Throws()
         {
@@ -156,17 +129,40 @@ namespace NValidation.Tests
             await act.Should().ThrowAsync<ArgumentNullException>();
         }
 
+        /// <summary>
+        /// Fresh options name nothing, so passing them changes only what they were given. That is what
+        /// lets a call ask for one setting without restating the others.
+        /// </summary>
         [Fact]
-        public void MessageProvider_CannotBeSetToNull()
+        public void MessageProvider_LeftUnset_IsNull()
         {
             // Arrange
             var options = new NValidationOptions();
 
+            // Assert
+            options.MessageProvider.Should().BeNull();
+        }
+
+        /// <summary>
+        /// The same for the messages as for the behaviors: a composed validator which declared a provider
+        /// for itself keeps it, and the run's options only reach one which declared nothing.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_WithOptions_AreOutrankedByANestedValidatorsOwnMessageProvider()
+        {
+            // Arrange
+            var options = new NValidationOptions { MessageProvider = new StubMessageProvider() };
+
+            var nested = new TestValidator<Manufacturer>(new NestedMessageProvider());
+            nested.Property(m => m.Name).NotEmpty();
+
+            var validator = new ComposingValidator(nested);
+
             // Act
-            var act = () => options.MessageProvider = null!;
+            var result = await validator.ValidateAsync(new CarModel { Manufacturer = new Manufacturer() }, options);
 
             // Assert
-            act.Should().Throw<ArgumentNullException>();
+            result.ShouldReport("Manufacturer.Name", "message from the nested validator's own provider");
         }
 
         private sealed class StubMessageProvider : IValidationMessageProvider
@@ -177,13 +173,21 @@ namespace NValidation.Tests
             }
         }
 
+        private sealed class NestedMessageProvider : IValidationMessageProvider
+        {
+            public string GetMessage(string errorCode, IReadOnlyDictionary<string, object?> arguments)
+            {
+                return "message from the nested validator's own provider";
+            }
+        }
+
         private sealed class TwoRuleValidator : Validator<Manufacturer>
         {
             public TwoRuleValidator()
             {
                 this.Property(m => m.Name)
-                    .Must(name => name == "Aurora", "Name must be Aurora.")
-                    .Must(name => name == "Northgate", "Name must be spelled out.");
+                    .Must(name => name == "Aurora").WithMessage("Name must be Aurora.")
+                    .Must(name => name == "Northgate").WithMessage("Name must be spelled out.");
             }
         }
 

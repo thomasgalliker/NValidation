@@ -18,7 +18,8 @@ namespace NValidation.TestData.Validators
             // only has to describe the shape of a VIN which is present.
             this.Property(c => c.Vin)
                 .NotEmpty()
-                .Must(vin => vin == null || vin.Trim().Length == VinLength, "The VIN must be exactly 17 characters long.");
+                .Must(vin => vin == null || vin.Trim().Length == VinLength)
+                .WithMessage("The VIN must be exactly 17 characters long.");
 
             this.Property(c => c.Model)
                 .NotNull()
@@ -26,6 +27,9 @@ namespace NValidation.TestData.Validators
 
             this.Property(c => c.Mileage)
                 .GreaterThanOrEqualTo(0);
+
+            this.Property(c => c.PurchasePrice)
+                .GreaterThan(0m);
 
             this.Property(c => c.FirstRegistration)
                 .WithDisplayName("Registration date")
@@ -42,9 +46,8 @@ namespace NValidation.TestData.Validators
             // answer for, which is why every rule here passes a missing collection.
             this.Property(c => c.ServiceHistory)
                 .MaximumCount(MaximumServiceRecords)
-                .Must(
-                    (c, history) => history == null || history.All(record => record.Mileage <= c.Mileage),
-                    "A service cannot be recorded at a higher mileage than the car has reached.")
+                .Must((c, history) => history == null || history.All(record => record.Mileage <= c.Mileage))
+                .WithMessage("A service cannot be recorded at a higher mileage than the car has reached.")
                 .ForEach(serviceRecordValidator);
         }
     }

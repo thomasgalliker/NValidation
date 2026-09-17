@@ -53,6 +53,19 @@ namespace NValidation
         }
 
         /// <summary>
+        /// The same, for a composed validator whose every rule judges rather than awaits, so this chain
+        /// stays synchronous.
+        /// </summary>
+        internal PropertyRuleBuilder<T, TProperty> AddComposed(Action<RuleContext<T, TProperty>> check)
+        {
+            ArgumentNullException.ThrowIfNull(check);
+
+            this.RequireRule().AddComposed(check);
+
+            return this;
+        }
+
+        /// <summary>
         /// Decides for this one property whether its chain reports every rule it breaks or stops at the
         /// first: <c>this.Property(x => x.Password).MinimumLength(12).Matches("[0-9]").WithValidationBehavior(ValidationBehavior.All);</c>
         /// </summary>
@@ -258,12 +271,26 @@ namespace NValidation
                     "ForEach cannot be declared for a string. Rules about the text itself belong on the property.");
             }
 
-            this.RequireRule().AddComposed(async (context, cancellationToken) =>
+            var rule = this.RequireRule();
+
+            if (elements.IsSynchronous)
+            {
+                rule.AddComposed(context =>
+                {
+                    if (context.Value is IEnumerable<TElement> sequence)
+                    {
+                        elements.ValidateElements(sequence, context.PropertyName, context.Frame);
+                    }
+                });
+
+                return;
+            }
+
+            rule.AddComposed(async (context, _) =>
             {
                 if (context.Value is IEnumerable<TElement> sequence)
                 {
-                    await elements.ValidateElementsAsync(
-                        sequence, context.PropertyName, context.AddComposedError, context.Messages, context.RequestedBehaviors, cancellationToken);
+                    await elements.ValidateElementsAsync(sequence, context.PropertyName, context.Frame);
                 }
             });
         }

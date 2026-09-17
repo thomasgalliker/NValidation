@@ -229,36 +229,6 @@ namespace NValidation.Tests
         }
 
         /// <summary>
-        /// The shape the registration actually produces for a singleton lifetime: one instance, resolved
-        /// once, shared by every request.
-        /// </summary>
-        [Fact]
-        public async Task ValidateAsync_OnASingletonResolvedFromTheContainer_IsSafeToShare()
-        {
-            // Arrange
-            var services = new ServiceCollection();
-            services.AddNValidation(o =>
-            {
-                o.ValidatorLifetime = ServiceLifetime.Singleton;
-                o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly);
-            });
-
-            var serviceProvider = services.BuildServiceProvider();
-            var validator = serviceProvider.GetRequiredService<IValidator<Car>>();
-
-            // Act
-            var failures = await RunConcurrently(
-                validator,
-                worker => (new Car(), Expected: "Vin"),
-                (result, expected) => result.Errors.Any(error => error.PropertyName == expected)
-                    ? null
-                    : "the VIN was not reported");
-
-            // Assert
-            failures.Should().BeEmpty();
-        }
-
-        /// <summary>
         /// The compiled-accessor caches are keyed by property name inside a holder per closed generic,
         /// so this races a key that no other test can have warmed — which is why the payload type is
         /// declared for this test alone.

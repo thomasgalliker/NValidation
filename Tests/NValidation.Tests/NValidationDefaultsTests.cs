@@ -1,8 +1,7 @@
 namespace NValidation.Tests
 {
     /// <summary>
-    /// Covers <see cref="NValidationOptions.Default"/>: what it reaches, what outranks it, and the
-    /// freeze that stops it changing under a run which is already reading it.
+    /// Covers <see cref="NValidationOptions.Default"/>: what it reaches and what outranks it.
     /// </summary>
     /// <remarks>
     /// The two tests worth reading first are the ones about a nested validator and an element chain.
@@ -13,23 +12,24 @@ namespace NValidation.Tests
     [Collection(Collections.ValidationDefaults)]
     public class NValidationDefaultsTests : IDisposable
     {
-        // In the constructor as well as Dispose: an earlier test in another collection has already
-        // validated something, which froze the defaults.
+        private readonly NValidationOptions original = NValidationOptions.Default;
+
+        // A fresh instance per test, and the original put back afterwards.
         public NValidationDefaultsTests()
         {
-            NValidationOptions.Default.Reset();
+            NValidationOptions.Default = new NValidationOptions();
         }
 
         public void Dispose()
         {
-            NValidationOptions.Default.Reset();
+            NValidationOptions.Default = this.original;
         }
 
         [Fact]
         public async Task MessageProvider_ReachesAValidatorConstructedWithNew()
         {
             // Arrange
-            NValidationOptions.Default.MessageProvider = new StubMessageProvider();
+            NValidationOptions.Default = new() { MessageProvider = new StubMessageProvider() };
 
             var validator = new TestValidator<Manufacturer>();
             validator.Property(m => m.Name).NotEmpty();
@@ -48,7 +48,7 @@ namespace NValidation.Tests
         public async Task MessageProvider_IsOutrankedByTheValidatorsOwn()
         {
             // Arrange
-            NValidationOptions.Default.MessageProvider = new StubMessageProvider();
+            NValidationOptions.Default = new() { MessageProvider = new StubMessageProvider() };
 
             var validator = new TestValidator<Manufacturer>(ErrorCodeProvider.Instance);
             validator.Property(m => m.Name).NotEmpty();
@@ -71,7 +71,7 @@ namespace NValidation.Tests
             var validator = new TestValidator<Manufacturer>();
             validator.Property(m => m.Name).NotEmpty();
 
-            NValidationOptions.Default.MessageProvider = new StubMessageProvider();
+            NValidationOptions.Default = new() { MessageProvider = new StubMessageProvider() };
 
             // Act
             var result = await validator.ValidateAsync(new Manufacturer());
@@ -88,7 +88,7 @@ namespace NValidation.Tests
         public async Task ValidationBehaviors_ReachANestedValidator()
         {
             // Arrange
-            NValidationOptions.Default.ValidationBehaviors.Property = ValidationBehavior.All;
+            NValidationOptions.Default = new() { ValidationBehaviors = new() { Property = ValidationBehavior.All } };
 
             var validator = new ComposingValidator(new TwoRuleValidator());
 
@@ -109,13 +109,13 @@ namespace NValidation.Tests
         public async Task ValidationBehaviors_ReachAnElementChain()
         {
             // Arrange
-            NValidationOptions.Default.ValidationBehaviors.Property = ValidationBehavior.All;
+            NValidationOptions.Default = new() { ValidationBehaviors = new() { Property = ValidationBehavior.All } };
 
             var validator = new TestValidator<Car>();
             validator.Property(c => c.ServiceHistory)
                 .ForEach(record => record.Property(r => r.Workshop)
-                    .Must(workshop => workshop == "Aurora", "Workshop must be Aurora.")
-                    .Must(workshop => workshop == "Northgate", "Workshop must be Northgate."));
+                    .Must(workshop => workshop == "Aurora").WithMessage("Workshop must be Aurora.")
+                    .Must(workshop => workshop == "Northgate").WithMessage("Workshop must be Northgate."));
 
             var car = Cars.Car();
             car.ServiceHistory = [new ServiceRecord { Workshop = "Elsewhere", Mileage = 10, Cost = 10m }];
@@ -136,10 +136,10 @@ namespace NValidation.Tests
         public async Task ValidationBehaviors_AreOutrankedByTheValidatorsOwn()
         {
             // Arrange
-            NValidationOptions.Default.ValidationBehaviors.Property = ValidationBehavior.All;
+            NValidationOptions.Default = new() { ValidationBehaviors = new() { Property = ValidationBehavior.All } };
 
             var validator = new TwoRuleValidator();
-            validator.ValidationBehaviors.Property = ValidationBehavior.StopAtFirstError;
+            validator.ValidationBehaviors = new() { Property = ValidationBehavior.StopAtFirstError };
 
             // Act
             var result = await validator.ValidateAsync(new Manufacturer());
@@ -155,7 +155,7 @@ namespace NValidation.Tests
         public async Task ValidationBehaviors_NamingOneAxis_LeavesTheOtherInheriting()
         {
             // Arrange
-            NValidationOptions.Default.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+            NValidationOptions.Default = new() { ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError } };
 
             var validator = new TwoRuleValidator();
 
@@ -166,127 +166,108 @@ namespace NValidation.Tests
             result.ShouldReport("Name", "Name must be Aurora.");
         }
 
-        [Fact]
-        public async Task IsReadOnly_IsFalseUntilSomethingValidates()
-        {
-            // Arrange
-            var validator = new TestValidator<Manufacturer>();
-            validator.Property(m => m.Name).NotEmpty();
-
-            // Act
-            var before = NValidationOptions.Default.IsReadOnly;
-            await validator.ValidateAsync(new Manufacturer());
-
-            // Assert
-            before.Should().BeFalse();
-            NValidationOptions.Default.IsReadOnly.Should().BeTrue();
-        }
-
-        [Fact]
-        public async Task MessageProvider_SetAfterSomethingValidated_Throws()
-        {
-            // Arrange
-            var validator = new TestValidator<Manufacturer>();
-            validator.Property(m => m.Name).NotEmpty();
-            await validator.ValidateAsync(new Manufacturer());
-
-            // Act
-            var act = () => NValidationOptions.Default.MessageProvider = new StubMessageProvider();
-
-            // Assert
-            act.Should().Throw<InvalidOperationException>().WithMessage("*already been used*Reset()*");
-        }
-
-        [Fact]
-        public async Task ValidationBehaviors_SetAfterSomethingValidated_Throw()
-        {
-            // Arrange
-            var validator = new TestValidator<Manufacturer>();
-            validator.Property(m => m.Name).NotEmpty();
-            await validator.ValidateAsync(new Manufacturer());
-
-            // Act
-            var setClass = () => NValidationOptions.Default.ValidationBehaviors.Class = ValidationBehavior.All;
-            var setProperty = () => NValidationOptions.Default.ValidationBehaviors.Property = ValidationBehavior.All;
-
-            // Assert
-            setClass.Should().Throw<InvalidOperationException>().WithMessage("*already been used*Reset()*");
-            setProperty.Should().Throw<InvalidOperationException>().WithMessage("*already been used*Reset()*");
-        }
-
         /// <summary>
-        /// For a host which would rather a misplaced configuration call failed at startup than whenever
-        /// validation first happens to run.
+        /// Assigning replaces what later runs fall back to, at any time, because it changes a reference
+        /// rather than an object.
         /// </summary>
         [Fact]
-        public void MakeReadOnly_FreezesWithoutWaitingForAValidation()
-        {
-            // Act
-            NValidationOptions.Default.MakeReadOnly();
-
-            // Assert
-            NValidationOptions.Default.IsReadOnly.Should().BeTrue();
-
-            var act = () => NValidationOptions.Default.MessageProvider = new StubMessageProvider();
-            act.Should().Throw<InvalidOperationException>();
-        }
-
-        [Fact]
-        public async Task Reset_PutsTheBuiltInDefaultsBackAndAllowsChangesAgain()
+        public async Task Default_AssignedAfterARun_ReplacesWhatLaterRunsFallBackTo()
         {
             // Arrange
-            NValidationOptions.Default.MessageProvider = new StubMessageProvider();
-            NValidationOptions.Default.ValidationBehaviors.Property = ValidationBehavior.All;
-            NValidationOptions.Default.MakeReadOnly();
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).NotEmpty();
+
+            await validator.ValidateAsync(new Manufacturer());
 
             // Act
-            NValidationOptions.Default.Reset();
+            NValidationOptions.Default = new NValidationOptions { MessageProvider = new StubMessageProvider() };
 
-            // Captured before validating, which freezes them again.
-            var isReadOnly = NValidationOptions.Default.IsReadOnly;
-            var messageProvider = NValidationOptions.Default.MessageProvider;
-            var propertyBehavior = NValidationOptions.Default.ValidationBehaviors.Property;
-
-            var validator = new TwoRuleValidator();
             var result = await validator.ValidateAsync(new Manufacturer());
 
             // Assert
-            isReadOnly.Should().BeFalse();
-            messageProvider.Should().BeOfType<DefaultValidationMessageProvider>();
-            propertyBehavior.Should().BeNull();
-            result.ShouldReport("Name", "Name must be Aurora.");
+            result.ShouldReport("Name", "message from the default provider");
+        }
+
+        /// <summary>
+        /// Options are immutable, so a variant is derived rather than the original changed: what an
+        /// earlier run read stays exactly as that run saw it.
+        /// </summary>
+        [Fact]
+        public void With_DerivesOptionsAndLeavesTheOriginalAlone()
+        {
+            // Arrange
+            var original = new NValidationOptions
+            {
+                MessageProvider = new StubMessageProvider(),
+                ValidationBehaviors = new ValidationBehaviors { Class = ValidationBehavior.StopAtFirstError },
+            };
+
+            // Act
+            var derived = original with
+            {
+                ValidationBehaviors = original.ValidationBehaviors with
+                {
+                    Property = ValidationBehavior.All
+                }
+            };
+
+            // Assert
+            derived.MessageProvider.Should().BeSameAs(original.MessageProvider);
+            derived.ValidationBehaviors.Class.Should().Be(ValidationBehavior.StopAtFirstError);
+            derived.ValidationBehaviors.Property.Should().Be(ValidationBehavior.All);
+            original.ValidationBehaviors.Property.Should().BeNull();
+        }
+
+        /// <summary>
+        /// Options naming nothing leave every setting to the level below, and failing every level the
+        /// built-in English answers.
+        /// </summary>
+        [Fact]
+        public async Task Default_NamingNothing_FallsBackToTheBuiltInEnglish()
+        {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).NotEmpty();
+
+            // Act
+            var result = await validator.ValidateAsync(new Manufacturer());
+
+            // Assert
+            result.ShouldReport("Name", "Name is required.");
         }
 
         [Fact]
-        public void MessageProvider_CannotBeSetToNull()
+        public void Default_CannotBeSetToNull()
         {
             // Act
-            var act = () => NValidationOptions.Default.MessageProvider = null!;
+            var act = () => NValidationOptions.Default = null!;
 
             // Assert
             act.Should().Throw<ArgumentNullException>();
         }
 
         /// <summary>
-        /// The copy does not go on sharing with what it was copied from, and is not frozen by it.
+        /// Options which named only a behavior leave the messages to the level below. Naming one setting
+        /// never quietly restates another — the same rule the two axes follow.
         /// </summary>
         [Fact]
-        public void CopyConstructor_TakesTheValuesWithoutTheFreeze()
+        public async Task ValidateAsync_WithOptionsNamingOnlyBehaviors_KeepsTheDefaultsMessageProvider()
         {
             // Arrange
-            NValidationOptions.Default.MessageProvider = new StubMessageProvider();
-            NValidationOptions.Default.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
-            NValidationOptions.Default.MakeReadOnly();
+            NValidationOptions.Default = new() { MessageProvider = new StubMessageProvider() };
+
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).NotEmpty().MaximumLength(3);
+
+            var options = new NValidationOptions { ValidationBehaviors = new() { Property = ValidationBehavior.All } };
 
             // Act
-            var copy = new NValidationOptions(NValidationOptions.Default);
-            copy.ValidationBehaviors.Property = ValidationBehavior.All;
+            var result = await validator.ValidateAsync(new Manufacturer { Name = "    " }, options);
 
             // Assert
-            copy.IsReadOnly.Should().BeFalse();
-            copy.MessageProvider.Should().BeOfType<StubMessageProvider>();
-            copy.ValidationBehaviors.Class.Should().Be(ValidationBehavior.StopAtFirstError);
-            NValidationOptions.Default.ValidationBehaviors.Property.Should().BeNull();
+            result.ShouldReport([
+                new("Name", "message from the default provider"),
+                new("Name", "message from the default provider")]);
         }
 
         private sealed class StubMessageProvider : IValidationMessageProvider
@@ -305,8 +286,8 @@ namespace NValidation.Tests
             public TwoRuleValidator()
             {
                 this.Property(m => m.Name)
-                    .Must(name => name == "Aurora", "Name must be Aurora.")
-                    .Must(name => name == "Northgate", "Name must be spelled out.");
+                    .Must(name => name == "Aurora").WithMessage("Name must be Aurora.")
+                    .Must(name => name == "Northgate").WithMessage("Name must be spelled out.");
             }
         }
 

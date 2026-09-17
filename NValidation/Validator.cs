@@ -9,67 +9,89 @@ namespace NValidation
     /// Implements <see cref="IValidator{T}"/>, so it is registered and called exactly like a validator
     /// written by hand — deriving from this class is a convenience, never a requirement.
     /// </summary>
-    public abstract class Validator<T> : IValidator<T>, IMessageProviderTarget, IValidationBehaviorTarget, IValidationRunAware<T>
+    public abstract class Validator<T> : IValidator<T>, IValidationRegistrationTarget, IValidationRunAware<T>
     {
         private readonly List<IPropertyRule<T>> rules = [];
 
-        /// <summary>
-        /// What this validator was handed, or <c>null</c> for one that was handed nothing and therefore
-        /// answers through <see cref="NValidationOptions.Default"/>. Held apart from the defaults rather
-        /// than seeded from them, so a default configured after this validator was constructed still
-        /// reaches it.
-        /// </summary>
-        private IValidationMessageProvider? messages;
+        // The rules as an array, taken on the first validation and never re-read: the loop walks an
+        // array rather than a list enumerator, and a rule declared afterwards is refused.
+        private IPropertyRule<T>[]? frozenRules;
 
-        private readonly ValidationBehaviors validationBehaviors = new();
+        // What this validator declared for itself. A setting left null falls through to what the pass
+        // inherits — the options of the call, or the composer's settings — then to what the registration
+        // configured, then to NValidationOptions.Default.
+        private NValidationOptions options = NValidationOptions.None;
 
-        /// <summary>
-        /// What the registration configured, kept apart from what this validator declared for itself so
-        /// the validator's word wins whichever was written first.
-        /// </summary>
-        private ValidationBehaviors? registeredValidationBehaviors;
+        // What the registration configured, for a validator the container built; null for one it did not.
+        private NValidationOptions? registeredOptions;
 
-        private PropertyDisplayNames? displayNames;
+        private bool? isSynchronous;
+
+        private IPropertyRule<T>[] Rules => this.frozenRules ??= this.FreezeRules();
 
         /// <summary>
-        /// Where the rules take their message texts from. Assigned by the DI registration
-        /// (<c>AddValidator</c>) from the registered <see cref="IValidationMessageProvider"/>, so a
-        /// concrete validator's constructor stays free of plumbing and only declares rules. Falls back
-        /// to <see cref="NValidationOptions.Default"/> when the validator is constructed directly, and
-        /// to the built-in English when that was never configured either.
+        /// Where this validator's rules take their message texts from, or <c>null</c> — the default — to
+        /// inherit: from the options passed to the call or the validator this one is composed into, then
+        /// what <c>AddNValidation</c> configured, then <see cref="NValidationOptions.Default"/>, and
+        /// failing all of those the built-in English. What is resolved here is in turn inherited by the
+        /// validators this one composes, unless they declared otherwise for themselves.
         /// </summary>
         /// <remarks>
-        /// Read while validating rather than while the rules are declared, so it can still be assigned
-        /// after the constructor has run — and so a default configured after this validator was
-        /// constructed still reaches it. Reading this property therefore resolves the answer rather
-        /// than returning a field: it is not a stable reference across a change to
-        /// <see cref="NValidationOptions.Default"/>.
+        /// Read while validating rather than while the rules are declared, so it can be assigned after
+        /// the constructor has run.
         /// </remarks>
-        public IValidationMessageProvider Messages
+        public IValidationMessageProvider? ValidationMessageProvider
         {
-            get => this.messages ?? NValidationOptions.DefaultInUse().MessageProvider;
-            set => this.messages = value ?? throw new ArgumentNullException(nameof(value));
+            get => this.options.MessageProvider;
+            set => this.options = this.options with { MessageProvider = value };
         }
 
         /// <summary>
-        /// How much this validator reports: across its properties, and within one property's chain.
-        /// Mutated rather than assigned — <c>this.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;</c>
-        /// — so naming one axis leaves the other inheriting.
+        /// How much this validator reports: across its properties, and within one property's chain. An
+        /// axis left <c>null</c> inherits on the same ladder as <see cref="ValidationMessageProvider"/>:
+        /// <code>this.ValidationBehaviors = new() { Property = ValidationBehavior.All };</code>
         /// </summary>
-        /// <remarks>
-        /// An axis left unset takes what the DI registration configured through
-        /// <c>NValidationBuilder.ValidationBehaviors</c>, failing that
-        /// <see cref="NValidationOptions.Default"/>, and failing that the built-in defaults:
-        /// every property, one message each. Like <see cref="Messages"/>, it is read while validating
-        /// rather than while the rules are declared, so where in the constructor it is written makes no
-        /// difference.
-        /// </remarks>
-        public ValidationBehaviors ValidationBehaviors => this.validationBehaviors;
+        /// <inheritdoc cref="ValidationMessageProvider" path="/remarks"/>
+        public ValidationBehaviors ValidationBehaviors
+        {
+            get => this.options.ValidationBehaviors;
+            set => this.options = this.options with { ValidationBehaviors = value };
+        }
 
         /// <inheritdoc/>
-        ValidationBehaviors IValidationBehaviorTarget.RegisteredValidationBehaviors
+        NValidationOptions IValidationRegistrationTarget.Options
         {
-            set => this.registeredValidationBehaviors = value ?? throw new ArgumentNullException(nameof(value));
+            set => this.registeredOptions = value ?? throw new ArgumentNullException(nameof(value));
+        }
+
+        /// <summary>
+        /// Whether every chain of this validator judges rather than awaits, so a validation can run
+        /// without an async state machine anywhere in it. Settled by the rules on first use.
+        /// </summary>
+        private bool IsSynchronous
+        {
+            get
+            {
+                if (this.isSynchronous is { } settled)
+                {
+                    return settled;
+                }
+
+                var synchronous = true;
+
+                foreach (var rule in this.Rules)
+                {
+                    if (!rule.IsSynchronous)
+                    {
+                        synchronous = false;
+                        break;
+                    }
+                }
+
+                this.isSynchronous = synchronous;
+
+                return synchronous;
+            }
         }
 
         /// <summary>
@@ -78,16 +100,17 @@ namespace NValidation
         /// as <c>Address.Street</c>.
         /// </summary>
         /// <remarks>
-        /// The chain is always built for the nullable form of the property's type. The builder cannot be
-        /// variant (it is a struct, and the property type appears in input positions), so a rule declared
-        /// for <c>string</c> would not accept a chain for a <c>string?</c> property and every optional
-        /// property would warn at its call site. Normalizing here means a rule is written once and a rule
-        /// body has to face the fact that the value may be null — which it may, since validation runs on
-        /// whatever a caller supplied.
+        /// The chain is always built for the nullable form of the property's type, so a rule is written
+        /// once and has to face the fact that the value may be null. A chain declared through an object
+        /// the payload may omit — <c>x => x.Address.Street</c> — is skipped rather than dereferenced when
+        /// that object is absent; requiring it is a rule of its own.
         /// </remarks>
+        /// <exception cref="ArgumentException">The expression does not reach a property through the lambda's own parameter.</exception>
+        /// <exception cref="InvalidOperationException">This validator has already validated something.</exception>
         protected PropertyRuleBuilder<T, TProperty?> Property<TProperty>(Expression<Func<T, TProperty>> expression)
         {
             ArgumentNullException.ThrowIfNull(expression);
+            this.ThrowIfFrozen();
 
             var propertyName = PropertyPath.From(expression);
             var rule = new PropertyRule<T, TProperty?>(propertyName, PropertyAccessor.For(propertyName, expression));
@@ -107,27 +130,23 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, naming the property and reading it directly instead of through an expression:
-        /// <code>this.Property("Vin", static c => c.Vin).NotEmpty();</code>
+        /// The same, naming the property and reading it with a plain delegate, for a value that is not a
+        /// member path: a computed value, a dictionary entry, an indexer.
+        /// <code>this.Property("Lines.Total", static o => o.Lines.Sum(l => l.Amount)).GreaterThan(0m);</code>
         /// </summary>
         /// <remarks>
-        /// An escape hatch for a validator on a hot path, not the spelling most code should use. The
-        /// expression form is read once to produce three things — the property name, a compiled accessor
-        /// and a guard against dereferencing something absent — and building it costs an expression tree
-        /// per construction plus the reflection behind <c>Expression.Property</c>, which together are the
-        /// larger part of what constructing a validator costs.
-        /// <para>
-        /// What it gives up: the name is written by hand, so renaming the property will not change what
-        /// the failure is reported under, and nothing checks that the two agree. Use it for a property
-        /// of the validated object itself; a path through another object needs the overload taking a
-        /// reachability predicate, or the expression form, which works it out.
-        /// </para>
+        /// The name is written by hand, so renaming the property will not change what the failure is
+        /// reported under, and nothing checks that the two agree. The accessor is called as written: a
+        /// path through an object the payload may omit needs the overload taking a reachability
+        /// predicate, or it dereferences the missing object.
         /// </remarks>
         /// <exception cref="ArgumentException"><paramref name="propertyName"/> is empty or whitespace.</exception>
+        /// <exception cref="InvalidOperationException">This validator has already validated something.</exception>
         protected PropertyRuleBuilder<T, TProperty> Property<TProperty>(string propertyName, Func<T, TProperty> accessor)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(propertyName);
             ArgumentNullException.ThrowIfNull(accessor);
+            this.ThrowIfFrozen();
 
             var rule = new PropertyRule<T, TProperty>(propertyName, accessor);
 
@@ -137,15 +156,11 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The same, for a property reached through something the payload may have omitted:
+        /// The same, for a value reached through something the payload may have omitted:
         /// <code>this.Property("Model.Name", static c => c.Model!.Name, static c => c.Model != null).NotEmpty();</code>
+        /// A chain whose <paramref name="isReachable"/> says no is skipped, exactly as a chain declared
+        /// through an absent object is.
         /// </summary>
-        /// <remarks>
-        /// <paramref name="isReachable"/> is what the expression form works out for itself. Without it
-        /// the accessor would dereference whatever is missing and turn a bad request into a server
-        /// error, which is the one thing this library is careful never to do. A chain whose predicate
-        /// says no is skipped, exactly as a chain declared through an absent object is.
-        /// </remarks>
         /// <inheritdoc cref="Property{TProperty}(string, Func{T, TProperty})" path="/exception"/>
         protected PropertyRuleBuilder<T, TProperty> Property<TProperty>(
             string propertyName,
@@ -165,6 +180,8 @@ namespace NValidation
         /// </summary>
         internal PropertyRuleBuilder<T, T?> RuleForSelf()
         {
+            this.ThrowIfFrozen();
+
             var rule = new PropertyRule<T, T?>(PropertyPath.Self, instance => instance);
 
             this.rules.Add(rule);
@@ -175,7 +192,7 @@ namespace NValidation
         /// <inheritdoc/>
         public ValueTask<ValidationResult> ValidateAsync(T instance, CancellationToken cancellationToken = default)
         {
-            return this.ValidateAsync(instance, this.Messages, requested: null, cancellationToken);
+            return this.ValidateAsync(instance, new ValidationRun(default, Scope: null, cancellationToken));
         }
 
         /// <inheritdoc/>
@@ -184,136 +201,270 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(options);
 
-            // Using them is what freezes them, exactly as reading NValidationOptions.Default does.
-            options.MakeReadOnly();
-
-            return this.ValidateAsync(
-                instance,
-                // The field rather than the property: a validator which was handed a provider keeps it,
-                // and one which was not must not fall through to NValidationOptions.Default here.
-                this.messages ?? options.MessageProvider,
-                // The options' own object, not a copy: using them froze it, so nothing can change
-                // it while this run reads it.
-                options.ValidationBehaviors,
-                cancellationToken);
+            return this.ValidateAsync(instance, new ValidationRun(InheritedSettings.From(options), Scope: null, cancellationToken));
         }
 
         /// <summary>
-        /// Validates against a message provider supplied per call rather than the one this validator
-        /// carries, so a caller which resolves messages differently — an element of a collection, whose
-        /// messages know its index — does not have to mutate shared state to do it.
+        /// Validates as part of <paramref name="run"/>, so a validator composed into another inherits its
+        /// composer's settings and knows the collection entry it is inside.
         /// </summary>
-        internal async ValueTask<ValidationResult> ValidateAsync(
-            T instance, IValidationMessageProvider messages, ValidationBehaviors? requested, CancellationToken cancellationToken)
+        internal ValueTask<ValidationResult> ValidateAsync(T instance, ValidationRun run)
         {
-            var errors = new List<ValidationError>();
+            var frame = this.CreateFrame(instance, errors: null, run, out var settings);
 
-            await this.ValidateIntoAsync(instance, errors, messages, requested, cancellationToken);
+            if (this.IsSynchronous)
+            {
+                this.ValidateFrame(frame, settings);
 
-            return ValidationResult.FromValidationErrors(errors);
+                return new ValueTask<ValidationResult>(Result(frame));
+            }
+
+            return this.ValidateAwaitingAsync(frame, settings);
+        }
+
+        /// <inheritdoc cref="ValidateAsync(T, ValidationRun)"/>
+        private async ValueTask<ValidationResult> ValidateAwaitingAsync(ValidationFrame<T> frame, PassSettings settings)
+        {
+            await this.ValidateFrameAsync(frame, settings);
+
+            return Result(frame);
         }
 
         /// <summary>
-        /// Reports into a list the caller owns, instead of into one of this validator's own wrapped in a
-        /// <see cref="ValidationResult"/>.
+        /// The synchronous form of <see cref="ValidateAsync(T, ValidationRun)"/>, for a composer which
+        /// knows that every rule here judges rather than awaits.
         /// </summary>
-        /// <remarks>
-        /// For a caller running this validator many times over — once per entry of a collection — where
-        /// a list and a result per entry would be the bulk of what the entry costs.
-        /// </remarks>
-        internal async ValueTask ValidateIntoAsync(
-            T instance,
-            List<ValidationError> errors,
-            IValidationMessageProvider messages,
-            ValidationBehaviors? requested,
-            CancellationToken cancellationToken)
+        internal ValidationResult Validate(T instance, ValidationRun run)
+        {
+            this.RequireSynchronous();
+
+            var frame = this.CreateFrame(instance, errors: null, run, out var settings);
+
+            this.ValidateFrame(frame, settings);
+
+            return Result(frame);
+        }
+
+        /// <summary>
+        /// Reports into a list the caller owns, for a caller running this validator once per entry of a
+        /// collection, where a list and a result per entry would be the bulk of what the entry costs.
+        /// </summary>
+        internal ValueTask ValidateIntoAsync(T instance, List<ValidationError> errors, ValidationRun run)
+        {
+            var frame = this.CreateFrame(instance, errors, run, out var settings);
+
+            if (this.IsSynchronous)
+            {
+                this.ValidateFrame(frame, settings);
+
+                return default;
+            }
+
+            return this.ValidateFrameAsync(frame, settings);
+        }
+
+        /// <inheritdoc cref="ValidateIntoAsync"/>
+        internal void ValidateInto(T instance, List<ValidationError> errors, ValidationRun run)
+        {
+            this.RequireSynchronous();
+
+            var frame = this.CreateFrame(instance, errors, run, out var settings);
+
+            this.ValidateFrame(frame, settings);
+        }
+
+        /// <summary>
+        /// What a finished pass amounts to: the failures it collected, or the shared successful result
+        /// where it collected none.
+        /// </summary>
+        private static ValidationResult Result(ValidationFrame<T> frame)
+        {
+            return frame.TryTakeErrors(out var errors)
+                ? ValidationResult.FromValidationErrorsInternal(errors)
+                : ValidationResult.Success;
+        }
+
+        /// <summary>
+        /// The state this validator's pass over one object works against, with the settings the pass
+        /// resolved substituted into its run — so what this validator composes inherits them.
+        /// </summary>
+        private ValidationFrame<T> CreateFrame(T instance, List<ValidationError>? errors, ValidationRun run, out PassSettings settings)
         {
             ArgumentNullException.ThrowIfNull(instance);
 
-            // What this run found, told apart from what the caller's list already held: the list is the
-            // caller's, and an element's inline rules have already reported into it by the time the
-            // element's own validator is handed the same list.
-            var errorCountAtStart = errors.Count;
+            settings = this.Resolve(run.Inherited);
 
-            // Read once, so both axes come from the same defaults even if something reconfigures
-            // them while this run is in flight. Reading them is also what freezes them.
-            var defaults = NValidationOptions.DefaultInUse().ValidationBehaviors;
+            var resolvedRun = run with
+            {
+                Inherited = new InheritedSettings(settings.MessageProvider, settings.ClassBehavior, settings.PropertyBehavior),
+            };
 
-            var classBehavior = this.validationBehaviors.Class
-                ?? requested?.Class
-                ?? this.registeredValidationBehaviors?.Class
-                ?? defaults.Class
+            return new ValidationFrame<T>(instance, errors, resolvedRun);
+        }
+
+        /// <summary>
+        /// The provider and the two behavior axes this pass runs with, resolved once from the most
+        /// specific level that names each: this validator, then what the pass inherits — the options of
+        /// the call, or the composer's settings — then what the registration configured, then
+        /// <see cref="NValidationOptions.Default"/>, then the built-in values. <c>Default</c> is read
+        /// once, so the three settings come from the same options even if it is reassigned meanwhile.
+        /// </summary>
+        private PassSettings Resolve(InheritedSettings inherited)
+        {
+            var defaults = NValidationOptions.Default;
+            var declared = this.options;
+            var registered = this.registeredOptions;
+
+            var messageProvider = declared.MessageProvider
+                ?? inherited.MessageProvider
+                ?? registered?.MessageProvider
+                ?? defaults.MessageProvider
+                ?? DefaultValidationMessageProvider.Instance;
+
+            var classBehavior = declared.ValidationBehaviors.Class
+                ?? inherited.Class
+                ?? registered?.ValidationBehaviors.Class
+                ?? defaults.ValidationBehaviors.Class
                 ?? ValidationBehavior.All;
 
             // A run that stops at the first error stops inside a chain too, or the setting would not do
-            // what its name says. A chain which declared something of its own still gets it, because it
-            // said so at the point it applies.
+            // what its name says. A chain which declared something of its own still gets it.
             var propertyBehavior = classBehavior == ValidationBehavior.StopAtFirstError
                 ? ValidationBehavior.StopAtFirstError
-                : this.validationBehaviors.Property
-                    ?? requested?.Property
-                    ?? this.registeredValidationBehaviors?.Property
-                    ?? defaults.Property
+                : declared.ValidationBehaviors.Property
+                    ?? inherited.Property
+                    ?? registered?.ValidationBehaviors.Property
+                    ?? defaults.ValidationBehaviors.Property
                     ?? ValidationBehavior.StopAtFirstError;
 
-            // Built once and kept: a display name is stored as a Func<string> and resolved while the
-            // message is produced, so the culture of the current run is already accounted for. The
-            // race between two first calls is benign — both compute the same map.
-            var displayNames = this.displayNames ??= PropertyDisplayNames.For(this.rules);
+            return new PassSettings(messageProvider, classBehavior, propertyBehavior);
+        }
 
-            foreach (var rule in this.rules)
+        /// <summary>
+        /// Runs every chain against a pass which has already been set up, where no chain awaits.
+        /// </summary>
+        /// <remarks>
+        /// The twin of <see cref="ValidateFrameAsync"/>, for the same reason
+        /// <see cref="PropertyRule{T, TProperty}.Validate"/> is the twin of its awaiting form: a body
+        /// shared between them would have to be an async method, which is the cost this avoids.
+        /// </remarks>
+        private void ValidateFrame(ValidationFrame<T> frame, PassSettings settings)
+        {
+            var cancellationToken = frame.Run.CancellationToken;
+
+            // What this pass found, told apart from what the caller's list already held: an element's
+            // inline rules have already reported into it by the time the element's own validator runs.
+            var errorCountAtStart = frame.ErrorCount;
+
+            var rules = this.Rules;
+
+            for (var i = 0; i < rules.Length; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (classBehavior == ValidationBehavior.StopAtFirstError && errors.Count > errorCountAtStart)
+                if (settings.ClassBehavior == ValidationBehavior.StopAtFirstError && frame.ErrorCount > errorCountAtStart)
                 {
                     return;
                 }
 
-                await rule.ValidateAsync(instance, errors, messages, displayNames, propertyBehavior, requested, cancellationToken);
+                rules[i].Validate(frame, settings.MessageProvider, settings.PropertyBehavior);
             }
         }
 
-        /// <inheritdoc/>
-        /// <remarks>
-        /// Implemented here rather than left to the default implementation on <see cref="IValidator{T}"/>.
-        /// A validator which serves a second payload — by implementing <see cref="IValidator{T}"/> for it
-        /// by hand, which <see cref="Internals.ValidatorTypeInfo"/> and the registration both support —
-        /// would otherwise inherit two of those defaults, neither more specific than the other, and the
-        /// type would not compile at all (CS8705). Declaring it on the base class settles the ambiguity
-        /// for the common case.
-        /// <para>
-        /// Such a validator is the one that has to say what it means: it re-implements this member itself
-        /// and dispatches on the instance's type, because a base class closed over one
-        /// <typeparamref name="T"/> cannot know about the other.
-        /// </para>
-        /// </remarks>
-        ValueTask<ValidationResult> IValidator.ValidateAsync(object instance, CancellationToken cancellationToken)
+        /// <inheritdoc cref="ValidateFrame"/>
+        private async ValueTask ValidateFrameAsync(ValidationFrame<T> frame, PassSettings settings)
         {
-            ArgumentNullException.ThrowIfNull(instance);
+            var cancellationToken = frame.Run.CancellationToken;
 
-            if (instance is not T typed)
+            var errorCountAtStart = frame.ErrorCount;
+
+            var rules = this.Rules;
+
+            for (var i = 0; i < rules.Length; i++)
             {
-                throw new InvalidCastException(
-                    $"{this.GetType()} validates {typeof(T)}, so it cannot validate an instance of " +
-                    $"{instance.GetType()}. A validator which serves more than one payload implements " +
-                    $"{nameof(IValidator)}.{nameof(IValidator.ValidateAsync)} itself and dispatches on the " +
-                    "instance's type.");
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (settings.ClassBehavior == ValidationBehavior.StopAtFirstError && frame.ErrorCount > errorCountAtStart)
+                {
+                    return;
+                }
+
+                await rules[i].ValidateAsync(frame, settings.MessageProvider, settings.PropertyBehavior);
+            }
+        }
+
+        /// <summary>
+        /// The rules as an array, and every chain told that it is now in use and which display names the
+        /// validator's properties carry. Done once, on the first validation; the race between two first
+        /// calls is benign, because both compute the same thing. From then on a rule declared late is
+        /// refused rather than silently ignored.
+        /// </summary>
+        private IPropertyRule<T>[] FreezeRules()
+        {
+            var frozen = this.rules.ToArray();
+            var displayNames = PropertyDisplayNames.For(frozen);
+
+            foreach (var rule in frozen)
+            {
+                rule.Freeze(displayNames);
             }
 
-            return this.ValidateAsync(typed, cancellationToken);
+            return frozen;
+        }
+
+        /// <exception cref="InvalidOperationException">This validator has already validated something.</exception>
+        private void ThrowIfFrozen()
+        {
+            if (this.frozenRules != null)
+            {
+                throw new InvalidOperationException(
+                    $"{this.GetType()} has already validated something, so its rules can no longer change. " +
+                    "Declare every rule before the first validation, typically in the constructor.");
+            }
+        }
+
+        private void RequireSynchronous()
+        {
+            if (!this.IsSynchronous)
+            {
+                throw new InvalidOperationException(
+                    $"{this.GetType()} has a rule which awaits, so it cannot be run synchronously.");
+            }
         }
 
         /// <inheritdoc/>
-        ValueTask<ValidationResult> IValidationRunAware<T>.ValidateAsync(T instance, IValidationMessageProvider messages, ValidationBehaviors? requested, CancellationToken cancellationToken)
+        bool IValidationRunAware<T>.IsSynchronous => this.IsSynchronous;
+
+        /// <inheritdoc/>
+        ValueTask<ValidationResult> IValidationRunAware<T>.ValidateAsync(T instance, ValidationRun run)
         {
-            return this.ValidateAsync(instance, messages, requested, cancellationToken);
+            return this.ValidateAsync(instance, run);
         }
 
         /// <inheritdoc/>
-        ValueTask IValidationRunAware<T>.ValidateIntoAsync(T instance, List<ValidationError> errors, IValidationMessageProvider messages, ValidationBehaviors? requested, CancellationToken cancellationToken)
+        ValueTask IValidationRunAware<T>.ValidateIntoAsync(T instance, List<ValidationError> errors, ValidationRun run)
         {
-            return this.ValidateIntoAsync(instance, errors, messages, requested, cancellationToken);
+            return this.ValidateIntoAsync(instance, errors, run);
         }
+
+        /// <inheritdoc/>
+        ValidationResult IValidationRunAware<T>.Validate(T instance, ValidationRun run)
+        {
+            return this.Validate(instance, run);
+        }
+
+        /// <inheritdoc/>
+        void IValidationRunAware<T>.ValidateInto(T instance, List<ValidationError> errors, ValidationRun run)
+        {
+            this.ValidateInto(instance, errors, run);
+        }
+
+        /// <summary>
+        /// What one pass runs with, resolved once rather than per chain.
+        /// </summary>
+        private readonly record struct PassSettings(
+            IValidationMessageProvider MessageProvider,
+            ValidationBehavior ClassBehavior,
+            ValidationBehavior PropertyBehavior);
     }
 }

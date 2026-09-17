@@ -1,4 +1,4 @@
-namespace NValidation.Tests
+namespace NValidation.DependencyInjection.Tests
 {
     /// <summary>
     /// Whole-payload scenarios for <see cref="CarValidator"/>, the validator the sample API exposes.
@@ -48,6 +48,7 @@ namespace NValidation.Tests
             var car = Cars.Car();
             car.Vin = "TOO-SHORT";
             car.Mileage = -1;
+            car.PurchasePrice = -1000m;
             car.SoldDate = car.FirstRegistration.AddDays(-1);
             car.FeatureIds = [1, 1];
 
@@ -58,6 +59,7 @@ namespace NValidation.Tests
             result.ShouldReport([
                 new("Vin", "The VIN must be exactly 17 characters long."),
                 new("Mileage", "Mileage must be greater than or equal to 0."),
+                new("PurchasePrice", "PurchasePrice must be greater than 0."),
                 new("SoldDate", "SoldDate must be greater than or equal to Registration date."),
                 new("FeatureIds", "FeatureIds must not contain duplicate entries.")]);
         }
