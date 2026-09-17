@@ -79,7 +79,8 @@ public sealed class CarValidator : Validator<Car>
     {
         this.Property(c => c.Vin)
             .NotEmpty()
-            .Must(vin => vin == null || vin.Length == 17, "The VIN must be exactly 17 characters long.");
+            .Must(vin => vin == null || vin.Length == 17)
+            .WithMessage("The VIN must be exactly 17 characters long.");
 
         this.Property(c => c.Model)
             .NotNull()
@@ -186,13 +187,15 @@ A validator built this way was handed nothing, so it falls back to
 
 ```csharp
 // Once, at startup, before anything validates.
-NValidationOptions.Default.MessageProvider = new ResourceValidationMessageProvider();
-NValidationOptions.Default.ValidationBehaviors.Property = ValidationBehavior.All;
+NValidationOptions.Default = new NValidationOptions
+{
+    MessageProvider = new ResourceValidationMessageProvider(),
+    ValidationBehaviors = new() { Property = ValidationBehavior.All },
+};
 ```
 
-That reaches every validator in the process which has not said otherwise for itself — **including the
-three nested ones above**, which no assignment on `validator` could have reached, because a validator's
-own settings are about itself and are not handed down to what it composes.
+That reaches every validator in the process which has not said otherwise for itself, the three nested
+ones above included.
 
 For one call rather than the whole process — a request whose messages are in its own language — pass the
 options instead:
@@ -201,10 +204,12 @@ options instead:
 var result = await validator.ValidateAsync(car, options);
 ```
 
-And `validator.Messages` and `validator.ValidationBehaviors` still settle it for one validator, outranking
-both. See [the override ladder](#the-override-ladder) for the whole order, and
-[what the container configures](#what-the-container-configures-and-what-it-does-not) for how this relates
-to `AddNValidation`.
+And `validator.ValidationMessageProvider` and `validator.ValidationBehaviors` settle it for one validator,
+outranking both. What a validator settles for itself is inherited by the validators it composes, so
+setting the provider on `validator` reaches the three nested ones too — as a default, which a nested
+validator that declared its own keeps. See [the override ladder](#the-override-ladder) for the whole
+order, and [what the container configures](#what-the-container-configures) for how this relates to
+`AddNValidation`.
 
 ### Validating an instance whose type is known only at run time
 
@@ -395,12 +400,10 @@ What `WithIndexer` returns is echoed into the reported property name, so identif
 the caller already sent rather than by something the response should not be carrying.
 
 The element builder carries its own [validation behavior](#validation-behavior):
-`record.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError` governs what *one entry*
-reports, and every entry is still walked. It is built where it is declared rather than by the container,
-so — like a validator you construct with `new` — what `AddNValidation` configured is never *handed* to
-it. What is *read* still reaches it: an axis left unset here takes what the options passed to the call
-asked for, then [`NValidationOptions.Default`](#validation-options), then the built-in default. Set it on
-the element builder itself where an element's rules should follow a different policy from all of those.
+`record.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError }` governs what *one
+entry* reports, and every entry is still walked. An axis left unset inherits from the validator the
+`ForEach` was declared in, exactly as a nested validator does. Set it on the element builder itself where
+an element's rules should follow a different policy.
 
 A missing collection and a `null` element are skipped — whether entries have to be there at all is a
 question for the collection's own rules.
@@ -427,7 +430,7 @@ live under one setting, and the level it applies to is where you write it rather
 // the registration — the default for every validator resolved from the container
 services.AddNValidation(o =>
 {
-    o.ValidationBehaviors.Class = ValidationBehavior.StopAtFirstError;
+    o.ValidationBehaviors = new() { Class = ValidationBehavior.StopAtFirstError };
 });
 
 // the validator
@@ -435,7 +438,7 @@ public sealed class CarValidator : Validator<Car>
 {
     public CarValidator()
     {
-        this.ValidationBehaviors.Property = ValidationBehavior.All;
+        this.ValidationBehaviors = new() { Property = ValidationBehavior.All };
 
         this.Property(c => c.Vin).NotEmpty().Length(17);
     }
@@ -453,12 +456,11 @@ this.Property(c => c.Vin)
 | `ValidationBehaviors.Class`    | `All`              | whether the run goes on to the next property |
 | `ValidationBehaviors.Property` | `StopAtFirstError` | whether a chain goes on to its next rule     |
 
-Both axes are nullable, and `null` — which is what they start as — means *inherit from the level above*.
-Naming one therefore never silently changes the other: a validator that sets `Class` leaves `Property`
-taking whatever the registration configured, and a registration that sets neither leaves both to
-[the options this call or this process was given](#validation-options), and failing those the defaults
-above. That is also why the setting is mutated rather than assigned; replacing the whole object
-would replace the axis you did not mean to touch.
+`ValidationBehaviors` is a small value whose two axes are nullable, and `null` — which is what they
+start as — means *inherit from the level below*. Naming one therefore never silently changes the other:
+`new() { Class = ... }` leaves `Property` taking whatever the level below configured, and a level that
+sets neither leaves both to [the options this call or this process was given](#validation-options), and
+failing those the defaults above.
 
 The defaults are chosen for the common case. Reporting every property at once is what lets a caller fix a
 form in one pass. Stopping within a chain is right because a chain's rules usually run coarse to fine: an
@@ -475,45 +477,17 @@ did not hold reported nothing, so there is nothing for the run to stop on and th
 judged.
 
 That usually means a single message, but do not rely on it as a cap. A run is stopped *between* rules, and
-one rule that reported several at once is not cut short: a validator merged in with `SetValidator` has
-already had its own say, and a `ForEach` reports on every entry it walked. What a composed validator found
-is its decision, not its composer's, so it is passed on whole rather than truncated.
+one rule that reported several at once is not cut short: a `ForEach` reports on every entry it walked, and
+a validator merged in with `SetValidator` which decided for itself to report everything is passed on
+whole. One which decided nothing inherits the stopping run and stops at its own first error, so the whole
+graph answers with the first thing that is wrong.
 
 The setting is resolved while validating, not while the rules are declared, so where in a constructor you
 write it makes no difference. A validator composed into another — through `SetValidator`, or per entry
-through `ForEach` — decides for itself, and is never cut short by what its composer has already reported.
+through `ForEach` — inherits what its composer resolved, unless it declared otherwise for itself.
 
 One caution for an HTTP payload: a stopping validator produces a problem details body naming a single
 field. That is often right for a machine caller, and usually wrong for a form a person is filling in.
-
-### One validator, two payloads
-
-A validator can serve more than one type by implementing `IValidator<T>` a second time. A base class
-closed over one `T` cannot know about the other, so such a validator re-implements the non-generic
-dispatch itself:
-
-```csharp
-public sealed class AddressValidator : Validator<ShippingAddress>, IValidator<BillingAddress>
-{
-    // ... the rules for the shipping address, declared as usual ...
-
-    ValueTask<ValidationResult> IValidator<BillingAddress>.ValidateAsync(
-        BillingAddress instance, CancellationToken cancellationToken)
-        => this.billingRules.ValidateAsync(instance, cancellationToken);
-
-    ValueTask<ValidationResult> IValidator.ValidateAsync(object instance, CancellationToken cancellationToken)
-        => instance switch
-        {
-            BillingAddress billing => ((IValidator<BillingAddress>)this).ValidateAsync(billing, cancellationToken),
-            ShippingAddress shipping => this.ValidateAsync(shipping, cancellationToken),
-            _ => throw new InvalidCastException(),
-        };
-}
-```
-
-Registration handles the rest: `AddValidator<AddressValidator>()` reads every closed `IValidator<T>` off
-the type and registers it under each one. Leave the dispatch out and a caller resolving it by `Type` gets
-an `InvalidCastException` naming exactly this.
 
 ### What is deliberately not here
 
@@ -526,7 +500,8 @@ always an ordinary language feature:
 | Inheritance / polymorphic validators | `Must` that dispatches, or a validator per concrete type resolved by the caller |
 | `Include`, to merge one validator's rules into another | `SetValidator` on the property, or an extension method holding the shared chain |
 | A pre-validation hook | The first rule of the chain |
-| A global configuration object that is the *only* place to look | [`NValidationOptions.Default`](#validation-options) exists, but as the bottom rung of [a documented ladder](#the-override-ladder) — per-call options, the validator itself and the registration all outrank it, so what a validator does is still readable from its own source |
+| A global configuration object that is the *only* place to look | [`NValidationOptions.Default`](#validation-options) exists, but as the bottom rung of [a short ladder](#the-override-ladder) — the validator itself, the options of a call and the registration all outrank it, so what a validator does is still readable from its own source |
+| A validator serving two payloads | A validator per payload; a shared chain is an extension method |
 
 ## Validation results
 
@@ -578,9 +553,8 @@ public ValidationError(string propertyName, string message, string? errorCode,
 ```
 
 `PropertyName` and `Message` are always there. `ErrorCode` is null only for an error built with the
-two-argument constructor, and `Arguments` is null for one whose message did not come from a template —
-which is the case for the `Must` overloads that carry their own text. Everything the shipped rules report
-carries all four.
+two-argument constructor, and `Arguments` is null for one whose message did not come from a template.
+Everything the shipped rules report carries all four.
 
 ### Where a failure is reported
 
@@ -613,11 +587,10 @@ var result = await this.carValidator.ValidateAsync(car, cancellationToken);
 result.ThrowIfInvalid();
 ```
 
-The exception carries the failures in a slightly different shape from `ToErrorsDictionary()`, because it
-is the shape an exception is usually re-thrown and re-wrapped in:
+The exception carries the failures in the same shape as `ToErrorsDictionary()`:
 
 ```csharp
-public IReadOnlyDictionary<string, IReadOnlyList<string>> Errors { get; }
+public IReadOnlyDictionary<string, string[]> Errors { get; }
 ```
 
 Its `Message` is every failure's message joined with a space, which is what ends up in a log line. Two
@@ -1161,15 +1134,8 @@ Naming a rule with `WithErrorCode` is what makes it localize like a shipped one,
 the key the host's message provider is asked for. A client can branch on `SwissPlate` too, which it could
 not do on a sentence.
 
-Where the wording is genuinely a one-off, the overloads taking a message say it inline — and that message
-is used **exactly as given**, with no placeholders substituted and no provider consulted:
-
-```csharp
-this.Property(c => c.Vin)
-    .Must(vin => vin is null || vin.Trim().Length == 17, "The VIN must be exactly 17 characters long.");
-```
-
-Where the wording should name placeholders, put it on `WithMessage`, which *is* substituted:
+Where the wording is genuinely a one-off, put it on `WithMessage`. It is a template like any shipped
+message, so it may name the placeholders the rule supplies and is used as written where it names none:
 
 ```csharp
 this.Property(c => c.Vin)
@@ -1177,8 +1143,8 @@ this.Property(c => c.Vin)
     .WithMessage("{PropertyName} must be exactly 17 characters long.");
 ```
 
-A `Func<string>` overload of both is re-evaluated at validation time rather than at declaration time,
-which is what a message read off a resource needs.
+A `Func<string>` overload is re-evaluated at validation time rather than at declaration time, which is
+what a message read off a resource needs.
 
 ### A reusable rule: an extension method
 
@@ -1306,7 +1272,7 @@ What the body of a custom rule is handed:
 | `PropertyName` | What a failure of this property is reported under |
 | `DisplayName` | What a message calls it — the `WithDisplayName` name, or the property name |
 | `HasFailed` | `true` once a rule in this chain has failed |
-| `Messages` | The message provider, for a rule building a `ValidationError` itself |
+| `ValidationMessageProvider` | The message provider, for a rule building a `ValidationError` itself |
 | `AddError(errorCode, params (string Name, object? Value)[])` | Reports a failure, resolving the message from the code and the arguments |
 | `AddError(ValidationError)` | Reports a failure the rule composed itself — used by rules reporting per element |
 | `GetDisplayName(propertyName)` | What a message should call *another* property, for a rule comparing two |
@@ -1360,68 +1326,65 @@ Settings that exist at more than one level are resolved from the most specific o
 
 | Default | Out of the box | Overridden at |
 |---|---|---|
-| Message text | the built-in English | `NValidationOptions.Default` → `AddNValidation` → the options passed to the call → the validator's `Messages` → `WithMessage` for one rule |
+| Message text | the built-in English | `NValidationOptions.Default` → `AddNValidation` → what the pass inherits: the options passed to the call, or the settings of the validator this one is composed into → the validator's `ValidationMessageProvider` → `WithMessage` for one rule |
 | Display name | the property's member path | `WithDisplayName`, per property |
 | Reported property name | the property's member path | `WithPropertyName`, per property |
-| `ValidationBehaviors.Class` | `All` | `NValidationOptions.Default` → `AddNValidation` → the options passed to the call → the validator → (`WithValidationBehavior` on a chain) |
+| `ValidationBehaviors.Class` | `All` | the same ladder, ending at the validator and then `WithValidationBehavior` on a chain |
 | `ValidationBehaviors.Property` | `StopAtFirstError` | the same ladder |
 | Validator lifetime | `ServiceLifetime.Scoped` | `o.ValidatorLifetime`, or per registration |
 | Element index | the zero-based position | `WithIndexer`, per `ForEach` |
 | Missing-validator behavior | `Ignore` | `AddValidationFilter` |
 
-The two lowest rungs are the ones a validator built with `new` can reach:
-[`NValidationOptions.Default`](#validation-options) for the whole process, and an `NValidationOptions`
-passed to `ValidateAsync` for one call. Both are *read* while validating rather than handed over at
-construction, which is why — unlike anything configured on `AddNValidation` — they also reach a nested
-validator and the element chain of a `ForEach`.
+Both settings of `NValidationOptions` travel that ladder identically, and each rung is asked only
+about what it named: options that set a behavior and no provider change the behavior and leave the
+messages to the level below.
 
-They sit **below** what a validator declared for itself, and that order is the point: a validator which
-said something about itself keeps it, and only one which said nothing inherits. Composing a validator
-therefore still never overrules what that validator decided — it only supplies a default to one that
-decided nothing.
+What a validator resolves for itself is what the validators it composes inherit: a nested validator, and
+the element chain of a `ForEach`, answer like their composer unless they declared otherwise. That is why
+one setting on the outermost validator — or on the options of a call, or on
+[`NValidationOptions.Default`](#validation-options) — reaches the whole graph, and why a validator which
+said something about itself keeps it wherever it is composed.
 
 ### Validation options
 
 `NValidationOptions` carries the two settings a validator can be given without a container: where its
-rules take their message texts from, and how much it reports. It serves two roles.
+rules take their message texts from, and how much it reports. It is immutable — a variant is derived
+with `with` — and it serves two roles.
 
-**For the process**, set `NValidationOptions.Default` once at startup:
+**For the process**, build one and assign it to `NValidationOptions.Default`, once at startup:
 
 ```csharp
-NValidationOptions.Default.MessageProvider = new ResourceValidationMessageProvider();
-NValidationOptions.Default.ValidationBehaviors.Property = ValidationBehavior.All;
+NValidationOptions.Default = new NValidationOptions
+{
+    MessageProvider = new ResourceValidationMessageProvider(),
+    ValidationBehaviors = new() { Property = ValidationBehavior.All },
+};
 ```
 
 **For one call**, pass an instance instead — a request answered in its own language, say:
 
 ```csharp
-var options = new NValidationOptions { MessageProvider = german };
+var options = NValidationOptions.Default with { MessageProvider = german };
 
 var result = await validator.ValidateAsync(car, options);
 ```
 
-Both are read while validating, so they reach a nested validator and the element chain of a `ForEach`,
-which nothing configured on `AddNValidation` can. Both sit below what a validator declared for itself —
-see [the override ladder](#the-override-ladder).
+Both reach a nested validator and the element chain of a `ForEach`, and both sit below what a validator
+declared for itself — see [the override ladder](#the-override-ladder).
 
-#### They freeze once they are used
-
-Options are mutable until something validates with them. From that moment `IsReadOnly` is `true` and
-every setter throws, so nothing a run is reading can change underneath it:
+**Options name only what they name.** Every setting starts at `null`, meaning *leave it to the level
+below*, so the two above are the same rule applied twice:
 
 ```csharp
-await validator.ValidateAsync(car);
+var options = new NValidationOptions { ValidationBehaviors = new() { Property = ValidationBehavior.All } };
 
-NValidationOptions.Default.MessageProvider = other;
-// InvalidOperationException: ... Configure them before anything validates, or call Reset() first.
+// Reports every rule of a property — and still answers in whatever language was already configured.
+var result = await validator.ValidateAsync(car, options);
 ```
 
-`MakeReadOnly()` does it deliberately, for a host which would rather a misplaced configuration call
-failed at startup than whenever validation first happens to run. `Reset()` puts every setting back and
-allows changes again — which is what makes the type usable from a test suite or a benchmark.
-
-This is `JsonSerializerOptions`' model, with two deliberate differences: `JsonSerializerOptions.Default`
-is read-only from the start and cannot be configured at all, and it has no `Reset()`.
+Assigning `NValidationOptions.Default` replaces a *reference*, so it is safe at any time: a run which
+already read the old options keeps them, and later runs read the new ones. A test does exactly this —
+install an instance, put the original back afterwards.
 
 > **For an application to set, not a library.** A package which configures `NValidationOptions.Default`
 > from a module initializer silently changes the wording every one of its consumers sees. A library which
@@ -1560,24 +1523,31 @@ The provider is built by the container and registered as a **singleton**: it is 
 it has to be thread-safe anyway because validators run concurrently, and being longer-lived than every
 validator is what lets validators of any lifetime be handed it. Resolve the language while the message is
 produced — a `Func<string>` over a resource — rather than in the constructor. A provider that genuinely
-cannot be shared goes through `o.Services` instead, at the cost of forcing every validator that uses it to
-be scoped too.
+cannot be shared is registered on the service collection directly — see the paragraph below — at the cost
+of forcing every validator that uses it to be scoped too.
 
-Registering `IValidationMessageProvider` on the service collection yourself, before `AddNValidation`, works
-as well and wins — the default English is only added if nothing else claimed the service.
+Registering `IValidationMessageProvider` on the service collection yourself works as well: the
+registration hands whatever provider the container holds to the validators it builds, and registers
+none on your behalf.
 
 A validator constructed with `new` was never handed anything, so it answers through
 [`NValidationOptions.Default`](#validation-options) — which an application sets once, in the place it
 would otherwise have configured every instance:
 
 ```csharp
-NValidationOptions.Default.MessageProvider = new ResourceValidationMessageProvider();
+NValidationOptions.Default = new NValidationOptions
+{
+    MessageProvider = new ResourceValidationMessageProvider()
+};
 ```
 
 One validator can still be settled on its own, which outranks both that and the registration:
 
 ```csharp
-var validator = new ManufacturerValidator { Messages = new ResourceValidationMessageProvider() };
+var validator = new ManufacturerValidator
+{
+    ValidationMessageProvider = new ResourceValidationMessageProvider()
+};
 ```
 
 Without a provider anywhere the built-in English messages are used, so the library is usable before any
@@ -1688,14 +1658,12 @@ with two validators in one assembly is settled: name the one you want, and the s
 of refusing to choose. Two explicit registrations naming different validators for one payload is a
 contradiction, and is refused.
 
-A validator serving more than one payload is registered under each of them, so
-`AddValidator<AddressValidator>()` resolves for both `IValidator<ShippingAddress>` and
-`IValidator<BillingAddress>`.
-
 ### Lifetimes
 
-Validators are **scoped** by default, because a validator may depend on something that is itself scoped —
-the database an async uniqueness rule asks — and a longer-lived validator would capture it.
+`ValidatorLifetime` is **scoped**, because a validator may depend on something that is itself scoped —
+the database an async uniqueness rule asks — and a longer-lived validator would capture it. It is the
+fallback rather than what most validators actually get: a validator that provably depends on nothing
+scoped is promoted to a singleton, which is [the default](#letting-the-registration-decide).
 
 A validator declares its rules in its constructor and never changes afterwards, so where nothing scoped is
 involved, registering them as singletons builds those rules once for the process instead of once per
@@ -1719,11 +1687,12 @@ validator wherever in the delegate you set it.
 #### Letting the registration decide
 
 Choosing globally means choosing for the validator that cannot follow. `PromoteSafeValidatorsToSingleton`
-decides per validator instead, at registration:
+decides per validator instead, at registration — and it is **on by default**:
 
 ```csharp
 services.AddNValidation(o =>
 {
+    // Already the default; set it to false to register every validator at ValidatorLifetime instead.
     o.PromoteSafeValidatorsToSingleton = true;
     o.AddValidatorsFromAssembly(typeof(CarValidator).Assembly);
 });
@@ -1733,17 +1702,14 @@ A validator is promoted only when every constructor parameter resolves to someth
 a singleton, or to another validator that itself qualifies. One that takes a scoped `DbContext` is left
 scoped. The decision is made once, from the service collection, and never depends on what a request does.
 
-It is worth turning on. Building a four-validator graph costs far more than using it:
+A lifetime you name yourself is an instruction and outranks the default, so
+`AddValidator<CarValidator>(ServiceLifetime.Transient)` — or a `ValidatorLifetime` you set — is registered
+exactly as written. Setting `PromoteSafeValidatorsToSingleton = true` yourself asks for promotion
+regardless, which lifts a named lifetime too.
 
-| Registration | Resolving the graph |
-|--------------|---------------------|
-| Scoped | 8,489 ns, 24,200 B |
-| Scoped, with safe promotion | 21.8 ns, 128 B |
-| Singleton | 23.6 ns, 128 B |
-
-Measured on an Apple M4 Pro, .NET 10, with `ValidatorResolutionBenchmark`. Validating the same payload
-costs about 830 ns, so on the scoped default roughly nine tenths of what this library costs a request is
-rebuilding rules that never change.
+It is on by default because building a validator graph costs far more than using it: a scoped
+registration spends more of a request on rebuilding rules that never change than on applying them. The
+figures are in the benchmark project, `Tests/NValidation.Benchmark`.
 
 ### Injecting services into a validator
 
@@ -1775,24 +1741,33 @@ public sealed class CarValidator : Validator<Car>
 A nested validator is injected the same way, as `IValidator<CarModel>` — the interface, so the composition
 is a dependency like any other and a test can substitute it.
 
-### What the container configures, and what it does not
+### What the container configures
 
 A validator the container built is **handed** two things a validator you constructed yourself is not:
 
-- its `Messages` — the registered `IValidationMessageProvider`;
+- its message provider — the `IValidationMessageProvider` the container holds, if any;
 - the [validation behavior](#validation-behavior) configured on `AddNValidation`.
 
-Handed is the operative word, and it is the whole distinction. The container can only hand something to a
-validator it constructed — so a registration reaches neither `new CarValidator(...)`, nor a validator
-another validator composed for itself, nor the element builder inside a `ForEach`, which is built where
-it is declared.
+What it hands over is a level *below* what a validator declared for itself and below the options passed
+to a call: a validator whose constructor set its own `ValidationMessageProvider` or named an axis keeps
+what it said, and a per-call wording still reaches a validator resolved from the container.
 
-[`NValidationOptions`](#validation-options) is *read* rather than handed, which is why it reaches all
-three. That is the setting to use where you want something to apply everywhere; `AddNValidation` is for
-what only the container can decide — which validators exist, and how long they live.
+The container can only hand something to a validator it constructed. What that validator resolves is
+then inherited by everything it composes — a nested validator built with `new`, the element chain of a
+`ForEach` — so the registration's settings reach the whole graph through its root. A validator nobody
+resolved from the container answers through [`NValidationOptions.Default`](#validation-options), which is
+the setting to use where you want something to apply everywhere; `AddNValidation` is for what only the
+container can decide — which validators exist, and how long they live.
 
-`o.Services` is the service collection itself, for an integration that needs to register something of its
-own alongside — which is how `AddValidationFilter` in the ASP.NET Core package is built.
+`o.Services` is the service collection itself, which is how `AddValidationFilter` in the ASP.NET Core
+package registers what it needs alongside. It is `internal`, so it is there for the integration packages
+in this repository rather than for application code.
+
+The filter calls validators without per-call options, so a request answered in its own language is not
+served by passing an `NValidationOptions` per request. Register one thread-safe provider that resolves
+the wording *while the message is produced* — from `CultureInfo.CurrentUICulture`, which
+`UseRequestLocalization` already sets per request — and every validator answers in the request's
+language without anything being passed at all. See [localization](#localization).
 
 ## ASP.NET Core integration
 
@@ -2054,7 +2029,8 @@ var result = await validator.ValidateAsync(new Invoice());
 result.ShouldReport("Reference", "Reference is required.");
 ```
 
-Declare every rule before validating: a display name is resolved on the first run and kept.
+Declare every rule before validating: the first run freezes the rules, and a rule declared afterwards
+throws rather than being silently ignored.
 
 Because every rule reports an `ErrorCode`, a test can assert *which* rule fired rather than its wording,
 and stay independent of translations. One validator, one run, no message provider to swap:

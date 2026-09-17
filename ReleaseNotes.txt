@@ -18,9 +18,12 @@
 - Added PrecisionScale for decimals, OneOf for a closed set of values, and MustAsync.
 - Added NValidationBuilder.PromoteSafeValidatorsToSingleton: registers a validator as a singleton when
   every constructor parameter resolves to a singleton or to another validator that also qualifies.
-  Resolving the sample four-validator graph drops from 8,489 ns / 24,200 B to 21.8 ns / 128 B.
-- Added Validator<T>.Property(name, accessor) and Property(name, accessor, isReachable): the same rule
-  chain without the expression tree, for a validator on a hot path.
+  Resolving the sample four-validator graph drops from 8,979 ns / 25,536 B to 23.7 ns / 128 B. It is
+  on by default. A lifetime named explicitly - on AddValidator, or through ValidatorLifetime - is an
+  instruction and is registered as written; setting PromoteSafeValidatorsToSingleton yourself asks for
+  promotion regardless, as it always did.
+- Added Validator<T>.Property(name, accessor) and Property(name, accessor, isReachable): a rule chain
+  for a value that is not a member path — a computed value, a dictionary entry, an indexer.
 - Built-in English is now correct at a count of one ("must contain at least 1 entry"). A message
   template may select between two forms with {MinCount:entry|entries}, which any provider and any
   translation can use.
@@ -33,9 +36,38 @@
 - Faster: validating is 1-7% quicker and constructing a validator allocates 14% less, because a
   synchronous rule is no longer wrapped in a lambda returning a completed ValueTask and a
   single-segment property name no longer builds a list.
-- Added Must(predicate) without a message, WithMessage(Func<T, string>) and
-  WithMessage(Func<T, TProperty, string>), ValidationAssertions.ShouldReportErrorCode, and the
-  BetweenExclusive/BetweenExclusiveFrom/BetweenExclusiveTo codes for the excluded-bound forms.
+- Much faster again, and a validation that reports nothing now allocates 64 bytes whatever the
+  validator's width - one object for the pass, and nothing per property:
+    * RuleContext is a readonly struct over a per-pass ValidationFrame instead of a class allocated
+      per property per validation. That was 112 bytes a chain, and it was the term that grew with the
+      payload. Source-compatible for rules, which use the context by value either way; binary-breaking.
+    * A validator whose every rule judges rather than awaits runs with no async state machine anywhere
+      in it. Worth about two thirds of the time on a wide payload.
+    * The rules and their checks are walked as arrays rather than through list enumerators.
+    * The error list is not built until something fails, and a failed result takes the list rather
+      than copying it.
+    * EmailAddress decides the everyday shape over the characters themselves and only asks
+      System.Net.Mail.MailAddress about the rest, so accepting a valid address no longer allocates the
+      parsed address and its parts. Verdicts are unchanged: the span pass only ever answers yes, and
+      anything it is not certain about still goes to the parser.
+  Measured on an Apple M4 Pro, .NET 10: one flat object 235 -> 53 ns and 648 -> 64 B, the sample
+  payload 845 -> 238 ns and 2,272 -> 504 B, a 34-property payload 1,247 -> 225 ns and 3,864 -> 64 B.
+- Collections allocate about 130 bytes an entry, down from about 400: one element scope is reused for
+  the whole collection rather than built per entry, and an entry is named only when it has something to
+  report - which it was not, because the caller asked for the name before knowing. A ForEach itself no
+  longer costs anything per validation beyond the entries: it used to box the rule context and allocate
+  a delegate on every run.
+- A validator composed with SetValidator or ForEach whose every rule judges rather than awaits is now run
+  synchronously as well, so a payload with nested validators and collections stays on the fast path.
+- Rules freeze on the first validation. A rule declared afterwards - a Property on the validator, or a
+  rule on a chain kept from before - used to be silently ignored; it now throws InvalidOperationException.
+- RuleContext.AddError takes params ReadOnlySpan for its arguments, and the placeholder formatter scans
+  the template by hand instead of through a regular expression, so a failure costs less to report.
+- RuleContext.CancellationToken exposes the token the validation was started with.
+- Added WithMessage(Func<T, string>) and WithMessage(Func<T, TProperty, string>),
+  ValidationAssertions.ShouldReportErrorCode, and the BetweenExclusive/BetweenExclusiveFrom/BetweenExclusiveTo
+  codes for the excluded-bound forms. The Must overloads taking a message are gone: Must(predicate) names
+  the rule, and WithMessage words it, with placeholders substituted either way.
 - Renamed SkipValidationAttribute to SkipNValidationAttribute ([SkipNValidation]). .NET 10's shared
   framework ships Microsoft.Extensions.Validation.SkipValidationAttribute, so importing both
   namespaces made the shorter name a CS0104 ambiguity rather than a warning.
@@ -49,34 +81,49 @@
 - Fixed: WithMessage did not substitute placeholders, and replaced the message of every failure a
   composed validator reported. It now substitutes, and is refused where it follows SetValidator or
   ForEach.
-- Fixed: a validator serving two payloads did not compile, though the registration supports one.
 - Fixed: an explicit AddValidator written after AddValidatorsFromAssembly was silently ignored.
   Registration is now order-independent, and two conflicting explicit registrations are refused.
 - Fixed: the problem details body carried its errors in an extension member typed object, which a
   host publishing ahead of time could not serialize. It is now HttpValidationProblemDetails.
 - Added ValidationBehavior: how much a validator reports, along two axes — across its properties
   (ValidationBehaviors.Class) and within one property's rule chain (ValidationBehaviors.Property).
-  Configurable on the registration, on a validator, and per chain with WithValidationBehavior.
-  Replaces ContinueOnFailure(), which is equivalent to WithValidationBehavior(ValidationBehavior.All).
-  The defaults are unchanged behaviour: every property, one message each.
+  ValidationBehaviors is a small immutable value assigned as a whole - new() { Class = ... } - whose unset
+  axis inherits. Configurable on the registration, on a validator, and per chain with
+  WithValidationBehavior. Replaces ContinueOnFailure(), which is equivalent to
+  WithValidationBehavior(ValidationBehavior.All). The defaults are unchanged behaviour: every property,
+  one message each.
 - Split the package in two. NValidation now has no dependencies at all; AddNValidation, the registration
   and the IConfiguration overloads moved to a new NValidation.DependencyInjection package, which is what
   NValidation.AspNetCore depends on. A host which only constructs validators no longer pulls
   Microsoft.Extensions.DependencyInjection.Abstractions in to do it. The options object AddNValidation
   configures is renamed NValidationBuilder, which is what it is: it registers things and returns itself.
 - Added NValidationOptions, which is what a validator falls back to when nothing more specific said —
-  the message provider, and how much it reports. Set NValidationOptions.Default once at startup and
-  every validator picks it up, so a host which constructs validators with new no longer configures each
-  instance. Unlike a setting on the registration, which is handed to the validators the container built,
-  these are read while validating and therefore also reach a nested validator and the element chain of a
-  ForEach, which nothing on a registration could ever reach.
-  The same type is accepted per call — validator.ValidateAsync(car, options) — for a request whose
-  messages are in its own language. It sits under whatever a validator declared for itself, so composing
-  a validator still does not overrule what that validator decided; it only supplies a default to one
-  which decided nothing.
-  Modelled on JsonSerializerOptions, including the freeze: options are mutable until something validates
-  with them, after which IsReadOnly is true and every setter throws. Reset() is the way back, which
-  JsonSerializerOptions has no equivalent of.
+  the message provider, and how much it reports. An immutable record: set NValidationOptions.Default once
+  at startup and every validator picks it up, so a host which constructs validators with new no longer
+  configures each instance; derive a variant with `with`. The same type is accepted per call —
+  validator.ValidateAsync(car, options) — for a request whose messages are in its own language.
+  Every setting starts at null, meaning "leave it to the level below", so options which name a behavior
+  and no provider change the behavior and leave the messages alone.
+- One ladder for both settings, and one direction of inheritance: what a validator declared for itself,
+  then what the pass inherits — the options passed to the call, or, for a validator composed into
+  another, what its composer resolved — then what AddNValidation configured, then
+  NValidationOptions.Default, then the built-in English and the built-in behaviors. What a validator
+  resolves is inherited by the validators it composes and by the element chain of a ForEach, so a
+  provider handed to the root of a graph reaches every rule in it, and a nested validator which declared
+  its own keeps it. A validator's own ValidationMessageProvider is now nullable: null means it inherits.
+- AddNValidation no longer registers an IValidationMessageProvider on the host's behalf. A validator the
+  container built is handed the provider the container holds, if any, and otherwise falls through to the
+  options of the call and NValidationOptions.Default while validating — so a default assigned after the
+  container was built still reaches it.
+- ValidationException.Errors has the same shape as ToErrorsDictionary(): { propertyName: string[] }.
+- The lifetime rules are unchanged: a lifetime named on a registration or through ValidatorLifetime is
+  registered as written by the default promotion, and PromoteSafeValidatorsToSingleton set to true by
+  hand lifts a named lifetime too. The resolution benchmark is what holds this to account.
+- IValidator, the non-generic contract, now has the options overload its typed counterpart has:
+  ValidateAsync(instance, options, cancellationToken). A caller which resolved a validator by Type can
+  ask for a wording of its own without reflecting over the closed generic.
+- Renamed Validator<T>.Messages and RuleContext<T, TProperty>.Messages to ValidationMessageProvider,
+  which is what they hold.
 - AddNValidation now takes an IConfiguration section, so ValidatorLifetime,
   PromoteSafeValidatorsToSingleton and ValidationBehaviors can move to appsettings.json. Which validators
   are registered and where messages come from stay in code, because a typo in a settings file would turn

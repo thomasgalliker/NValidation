@@ -51,11 +51,15 @@ The filter resolved `IValidator<Car>` and ran it, so an invalid payload never re
 {
   "status": 400,
   "errors": {
-    "Vin": ["Vin must be exactly 17 characters long."],
+    "Vin": ["The VIN must be exactly 17 characters long."],
     "Model.Name": ["Name is required."],
+    "Model.Manufacturer.Name": ["Name is required."],
     "Model.Manufacturer.CountryCode": ["CountryCode must be exactly 3 characters long."],
+    "Model.Manufacturer.ContactEmail": ["ContactEmail is not a valid email address."],
     "Model.SeatCount": ["SeatCount must be between 1 and 9."],
-    "Mileage": ["Mileage must be greater than or equal to 0."]
+    "Model.BasePrice": ["BasePrice is required."],
+    "Mileage": ["Mileage must be greater than or equal to 0."],
+    "PurchasePrice": ["PurchasePrice must be greater than 0."]
   }
 }
 ```

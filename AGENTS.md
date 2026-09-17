@@ -131,11 +131,19 @@
 - Tests which change the ambient culture carry `[Collection(Collections.CultureSpecific)]`, because the
   culture is process-wide.
 - Tests which configure `NValidationOptions.Default` carry `[Collection(Collections.ValidationDefaults)]`
-  **and** call `NValidationOptions.Default.Reset()` in both their constructor and `Dispose`. The
-  collection stops them running beside the ~100 assertions on the built-in English; the reset in the
-  *constructor* is what the collection cannot do, because the defaults freeze the first time anything
-  validates and an earlier test elsewhere has already done that. A test which passes its own
-  `NValidationOptions` to `ValidateAsync` needs neither, and is the better shape where it fits.
+  **and** install a fresh instance in their constructor, keeping the original in a field to assign back
+  in `Dispose`. The collection stops them running beside the ~100 assertions on the built-in English.
+  A test which passes its own `NValidationOptions` to `ValidateAsync` needs neither, and is the better
+  shape where it fits.
+- Rules are declared before the first validation: a validator freezes its rules when it first validates,
+  and a rule declared afterwards throws. A test which needs a rule the earlier ones did not declare
+  builds a second validator.
+
+## Design notes
+The reasoning behind the shape of the library — the settings ladder, the struct rule context over a
+per-pass frame, the synchronous fast path, why everything absent passes — lives in `docs/design.md`.
+A doc comment says what a member does and, in one sentence, why; an argument longer than that belongs in
+that document, not in the comment.
 
 ## Vocabulary
 Two words, each meaning exactly one thing, everywhere in code, tests and docs:
