@@ -125,6 +125,69 @@ namespace NValidation.Tests
             act.Should().Throw<ArgumentOutOfRangeException>();
         }
 
+        /// <summary>
+        /// The rule decides the everyday shape over the characters themselves and only asks
+        /// <see cref="System.Net.Mail.MailAddress"/> about the rest, so the two have to agree on every
+        /// value — otherwise the shortcut would have changed a verdict rather than only its cost.
+        /// </summary>
+        [Theory]
+        [InlineData("info@aurora-motors.example")]
+        [InlineData("sales+fleet@aurora-motors.co.uk")]
+        [InlineData("first.last@sub.domain.example")]
+        [InlineData("under_score@example.com")]
+        [InlineData("dash-name@a-b.example")]
+        [InlineData("UPPER@CASE.EXAMPLE")]
+        [InlineData("digits123@456example.com")]
+        [InlineData("x@y.z")]
+        [InlineData("a@localhost")] // a host without a dot is left to the parser
+        [InlineData("\"quoted local\"@aurora-motors.example")]
+        [InlineData("parts@[192.168.0.1]")]
+        [InlineData("verkauf@aurora-motörs.example")]
+        [InlineData("o'brien@example.com")]
+        [InlineData("percent%sign@example.com")]
+        [InlineData("equals=sign@example.com")]
+        [InlineData("")]
+        [InlineData("@example.com")]
+        [InlineData("local@")]
+        [InlineData(".leading@example.com")]
+        [InlineData("trailing.@example.com")]
+        [InlineData("double..dot@example.com")]
+        [InlineData("two@@ats.example")]
+        [InlineData("a@b..c")]
+        [InlineData("a@-leading.example")]
+        [InlineData("a@trailing-.example")]
+        [InlineData("a@.example")]
+        [InlineData("a@example.")]
+        [InlineData("not an email")]
+        [InlineData("missing-at.example.com")]
+        [InlineData("info@aurora-motors.example ")]
+        [InlineData(" info@aurora-motors.example")]
+        [InlineData("Aurora Motors <info@aurora-motors.example>")]
+        [InlineData("info@aurora-motors.example, sales@aurora-motors.example")]
+        public async Task EmailAddress_AgreesWithTheParserOnEveryValue(string email)
+        {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.ContactEmail).EmailAddress();
+
+            var manufacturer = Cars.Manufacturer();
+            manufacturer.ContactEmail = email;
+
+            // A blank value is the rule's own business and never reaches either path.
+            var expectedToSucceed = string.IsNullOrWhiteSpace(email) ||
+                (System.Net.Mail.MailAddress.TryCreate(email, out var parsed) &&
+                 string.Equals(parsed.Address, email, StringComparison.Ordinal));
+
+            // Act
+            var result = await validator.ValidateAsync(manufacturer);
+
+            // Assert
+            result.Succeeded.Should().Be(
+                expectedToSucceed,
+                "the rule and System.Net.Mail.MailAddress must reach the same verdict for '{0}'",
+                email);
+        }
+
         [Theory]
         [InlineData(null, true)] // absent is left to NotEmpty
         [InlineData("   ", true)]

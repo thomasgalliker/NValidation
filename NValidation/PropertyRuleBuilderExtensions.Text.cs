@@ -188,7 +188,7 @@ namespace NValidation
         {
             return builder.Add(context =>
             {
-                if (!string.IsNullOrWhiteSpace(context.Value) && !TryGetBareAddress(context.Value, out _))
+                if (!string.IsNullOrWhiteSpace(context.Value) && !IsBareAddress(context.Value))
                 {
                     context.AddError(ValidationErrorCodes.EmailAddress);
                 }
@@ -296,6 +296,127 @@ namespace NValidation
                     }
                 }
             });
+        }
+
+        /// <summary>
+        /// Whether the value is one mail address and nothing else.
+        /// </summary>
+        /// <remarks>
+        /// The everyday shape is decided over the characters themselves, because
+        /// <see cref="MailAddress"/> allocates the parsed address and its parts, and a value the rule
+        /// accepts should not pay for producing something nobody goes on to read. The span pass only
+        /// ever answers yes: everything it is not certain about — a quoted local part, an address
+        /// literal, an internationalized domain, a host without a dot — falls through to the parser,
+        /// which is what decides those. A rule which needs the parsed address itself, rather than a
+        /// verdict about it, still asks <see cref="TryGetBareAddress"/>.
+        /// </remarks>
+        private static bool IsBareAddress(string value)
+        {
+            return IsOrdinaryAddress(value) || TryGetBareAddress(value, out _);
+        }
+
+        /// <summary>
+        /// Whether the value is an address of the everyday shape — a dot-atom local part of unreserved
+        /// ASCII, one <c>@</c>, then a dotted host of letters, digits and hyphens — which
+        /// <see cref="MailAddress"/> parses to exactly itself, so accepting it here and accepting it
+        /// there are the same answer.
+        /// </summary>
+        /// <remarks>
+        /// <c>false</c> means "not decided here", never "not an address".
+        /// </remarks>
+        private static bool IsOrdinaryAddress(ReadOnlySpan<char> value)
+        {
+            var at = value.IndexOf('@');
+
+            if (at <= 0 || at == value.Length - 1)
+            {
+                return false;
+            }
+
+            return IsDotAtom(value[..at]) && IsDottedHost(value[(at + 1)..]);
+        }
+
+        /// <summary>
+        /// A local part of unreserved ASCII, with dots between its atoms rather than at either end or
+        /// doubled.
+        /// </summary>
+        private static bool IsDotAtom(ReadOnlySpan<char> local)
+        {
+            if (local[0] == '.' || local[^1] == '.')
+            {
+                return false;
+            }
+
+            var previousWasDot = false;
+
+            foreach (var character in local)
+            {
+                if (character == '.')
+                {
+                    if (previousWasDot)
+                    {
+                        return false;
+                    }
+
+                    previousWasDot = true;
+                    continue;
+                }
+
+                // Deliberately narrower than a dot-atom is allowed to be. The rest of the legal
+                // punctuation is rare enough that parsing it is cheaper than describing it here, and a
+                // character this does not know is deferred rather than refused.
+                if (!char.IsAsciiLetterOrDigit(character) && character is not ('_' or '-' or '+'))
+                {
+                    return false;
+                }
+
+                previousWasDot = false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// A host of dot-separated labels of letters, digits and hyphens, each label non-empty and
+        /// neither starting nor ending with a hyphen. A host carrying no dot is legal and left to the
+        /// parser.
+        /// </summary>
+        private static bool IsDottedHost(ReadOnlySpan<char> host)
+        {
+            var labelLength = 0;
+            var dots = 0;
+            var previous = '\0';
+
+            foreach (var character in host)
+            {
+                if (character == '.')
+                {
+                    if (labelLength == 0 || previous == '-')
+                    {
+                        return false;
+                    }
+
+                    dots++;
+                    labelLength = 0;
+                    previous = character;
+                    continue;
+                }
+
+                if (labelLength == 0 && character == '-')
+                {
+                    return false;
+                }
+
+                if (!char.IsAsciiLetterOrDigit(character) && character != '-')
+                {
+                    return false;
+                }
+
+                labelLength++;
+                previous = character;
+            }
+
+            return dots > 0 && labelLength > 0 && previous != '-';
         }
 
         /// <summary>
