@@ -68,18 +68,22 @@ namespace NValidation.Internals
                 return null;
             }
 
-            Expression? guard = null;
+            // The deepest owner seeds the guard and each shallower one goes in front of it: AndAlso, and
+            // the shallower test first, because the deeper one cannot be evaluated until the one before
+            // it is known to hold.
+            var guard = IsPresent(dereferenced[0]);
 
-            foreach (var owner in dereferenced)
+            for (var i = 1; i < dereferenced.Count; i++)
             {
-                var isPresent = Expression.NotEqual(owner, Expression.Constant(null, owner.Type));
-
-                // AndAlso, and the shallower test in front: the deeper one cannot be evaluated until
-                // the one before it is known to hold.
-                guard = guard == null ? isPresent : Expression.AndAlso(isPresent, guard);
+                guard = Expression.AndAlso(IsPresent(dereferenced[i]), guard);
             }
 
-            return Expression.Lambda<Func<T, bool>>(guard!, expression.Parameters).Compile();
+            return Expression.Lambda<Func<T, bool>>(guard, expression.Parameters).Compile();
+        }
+
+        private static BinaryExpression IsPresent(Expression owner)
+        {
+            return Expression.NotEqual(owner, Expression.Constant(null, owner.Type));
         }
 
         private static bool CanBeNull(Type type)

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace NValidation.Internals
@@ -262,11 +263,11 @@ namespace NValidation.Internals
         // asked before the property is read: it is what guards a chain whose path is only reachable when
         // the condition holds.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private bool TryReadValue(ValidationFrame<T> frame, out TProperty value)
+        private bool TryReadValue(ValidationFrame<T> frame, [MaybeNullWhen(false)] out TProperty value)
         {
             if (this.Condition != null && !this.Condition(frame.Instance))
             {
-                value = default!;
+                value = default;
 
                 return false;
             }

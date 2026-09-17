@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 
 namespace NValidation.Internals
@@ -37,11 +38,11 @@ namespace NValidation.Internals
         /// object and turn a bad request into a server error. Whether the object in between has to be there
         /// at all is a question for a rule of its own.
         /// </summary>
-        public bool TryRead(T instance, out TValue value)
+        public bool TryRead(T instance, [MaybeNullWhen(false)] out TValue value)
         {
             if (this.isReachable != null && !this.isReachable(instance))
             {
-                value = default!;
+                value = default;
                 return false;
             }
 

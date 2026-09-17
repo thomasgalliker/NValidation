@@ -8,7 +8,7 @@ namespace NValidation
     /// </summary>
     public readonly struct PropertyRuleBuilder<T, TProperty> : IPropertyRuleTarget<TProperty>
     {
-        private readonly PropertyRule<T, TProperty> rule;
+        private readonly PropertyRule<T, TProperty>? rule;
 
         internal PropertyRuleBuilder(PropertyRule<T, TProperty> rule)
         {

@@ -132,7 +132,7 @@ namespace NValidation.Testing.Internals
 
         private static (string PropertyName, string Message) Row(ExpectedError expected)
         {
-            return (expected.PropertyName, expected.Match == ExpectedMessage.Any ? AnyMessage : Quote(expected.Message!));
+            return (expected.PropertyName, expected.Message is { } message ? Quote(message) : AnyMessage);
         }
 
         private static (string PropertyName, string Message) Row(ValidationError error)

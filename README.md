@@ -502,6 +502,7 @@ always an ordinary language feature:
 | A pre-validation hook | The first rule of the chain |
 | A global configuration object that is the *only* place to look | [`NValidationOptions.Default`](#validation-options) exists, but as the bottom rung of [a short ladder](#the-override-ladder) — the validator itself, the options of a call and the registration all outrank it, so what a validator does is still readable from its own source |
 | A validator serving two payloads | A validator per payload; a shared chain is an extension method |
+| Requiring a property because the model declares it non-nullable | `NotNull()` or `NotEmpty()`, written on the chain. A nullable annotation is a claim about the code that declares it; a deserialized payload can still carry `null`, so presence is asked for where every other rule is |
 
 ## Validation results
 

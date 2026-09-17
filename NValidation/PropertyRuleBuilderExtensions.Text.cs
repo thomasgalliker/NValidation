@@ -171,13 +171,17 @@ namespace NValidation
         /// Pass a <see cref="Regex"/> instead when the pattern is reused across validators, or when it needs
         /// options this overload does not expose.
         /// </remarks>
-        public static PropertyRuleBuilder<T, string?> Matches<T>(this PropertyRuleBuilder<T, string?> builder, string pattern)
+        public static PropertyRuleBuilder<T, string?> Matches<T>(
+            this PropertyRuleBuilder<T, string?> builder, [StringSyntax(StringSyntaxAttribute.Regex)] string pattern)
         {
             return builder.Matches(pattern, RegexOptions.None);
         }
 
         /// <inheritdoc cref="Matches{T}(PropertyRuleBuilder{T, string}, string)"/>
-        public static PropertyRuleBuilder<T, string?> Matches<T>(this PropertyRuleBuilder<T, string?> builder, string pattern, RegexOptions options)
+        public static PropertyRuleBuilder<T, string?> Matches<T>(
+            this PropertyRuleBuilder<T, string?> builder,
+            [StringSyntax(StringSyntaxAttribute.Regex, nameof(options))] string pattern,
+            RegexOptions options)
         {
             ArgumentNullException.ThrowIfNull(pattern);
 

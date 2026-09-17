@@ -40,7 +40,7 @@ namespace NValidation.Internals
             }
             catch (ReflectionTypeLoadException exception)
             {
-                return exception.Types.Where(type => type != null)!;
+                return exception.Types.OfType<Type>();
             }
         }
     }

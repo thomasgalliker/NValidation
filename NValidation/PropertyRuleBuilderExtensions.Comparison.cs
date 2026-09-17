@@ -771,7 +771,7 @@ namespace NValidation
 
             return builder.Add(context =>
             {
-                if (context.Value is { } actual && other.TryRead(context.Instance, out var expected) &&
+                if (context.Value is { } actual && other.TryRead(context.Instance, out var value) && value is { } expected &&
                     !Equality.IsSatisfied(string.Equals(actual, expected, comparison), kind))
                 {
                     other.AddError(context, kind);

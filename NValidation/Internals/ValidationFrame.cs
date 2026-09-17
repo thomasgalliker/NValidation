@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace NValidation.Internals
 {
     internal abstract class ValidationFrame
@@ -34,11 +36,11 @@ namespace NValidation.Internals
         /// What this pass reported, where it owned the list and there is something in it. The list is handed
         /// over rather than copied: the pass is finished with it by the time this is asked.
         /// </summary>
-        public bool TryTakeErrors(out List<ValidationError> reported)
+        public bool TryTakeErrors([NotNullWhen(true)] out List<ValidationError>? reported)
         {
-            reported = this.errors!;
+            reported = this.errors;
 
-            return this.errors is { Count: > 0 };
+            return reported is { Count: > 0 };
         }
     }
 

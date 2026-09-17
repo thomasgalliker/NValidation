@@ -968,6 +968,45 @@ namespace NValidation.Tests
             result.Succeeded.Should().Be(expectedToSucceed);
         }
 
+        [Theory]
+        [InlineData("ZH 1", null)] // nothing on the other side to compare against
+        [InlineData(null, "BE 2")] // absent is left to NotEmpty
+        [InlineData(null, null)]
+        public async Task EqualTo_WithAnotherTextProperty_PassesWhenEitherSideIsAbsent(string? plate, string? previousPlate)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.RegistrationPlate).EqualTo(c => c.PreviousRegistrationPlate);
+
+            var car = Cars.Car();
+            car.RegistrationPlate = plate;
+            car.PreviousRegistrationPlate = previousPlate;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Errors.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task EqualTo_WithAnotherTextProperty_ReportsWhenTheyDiffer()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.RegistrationPlate).EqualTo(c => c.PreviousRegistrationPlate);
+
+            var car = Cars.Car();
+            car.RegistrationPlate = "ZH 1";
+            car.PreviousRegistrationPlate = "BE 2";
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport("RegistrationPlate", "RegistrationPlate must match PreviousRegistrationPlate.");
+        }
+
         [Fact]
         public async Task GreaterThan_ReportsGreaterThan()
         {

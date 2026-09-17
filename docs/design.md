@@ -28,6 +28,22 @@ always a rule of its own (`NotNull`, `NotEmpty`, `NotDefault`). A rule that dere
 guard would turn a bad request into a server error, which is the one thing a validation library must
 never do.
 
+## An annotation is not a rule
+
+`Property(x => x.Name)` always builds the chain for the *nullable* form of the property's type:
+`TProperty?` on an unconstrained type parameter, which adds `?` for a reference type and is a no-op for a
+value type. That is what lets one `NotEmpty()` be written for `string?` and still bind to a property
+declared `string`, and it is what keeps `RuleContext.Value` maybe-null in every rule — a payload that
+arrived over the wire can carry `null` whatever the model declared.
+
+Nothing here reads `NullableAttribute`. An annotation is a claim about the code that declares it, not
+about the payload, and metadata a trimmer may remove is not a place to keep rules.
+
+`NotNull()` therefore does not narrow the chain to the non-nullable form afterwards. It could only be
+sound under `StopAtFirstError`, and the behavior is resolved while validating rather than while the rules
+are declared — the compile-time type would depend on a run-time setting. Under `ValidationBehavior.All`
+the chain carries on and every rule after `NotNull()` is handed the same null.
+
 ## Error code is the message key
 
 A rule reports a code from `ValidationErrorCodes` and its arguments; the host resolves the wording
