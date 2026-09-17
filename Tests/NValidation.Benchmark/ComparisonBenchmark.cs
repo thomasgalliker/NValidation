@@ -48,8 +48,8 @@ namespace NValidation.Benchmark
             this.invalid.CountryCode = "TOO-LONG";
             this.invalid.ContactEmail = "not-an-address";
 
-            RequireTheSameVerdict(this.valid);
-            RequireTheSameVerdict(this.invalid);
+            this.RequireTheSameVerdict(this.valid);
+            this.RequireTheSameVerdict(this.invalid);
         }
 
         [Benchmark(Baseline = true, Description = "NValidation ValueTask (valid)")]
