@@ -171,7 +171,10 @@ namespace NValidation.AspNetCore
                 case MissingValidatorBehavior.Log:
                     if (Actions.GetOrCreateValue(context.ActionDescriptor).ReportedMissingValidators.TryAdd(parameter.Name, 0))
                     {
-                        this.LogMissingValidator(parameter.Name, parameter.ParameterType, context.ActionDescriptor.DisplayName);
+                        this.LogMissingValidator(
+                            parameter.Name,
+                            parameter.ParameterType.GetFormattedFullName(),
+                            context.ActionDescriptor.DisplayName);
                     }
 
                     break;
@@ -179,8 +182,9 @@ namespace NValidation.AspNetCore
                 case MissingValidatorBehavior.Throw:
                     throw new InvalidOperationException(
                         $"No validator is registered for parameter '{parameter.Name}' of type " +
-                        $"'{parameter.ParameterType}' on action '{context.ActionDescriptor.DisplayName}'. " +
-                        $"Register an IValidator<{parameter.ParameterType.Name}>, or mark the parameter with " +
+                        $"'{parameter.ParameterType.GetFormattedFullName()}' on action " +
+                        $"'{context.ActionDescriptor.DisplayName}'. Register an " +
+                        $"IValidator<{parameter.ParameterType.GetFormattedName()}>, or mark the parameter with " +
                         $"[SkipNValidation] to record that it is deliberately not validated.");
 
                 case MissingValidatorBehavior.Ignore:
@@ -190,7 +194,7 @@ namespace NValidation.AspNetCore
         }
 
         [LoggerMessage(EventId = 1, Level = LogLevel.Warning, Message = "No validator is registered for parameter '{ParameterName}' of type '{ParameterType}' on action '{ActionDisplayName}'.")]
-        private partial void LogMissingValidator(string parameterName, Type parameterType, string? actionDisplayName);
+        private partial void LogMissingValidator(string parameterName, string parameterType, string? actionDisplayName);
 
         private sealed class ActionCache
         {

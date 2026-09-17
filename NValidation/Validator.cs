@@ -367,7 +367,8 @@ namespace NValidation
             if (this.frozenRules != null)
             {
                 throw new InvalidOperationException(
-                    $"{this.GetType()} has already validated something, so its rules can no longer change. " +
+                    $"{this.GetType().GetFormattedFullName()} has already validated something, so its rules " +
+                    "can no longer change. " +
                     "Declare every rule before the first validation, typically in the constructor.");
             }
         }
@@ -377,7 +378,8 @@ namespace NValidation
             if (!this.IsSynchronous)
             {
                 throw new InvalidOperationException(
-                    $"{this.GetType()} has a rule which awaits, so it cannot be run synchronously.");
+                    $"{this.GetType().GetFormattedFullName()} has a rule which awaits, so it cannot be run " +
+                    "synchronously.");
             }
         }
 

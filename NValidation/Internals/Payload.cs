@@ -13,7 +13,8 @@ namespace NValidation.Internals
             if (instance is not T typed)
             {
                 throw new InvalidCastException(
-                    $"{validatorType} validates {typeof(T)}, so it cannot validate an instance of {instance.GetType()}.");
+                    $"{validatorType.GetFormattedFullName()} validates {typeof(T).GetFormattedFullName()}, " +
+                    $"so it cannot validate an instance of {instance.GetType().GetFormattedFullName()}.");
             }
 
             return typed;

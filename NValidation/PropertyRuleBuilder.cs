@@ -292,7 +292,8 @@ namespace NValidation
         private PropertyRule<T, TProperty> RequireRule()
         {
             return this.rule ?? throw new InvalidOperationException(
-                $"A {nameof(PropertyRuleBuilder<T, TProperty>)} must be obtained from {nameof(Validator<T>)}.Property(...).");
+                $"A {typeof(PropertyRuleBuilder<T, TProperty>).GetFormattedName()} must be obtained from " +
+                $"{typeof(Validator<T>).GetFormattedName()}.Property(...).");
         }
     }
 }

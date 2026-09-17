@@ -609,7 +609,8 @@ namespace NValidation
             if (!Orderable<TValue>.IsSupported)
             {
                 throw new ArgumentException(
-                    $"{typeof(TValue)} cannot be ordered: it implements IComparable<{typeof(TValue).Name}> " +
+                    $"{typeof(TValue).GetFormattedFullName()} cannot be ordered: it implements " +
+                    $"IComparable<{typeof(TValue).GetFormattedName()}> " +
                     "for no type, so there is no order to compare against. Judge it with Must(...) and " +
                     "name the rule with WithErrorCode.");
             }

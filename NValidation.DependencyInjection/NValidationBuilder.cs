@@ -106,14 +106,16 @@ namespace NValidation
                 if (value != null && !typeof(IValidationMessageProvider).IsAssignableFrom(value))
                 {
                     throw new ArgumentException(
-                        $"Type '{value}' does not implement {nameof(IValidationMessageProvider)}.",
+                        $"Type '{value.GetFormattedFullName()}' does not implement " +
+                        $"{nameof(IValidationMessageProvider)}.",
                         nameof(this.MessageProvider));
                 }
 
                 if (value != null && (value.IsAbstract || value.IsInterface))
                 {
                     throw new ArgumentException(
-                        $"Type '{value}' cannot be constructed, so it cannot serve as the message provider.",
+                        $"Type '{value.GetFormattedFullName()}' cannot be constructed, so it cannot serve " +
+                        "as the message provider.",
                         nameof(this.MessageProvider));
                 }
 
@@ -299,8 +301,9 @@ namespace NValidation
         /// </summary>
         private static string RefusalOf(Registration first, Registration second, Type validatedType)
         {
-            var subject = $"'{first.ValidatorType}' and '{second.ValidatorType}' both validate " +
-                $"'{Validated(validatedType)}'";
+            var subject = $"'{first.ValidatorType.GetFormattedFullName()}' and " +
+                $"'{second.ValidatorType.GetFormattedFullName()}' both validate " +
+                $"'{Validated(validatedType).GetFormattedFullName()}'";
 
             return first.Explicit
                 ? $"{subject}, and both were registered explicitly. Name only one of them."
@@ -398,7 +401,8 @@ namespace NValidation
             if (validatedTypes.Length == 0)
             {
                 throw new ArgumentException(
-                    $"Type '{validatorType}' does not implement {typeof(IValidator<>)}.", nameof(validatorType));
+                    $"Type '{validatorType.GetFormattedFullName()}' does not implement " +
+                    $"{typeof(IValidator<>).GetFormattedName()}.", nameof(validatorType));
             }
 
             foreach (var validatedType in validatedTypes)
