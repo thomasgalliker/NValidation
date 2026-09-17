@@ -1,5 +1,5 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
+using System.Text;
 
 namespace NValidation
 {
@@ -10,32 +10,113 @@ namespace NValidation
     /// <remarks>
     /// A template which names fewer placeholders than the rule supplies drops the rest, and one which
     /// names a placeholder the rule does not supply keeps it as written instead of throwing. A format
-    /// a value cannot honour renders the value unformatted, for the same reason.
+    /// a value cannot honour renders the value unformatted, for the same reason. Scanned by hand rather
+    /// than with a regular expression, because this runs for every failure and a match evaluator costs
+    /// a closure and a match object per placeholder.
     /// </remarks>
-    public static partial class ValidationMessageFormatter
+    public static class ValidationMessageFormatter
     {
         public static string Format(string template, IReadOnlyDictionary<string, object?> arguments)
         {
             ArgumentNullException.ThrowIfNull(template);
             ArgumentNullException.ThrowIfNull(arguments);
 
-            // A template naming nothing is returned as it stands: most messages carry a placeholder,
-            // but a translation is free to leave every one of them out, and matching against a
-            // template that cannot match is pure cost.
-            if (!template.Contains('{'))
+            // A template naming nothing is returned as it stands: a translation is free to leave every
+            // placeholder out, and scanning a template that cannot match is pure cost.
+            var open = template.IndexOf('{');
+
+            if (open < 0)
             {
                 return template;
             }
 
-            return PlaceholderPattern().Replace(template, match =>
+            var builder = new StringBuilder(template.Length + 32);
+            var rest = template.AsSpan();
+
+            while (open >= 0)
             {
-                if (!arguments.TryGetValue(match.Groups["name"].Value, out var value))
+                builder.Append(rest[..open]);
+                rest = rest[open..];
+
+                if (TryReadPlaceholder(rest, out var name, out var format, out var length))
                 {
-                    return match.Value;
+                    var key = name.ToString();
+
+                    if (arguments.TryGetValue(key, out var value))
+                    {
+                        builder.Append(RenderValue(value, format));
+                    }
+                    else
+                    {
+                        // A placeholder the rule did not supply is kept as written: visible in a test,
+                        // harmless in production.
+                        builder.Append(rest[..length]);
+                    }
+
+                    rest = rest[length..];
+                }
+                else
+                {
+                    // Not a placeholder — a lone brace, or one with nothing a name could be made of.
+                    builder.Append('{');
+                    rest = rest[1..];
                 }
 
-                return RenderValue(value, match.Groups["format"]);
-            });
+                open = rest.IndexOf('{');
+            }
+
+            builder.Append(rest);
+
+            return builder.ToString();
+        }
+
+        /// <summary>
+        /// Reads <c>{Name}</c> or <c>{Name:format}</c> at the start of <paramref name="text"/>: a name
+        /// of letters, digits and underscores, and a format of anything up to the closing brace.
+        /// </summary>
+        private static bool TryReadPlaceholder(ReadOnlySpan<char> text, out ReadOnlySpan<char> name, out ReadOnlySpan<char> format, out int length)
+        {
+            name = default;
+            format = default;
+            length = 0;
+
+            var i = 1;
+
+            while (i < text.Length && (char.IsLetterOrDigit(text[i]) || text[i] == '_'))
+            {
+                i++;
+            }
+
+            if (i == 1 || i == text.Length)
+            {
+                return false;
+            }
+
+            name = text[1..i];
+
+            if (text[i] == '}')
+            {
+                length = i + 1;
+
+                return true;
+            }
+
+            if (text[i] != ':')
+            {
+                return false;
+            }
+
+            var close = text[(i + 1)..].IndexOf('}');
+
+            if (close <= 0)
+            {
+                return false;
+            }
+
+            format = text.Slice(i + 1, close);
+            length = i + 1 + close + 1;
+
+            return true;
         }
 
         /// <summary>
@@ -49,18 +130,18 @@ namespace NValidation
         /// reading its own resource file, so a specifier the value cannot honour falls back to the plain
         /// rendering rather than turning a bad request into a server error.
         /// </remarks>
-        private static string RenderValue(object? value, Group format)
+        private static string RenderValue(object? value, ReadOnlySpan<char> format)
         {
-            if (format.Success && TrySelectPluralForm(value, format.ValueSpan, out var pluralForm))
+            if (!format.IsEmpty && TrySelectPluralForm(value, format, out var pluralForm))
             {
                 return pluralForm;
             }
 
-            if (format.Success && value is IFormattable formattable)
+            if (!format.IsEmpty && value is IFormattable formattable)
             {
                 try
                 {
-                    return formattable.ToString(format.Value, CultureInfo.CurrentCulture);
+                    return formattable.ToString(format.ToString(), CultureInfo.CurrentCulture);
                 }
                 catch (FormatException)
                 {
@@ -131,8 +212,5 @@ namespace NValidation
                 default: count = 0; return false;
             }
         }
-
-        [GeneratedRegex(@"\{(?<name>\w+)(?::(?<format>[^}]+))?\}")]
-        private static partial Regex PlaceholderPattern();
     }
 }
