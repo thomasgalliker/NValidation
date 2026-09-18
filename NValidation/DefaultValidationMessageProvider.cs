@@ -83,7 +83,7 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(errorCode);
 
-            var template = Messages.TryGetValue(errorCode, out var message) ? message : errorCode;
+            var template = Messages.GetValueOrDefault(errorCode, errorCode);
             return ValidationMessageFormatter.Format(template, arguments);
         }
     }
