@@ -1,10 +1,11 @@
 # Previous run against this run
 
-The figures of the run taken before the architecture review, set against the run taken after it, for
-every NValidation row the benchmark project measures. Both runs: Apple M4 Pro, .NET 10, BenchmarkDotNet
-`--job medium`, nothing else running. The previous run's standard deviations were not kept, so the
-significance test uses this run's: a change counts when it is past 5% and past three standard deviations.
-Allocation figures are exact, so every byte shown as changed did change.
+The figures of the run taken for the second performance review, set against the run taken after the
+email rule was rewritten and `PropertyRuleBuilder` became a class, for every NValidation row the
+benchmark project measures. Both runs: Apple M4 Pro, .NET 10, BenchmarkDotNet `--job medium`, nothing
+else running. The previous run's standard deviations were not kept, so the significance test uses this
+run's: a change counts when it is past 5% and past three standard deviations. Allocation figures are
+exact, so every byte shown as changed did change — and on the validation path, none did.
 
 Ratios matter more than the absolute numbers; take both runs again on the same machine before trusting a
 difference smaller than the noise column.
@@ -14,93 +15,96 @@ difference smaller than the noise column.
 
 | Case | Time before | Time now | ± (StdDev now) | Change | Allocated before | Allocated now |
 | --- | ---: | ---: | ---: | --- | ---: | ---: |
-| SingleObject | 54.0 ns | 53.1 ns | 0.6 ns | -2% (within noise) | 56 B | 64 B |
-| WholePayload | 384.0 ns | 238.2 ns | 2.4 ns | -38% (faster) | 480 B | 504 B |
-| WholePayloadWithFailures | 930.0 ns | 500.3 ns | 2.3 ns | -46% (faster) | 2,784 B | 2,336 B |
-| WithAnAwaitingRule | 1,379.0 ns | 1,305.4 ns | 84.0 ns | -5% (within noise) | 790 B | 815 B |
+| SingleObject | 53.1 ns | 56.3 ns | 0.4 ns | +6% (slower) | 64 B | 64 B |
+| WholePayload | 238.2 ns | 236.3 ns | 1.3 ns | -1% (within noise) | 504 B | 504 B |
+| WholePayloadWithFailures | 500.3 ns | 493.7 ns | 8.2 ns | -1% (within noise) | 2,336 B | 2,336 B |
+| WithAnAwaitingRule | 1,305.4 ns | 1,179.6 ns | 232.0 ns | -10% (within noise) | 815 B | 815 B |
 
 ## `ChainCostBenchmark`
 
 | Case | Time before | Time now | ± (StdDev now) | Change | Allocated before | Allocated now |
 | --- | ---: | ---: | ---: | --- | ---: | ---: |
-| 0 chains | 9.5 ns | 8.8 ns | 0.0 ns | -7% (faster) | 56 B | 64 B |
-| 1 chain | 16.0 ns | 17.9 ns | 0.1 ns | +12% (slower) | 56 B | 64 B |
-| 2 chains | 19.0 ns | 20.9 ns | 0.2 ns | +10% (slower) | 56 B | 64 B |
-| 4 chains | 24.2 ns | 25.8 ns | 0.1 ns | +7% (slower) | 56 B | 64 B |
-| 8 chains | 36.4 ns | 36.5 ns | 0.1 ns | +0% (within noise) | 56 B | 64 B |
-| 16 chains | 59.1 ns | 57.7 ns | 0.6 ns | -2% (within noise) | 56 B | 64 B |
+| 0 chains | 8.8 ns | 9.0 ns | 0.0 ns | +2% (within noise) | 64 B | 64 B |
+| 1 chain | 17.9 ns | 16.1 ns | 0.1 ns | -10% (faster) | 64 B | 64 B |
+| 2 chains | 20.9 ns | 18.9 ns | 0.1 ns | -10% (faster) | 64 B | 64 B |
+| 4 chains | 25.8 ns | 23.7 ns | 0.1 ns | -8% (faster) | 64 B | 64 B |
+| 8 chains | 36.5 ns | 34.2 ns | 0.2 ns | -6% (faster) | 64 B | 64 B |
+| 16 chains | 57.7 ns | 55.5 ns | 0.2 ns | -4% (within noise) | 64 B | 64 B |
 
 ## `CollectionValidationBenchmark`
 
 | Case | Time before | Time now | ± (StdDev now) | Change | Allocated before | Allocated now |
 | --- | ---: | ---: | ---: | --- | ---: | ---: |
-| 0 entries | 148.0 ns | 17.9 ns | 0.1 ns | -88% (faster) | 192 B | 64 B |
-| 10 entries | 761.0 ns | 512.1 ns | 13.7 ns | -33% (faster) | 1,448 B | 1,472 B |
-| 100 entries | 6,441.0 ns | 4,572.7 ns | 37.5 ns | -29% (faster) | 11,528 B | 12,992 B |
-| 1,000 entries | 61.7 µs | 44.1 µs | 452.5 ns | -29% (faster) | 112,328 B | 128,192 B |
+| 0 entries | 17.9 ns | 17.1 ns | 0.1 ns | -5% (within noise) | 64 B | 64 B |
+| 10 entries | 512.1 ns | 490.3 ns | 20.6 ns | -4% (within noise) | 1,472 B | 1,472 B |
+| 100 entries | 4,572.7 ns | 4,994.0 ns | 521.1 ns | +9% (within noise) | 12,992 B | 12,992 B |
+| 1,000 entries | 44.1 µs | 44.4 µs | 2.0 µs | +1% (within noise) | 128,192 B | 128,192 B |
 
 ## `ComparisonBenchmark (NValidation rows)`
 
 | Case | Time before | Time now | ± (StdDev now) | Change | Allocated before | Allocated now |
 | --- | ---: | ---: | ---: | --- | ---: | ---: |
-| 4 chains, valid | 51.3 ns | 52.2 ns | 0.4 ns | +2% (within noise) | 56 B | 64 B |
-| 4 chains, invalid | 1,078.9 ns | 386.3 ns | 1.6 ns | -64% (faster) | 4,240 B | 2,256 B |
+| 4 chains, valid | 52.2 ns | 57.4 ns | 0.3 ns | +10% (slower) | 64 B | 64 B |
+| 4 chains, invalid | 386.3 ns | 340.2 ns | 2.8 ns | -12% (faster) | 2,256 B | 2,256 B |
 
 ## `PayloadComparisonBenchmark (NValidation rows)`
 
 | Case | Time before | Time now | ± (StdDev now) | Change | Allocated before | Allocated now |
 | --- | ---: | ---: | ---: | --- | ---: | ---: |
-| nested payload, valid | 376.8 ns | 241.3 ns | 3.1 ns | -36% (faster) | 480 B | 504 B |
-| nested payload, invalid | 941.9 ns | 501.0 ns | 7.7 ns | -47% (faster) | 2,784 B | 2,336 B |
+| nested payload, valid | 241.3 ns | 243.7 ns | 1.9 ns | +1% (within noise) | 504 B | 504 B |
+| nested payload, invalid | 501.0 ns | 508.7 ns | 11.7 ns | +2% (within noise) | 2,336 B | 2,336 B |
 
 ## `WideComparisonBenchmark (NValidation rows)`
 
 | Case | Time before | Time now | ± (StdDev now) | Change | Allocated before | Allocated now |
 | --- | ---: | ---: | ---: | --- | ---: | ---: |
-| 34 chains, valid | 232.3 ns | 243.5 ns | 23.7 ns | +5% (within noise) | 56 B | 64 B |
-| 34 chains, invalid | 1,775.4 ns | 689.3 ns | 3.6 ns | -61% (faster) | 6,456 B | 3,192 B |
+| 34 chains, valid | 243.5 ns | 235.0 ns | 2.4 ns | -3% (within noise) | 64 B | 64 B |
+| 34 chains, invalid | 689.3 ns | 686.2 ns | 2.5 ns | -0% (within noise) | 3,192 B | 3,192 B |
 
 ## `ValidatorResolutionBenchmark`
 
 | Case | Time before | Time now | ± (StdDev now) | Change | Allocated before | Allocated now |
 | --- | ---: | ---: | ---: | --- | ---: | ---: |
-| Scoped | 8,979.0 ns | 9,135.1 ns | 168.1 ns | +2% (within noise) | 25,536 B | 26,400 B |
-| Singleton | 25.6 ns | 22.8 ns | 0.1 ns | -11% (faster) | 128 B | 128 B |
-| ScopedWithSafePromotion | 23.7 ns | 24.2 ns | 0.7 ns | +2% (within noise) | 128 B | 128 B |
+| Scoped | 9,135.1 ns | 9,493.4 ns | 38.3 ns | +4% (within noise) | 26,400 B | 27,128 B |
+| Singleton | 22.8 ns | 28.9 ns | 1.0 ns | +27% (see below) | 128 B | 128 B |
+| ScopedWithSafePromotion | 24.2 ns | 29.5 ns | 0.7 ns | +22% (see below) | 128 B | 128 B |
 
 ## What moved the numbers
 
-- **Composed validators stay on the synchronous path.** `SetValidator` and `ForEach` used to register an
-  awaiting check, so any validator with a nested object or a collection ran every loop through the async
-  twins even when nothing inside could suspend. They now ask the composed validator once, when the rule is
-  declared, and pick the synchronous twin when it judges rather than awaits. This is the whole of the
-  `WholePayload` gain and most of the per-entry collection gain.
-- **`ForEach` no longer boxes the rule context.** The composed rule passed a method group of the struct
-  context as a delegate, which boxed the context and allocated the delegate on every validation: 136 bytes
-  and about 130 ns whether or not the collection had entries. It now hands the frame itself to the element
-  builder, which is why an empty collection fell from 192 B to the 64 B floor.
-- **Failures cost less to report.** `AddError` takes its arguments as a `params ReadOnlySpan`, the
-  placeholder formatter scans the template by hand instead of running a regular expression with a closure
-  per placeholder, and a rule inside a `ForEach` enriches its arguments once rather than copying the
-  dictionary twice.
-- **Every pass carries 8 bytes more.** The settings a validator resolves — its provider and its two
-  behavior axes — now travel down to the validators it composes, together with the cancellation token,
-  inside the run the frame holds. That is the 56 B → 64 B per pass, and the 16 B more per collection entry
-  (two frames an entry). It is the only allocation figure that went up on the validation path.
-- **The scoped resolution path allocates about 860 B more per graph.** A validator the container builds
-  is now handed one `NValidationOptions` record instead of two references. It is paid only where a host
-  names a scoped lifetime; the promoted path is unchanged at 128 B.
+- **A malformed address is refused without being parsed.** The four-chain invalid payload carries
+  `not-an-address`. The previous check handed it to the framework's mail parser, which read it
+  backwards to the end before saying no; the scanner sees no `@` and stops. That is the whole of the
+  46 ns the row lost. Measured on its own, that value fell from 152 ns to 96 ns, and 4 KB of junk from
+  2,072 ns to 96 ns.
+- **The everyday address costs about 5 ns more to accept.** The four-chain valid payload is the one
+  row that got slower, and `SingleObject` is the same validator. The previous check took a shortcut for
+  exactly that shape and left everything else to the parser; the scanner reads the full grammar for
+  every value — the 64- and 255-octet limits, the 63-octet label, the whole of `atext`, whether the
+  text is well-formed. On the nested payload, which carries the same rule on 240 ns of work, the
+  difference is inside the noise.
+- **The builder became a class, and the validation path did not notice.** A builder is what a chain is
+  *declared* through, in the validator's constructor; nothing that runs a validation holds one. Every
+  allocation figure on every row above is identical to the previous run, and the chain benchmark —
+  the same measurement with no address rule in it — moved only in the faster direction.
+- **Building a validator graph allocates 728 bytes more.** One 24-byte builder per declared property,
+  22 of them in the `CarValidator` graph, plus the options object, the closure, its delegate and the
+  derived builder an `EmailAddress()` rule now declares. It is paid where a host names a scoped
+  lifetime; with promotion on, which is the default, the graph is built once for the process, and the
+  two promoted rows allocate the same 128 B they did.
+- **The address and its domain are one rule.** `EmailAddress().RequireTopLevelDomain(...)` parses the
+  value once and reads the domain off that parse: 42 ns and 64 B, against 130 ns and 328 B for the two
+  rules it replaced, which each parsed and each allocated the parsed address.
 
 ## What to distrust
 
-- The wide valid row (34 chains) is the noisiest number in either run: a standard deviation of 24 ns on a
-  mean of 244 ns, with a median of 225 ns. `ChainCostBenchmark`, which measures the same thing with a
-  tighter error bar, shows the per-chain term unchanged.
-- The one awaiting rule row varies by ±84 ns between iterations; its 5% difference is noise.
-- A regression appeared and was fixed between the two runs: growing the rule context by two references
-  pushed its construction out of the JIT's inlining budget and cost 6 ns on the first chain. The context
-  now holds references to its rule and its check instead of copying five fields out of them, and its
-  construction is force-inlined. The chain-cost table above is the run after that fix.
-- `ScopedWithSafePromotion` briefly measured the same as `Scoped` while the promotion rule was being
-  simplified; the rule was put back and the row above is the corrected run. This benchmark is the guard
-  for that setting, and it did its job.
+- The two promoted resolution rows moved by about 6 ns each. Nothing on their path changed — they
+  return a validator the container already built, and no builder is touched — and they allocate the
+  same 128 B. Both rows do identical work and moved together, which points at the machine between two
+  runs two days apart rather than at the library; the `Scoped` row, which does thirty times the work,
+  moved by 4%.
+- The 100-entry collection row: a mean of 4,994 ns against a median of 4,532 ns, with a standard
+  deviation of 521 ns — one launch ran hot. The 10- and 1,000-entry rows on either side of it are
+  within 4% and 1%.
+- The one awaiting rule varies by ±232 ns between iterations, as it always has; its 10% is noise.
+- The address-rule figures quoted above (152 → 96 ns, 130 → 42 ns) come from a separate run the same
+  day on the same code, because those benchmarks did not exist when the previous run was taken.

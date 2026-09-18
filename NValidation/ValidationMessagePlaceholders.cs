@@ -58,6 +58,16 @@ namespace NValidation
         public const string TopLevelDomain = "TopLevelDomain";
 
         /// <summary>
+        /// The schemes a URL is allowed to use, as a readable list.
+        /// </summary>
+        public const string Schemes = "Schemes";
+
+        /// <summary>
+        /// The hosts a URL is allowed to point at, as a readable list.
+        /// </summary>
+        public const string Hosts = "Hosts";
+
+        /// <summary>
         /// The value a property was compared against, e.g. the lower bound of a <c>GreaterThan</c>.
         /// </summary>
         public const string OtherValue = "OtherValue";

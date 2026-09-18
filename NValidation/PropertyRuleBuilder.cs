@@ -6,13 +6,25 @@ namespace NValidation
     /// The chainable part of <see cref="Validator{T}.Property{TProperty}(System.Linq.Expressions.Expression{System.Func{T, TProperty}})"/>. Rules are extension methods
     /// on this type, so an application can add its own without touching the core.
     /// </summary>
-    public readonly struct PropertyRuleBuilder<T, TProperty> : IPropertyRuleTarget<TProperty>
+    /// <remarks>
+    /// A rule whose refinements belong to it alone returns a builder derived from this one, as
+    /// <see cref="PropertyRuleBuilderExtensions.EmailAddress{T}"/> does; every rule written after it still
+    /// chains, because the rules are extension methods on the base.
+    /// </remarks>
+    public class PropertyRuleBuilder<T, TProperty> : IPropertyRuleTarget<TProperty>
     {
-        private readonly PropertyRule<T, TProperty>? rule;
+        private readonly PropertyRule<T, TProperty> rule;
 
         internal PropertyRuleBuilder(PropertyRule<T, TProperty> rule)
         {
             this.rule = rule;
+        }
+
+        // A derived builder continues the chain of the property it was handed, so it takes over the one
+        // thing a builder carries rather than starting a rule of its own.
+        internal PropertyRuleBuilder(PropertyRuleBuilder<T, TProperty> source)
+            : this(source.rule)
+        {
         }
 
         /// <summary>
@@ -22,7 +34,7 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(check);
 
-            this.RequireRule().Add(check);
+            this.rule.Add(check);
 
             return this;
         }
@@ -34,7 +46,7 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(check);
 
-            this.RequireRule().Add(check);
+            this.rule.Add(check);
 
             return this;
         }
@@ -43,7 +55,7 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(check);
 
-            this.RequireRule().AddComposed(check);
+            this.rule.AddComposed(check);
 
             return this;
         }
@@ -52,7 +64,7 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(check);
 
-            this.RequireRule().AddComposed(check);
+            this.rule.AddComposed(check);
 
             return this;
         }
@@ -71,7 +83,7 @@ namespace NValidation
         /// </remarks>
         public PropertyRuleBuilder<T, TProperty> WithValidationBehavior(ValidationBehavior validationBehavior)
         {
-            this.RequireRule().ValidationBehaviorOverride = validationBehavior;
+            this.rule.ValidationBehaviorOverride = validationBehavior;
 
             return this;
         }
@@ -127,7 +139,7 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(message);
 
-            this.RequireRule().SetMessageOfLastCheck(message);
+            this.rule.SetMessageOfLastCheck(message);
 
             return this;
         }
@@ -149,7 +161,7 @@ namespace NValidation
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(errorCode);
 
-            this.RequireRule().SetErrorCodeOfLastCheck(errorCode);
+            this.rule.SetErrorCodeOfLastCheck(errorCode);
 
             return this;
         }
@@ -184,7 +196,7 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(displayName);
 
-            this.RequireRule().DisplayName = displayName;
+            this.rule.DisplayName = displayName;
 
             return this;
         }
@@ -212,7 +224,7 @@ namespace NValidation
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(propertyName);
 
-            this.RequireRule().PropertyNameOverride = propertyName;
+            this.rule.PropertyNameOverride = propertyName;
 
             return this;
         }
@@ -229,7 +241,7 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(condition);
 
-            this.RequireRule().AddCondition(condition);
+            this.rule.AddCondition(condition);
 
             return this;
         }
@@ -261,7 +273,7 @@ namespace NValidation
                     "ForEach cannot be declared for a string. Rules about the text itself belong on the property.");
             }
 
-            var rule = this.RequireRule();
+            var rule = this.rule;
 
             if (elements.IsSynchronous)
             {
@@ -285,15 +297,11 @@ namespace NValidation
             });
         }
 
-        /// <summary>
-        /// A builder is only meaningful when it came from Validator. It is a struct, so a caller can also
-        /// write default, which carries no rule to append to.
-        /// </summary>
-        private PropertyRule<T, TProperty> RequireRule()
+        // For a derived builder's own refinements, which change the rule after it was declared exactly as
+        // WithMessage does, and are refused after the first validation for the same reason.
+        private protected void ThrowIfFrozen()
         {
-            return this.rule ?? throw new InvalidOperationException(
-                $"A {typeof(PropertyRuleBuilder<T, TProperty>).GetFormattedName()} must be obtained from " +
-                $"{typeof(Validator<T>).GetFormattedName()}.Property(...).");
+            this.rule.ThrowIfFrozen();
         }
     }
 }

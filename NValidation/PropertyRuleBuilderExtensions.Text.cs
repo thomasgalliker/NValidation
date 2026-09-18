@@ -1,7 +1,6 @@
-using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
-using System.Net.Mail;
 using System.Text.RegularExpressions;
+using NValidation.Internals;
 
 namespace NValidation
 {
@@ -189,92 +188,64 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Requires the value to be one mail address and nothing else. A missing or blank value
-        /// passes; use <c>NotEmpty()</c> to require one.
+        /// Requires the value to be one mail address of the everyday shape and nothing else: a dot-separated
+        /// local part, one <c>@</c>, then a domain of two or more labels. A missing or blank value passes;
+        /// use <c>NotEmpty()</c> to require one.
         /// </summary>
         /// <remarks>
-        /// Reports <see cref="ValidationErrorCodes.EmailAddress"/>.
-        /// Parsed by <see cref="MailAddress"/> rather than matched against a pattern, which also cannot be
-        /// made to backtrack by a hostile value. The value has to be the address <em>alone</em>:
-        /// <see cref="MailAddress"/> parses the header forms too, so <c>Foo &lt;a@b.com&gt;</c>,
-        /// <c>a@b.com, c@d.com</c> and a value with surrounding whitespace all parse, and each is something
-        /// other than the single address the field asked for.
+        /// Reports <see cref="ValidationErrorCodes.EmailAddress"/>. The address is read against RFC 5321,
+        /// with an internationalized domain checked against IDNA, and never matched to a pattern. The legal
+        /// forms this refuses — a quoted local part, an address literal, a domain of a single label — are
+        /// admitted by the refinements on the <see cref="EmailAddressRuleBuilder{T}"/> it returns, which also
+        /// carries the domain rules; write those before any other rule or decoration. A syntax rule says an
+        /// address is well-formed, never that it exists.
         /// </remarks>
-        public static PropertyRuleBuilder<T, string?> EmailAddress<T>(this PropertyRuleBuilder<T, string?> builder)
+        public static EmailAddressRuleBuilder<T> EmailAddress<T>(this PropertyRuleBuilder<T, string?> builder)
         {
-            return builder.Add(context =>
-            {
-                if (!string.IsNullOrWhiteSpace(context.Value) && !IsBareAddress(context.Value))
-                {
-                    context.AddError(ValidationErrorCodes.EmailAddress);
-                }
-            });
-        }
+            var options = new EmailAddressOptions();
 
-        /// <summary>
-        /// Requires a mail address to sit under one of <paramref name="topLevelDomains"/>, e.g. the
-        /// domains a tenant is allowed to invite from. Entries are compared without regard to case, and may
-        /// be written with or without their leading dot.
-        /// </summary>
-        /// <remarks>
-        /// Reports <see cref="ValidationErrorCodes.EmailTopLevelDomain"/> with
-        /// <see cref="ValidationMessagePlaceholders.TopLevelDomains"/>.
-        /// Declare it after <see cref="EmailAddress{T}"/>: this rule asks which domain the address is under,
-        /// and a value that is not an address has no answer, so it passes here and is reported by the rule
-        /// whose question it is. An address whose host carries no top-level domain — a bare host name, or an
-        /// IP literal — is not under any of them and is reported.
-        /// </remarks>
-        /// <exception cref="ArgumentException"><paramref name="topLevelDomains"/> is empty, or names a blank entry.</exception>
-        public static PropertyRuleBuilder<T, string?> EmailTopLevelDomainIn<T>(this PropertyRuleBuilder<T, string?> builder, params string[] topLevelDomains)
-        {
-            var allowed = ToTopLevelDomains(topLevelDomains, nameof(topLevelDomains));
-
-            return builder.Add(context =>
+            builder.Add(context =>
             {
-                if (context.Value is not { } value || !TryGetBareAddress(value, out var address))
+                if (string.IsNullOrWhiteSpace(context.Value))
                 {
                     return;
                 }
 
-                if (TopLevelDomainOf(address) is not { } topLevelDomain || !allowed.Contains(topLevelDomain))
+                if (!EmailAddresses.TryParse(context.Value, options, out var parts))
+                {
+                    context.AddError(ValidationErrorCodes.EmailAddress);
+                    return;
+                }
+
+                if (options.RequiredTopLevelDomains is null && options.RefusedTopLevelDomains is null)
+                {
+                    return;
+                }
+
+                // The domain rules refine this rule rather than being rules of their own, so they are
+                // asked in turn over the one parse and the first to object is the failure reported.
+                var topLevelDomain = parts.TopLevelDomain;
+
+                if (options.RequiredTopLevelDomains is { } required
+                    && (topLevelDomain.IsEmpty || !HostNames.IsOneOf(topLevelDomain, required)))
                 {
                     context.AddError(
                         ValidationErrorCodes.EmailTopLevelDomain,
-                        (ValidationMessagePlaceholders.TopLevelDomains, string.Join(", ", allowed)));
-                }
-            });
-        }
-
-        /// <summary>
-        /// Refuses a mail address under any of <paramref name="topLevelDomains"/> — the throwaway
-        /// domains a signup form will not take, typically. Entries are compared without regard to case, and
-        /// may be written with or without their leading dot.
-        /// </summary>
-        /// <remarks>
-        /// Reports <see cref="ValidationErrorCodes.EmailTopLevelDomainNotAllowed"/> with
-        /// <see cref="ValidationMessagePlaceholders.TopLevelDomain"/>.
-        /// Declare it after <see cref="EmailAddress{T}"/>, for the same reason as its counterpart: a value
-        /// that is not an address has no domain to judge and passes here.
-        /// </remarks>
-        /// <inheritdoc cref="EmailTopLevelDomainIn{T}" path="/exception"/>
-        public static PropertyRuleBuilder<T, string?> EmailTopLevelDomainNotIn<T>(this PropertyRuleBuilder<T, string?> builder, params string[] topLevelDomains)
-        {
-            var refused = ToTopLevelDomains(topLevelDomains, nameof(topLevelDomains));
-
-            return builder.Add(context =>
-            {
-                if (context.Value is not { } value || !TryGetBareAddress(value, out var address))
-                {
+                        (ValidationMessagePlaceholders.TopLevelDomains, options.RequiredTopLevelDomainsText));
                     return;
                 }
 
-                if (TopLevelDomainOf(address) is { } topLevelDomain && refused.Contains(topLevelDomain))
+                if (options.RefusedTopLevelDomains is { } refused
+                    && !topLevelDomain.IsEmpty
+                    && HostNames.IsOneOf(topLevelDomain, refused))
                 {
                     context.AddError(
                         ValidationErrorCodes.EmailTopLevelDomainNotAllowed,
-                        (ValidationMessagePlaceholders.TopLevelDomain, topLevelDomain));
+                        (ValidationMessagePlaceholders.TopLevelDomain, topLevelDomain.ToString()));
                 }
             });
+
+            return new EmailAddressRuleBuilder<T>(builder, options);
         }
 
         /// <summary>
@@ -304,7 +275,7 @@ namespace NValidation
             StringComparison comparison,
             params string[] values)
         {
-            var refused = RequireTerms(values, nameof(values));
+            var refused = Terms.Require(values, nameof(values));
 
             return builder.Add(context =>
             {
@@ -322,160 +293,6 @@ namespace NValidation
                     }
                 }
             });
-        }
-
-        /// <summary>
-        /// Whether the value is one mail address and nothing else. Decided over the characters for the
-        /// everyday shape, because <c>MailAddress</c> also parses the header forms.
-        /// </summary>
-        private static bool IsBareAddress(string value)
-        {
-            return IsOrdinaryAddress(value) || TryGetBareAddress(value, out _);
-        }
-
-        private static bool IsOrdinaryAddress(ReadOnlySpan<char> value)
-        {
-            var at = value.IndexOf('@');
-
-            if (at <= 0 || at == value.Length - 1)
-            {
-                return false;
-            }
-
-            return IsDotAtom(value[..at]) && IsDottedHost(value[(at + 1)..]);
-        }
-
-        private static bool IsDotAtom(ReadOnlySpan<char> local)
-        {
-            if (local[0] == '.' || local[^1] == '.')
-            {
-                return false;
-            }
-
-            var previousWasDot = false;
-
-            foreach (var character in local)
-            {
-                if (character == '.')
-                {
-                    if (previousWasDot)
-                    {
-                        return false;
-                    }
-
-                    previousWasDot = true;
-                    continue;
-                }
-
-                // Deliberately narrower than a dot-atom is allowed to be. The rest of the legal
-                // punctuation is rare enough that parsing it is cheaper than describing it here, and a
-                // character this does not know is deferred rather than refused.
-                if (!char.IsAsciiLetterOrDigit(character) && character is not ('_' or '-' or '+'))
-                {
-                    return false;
-                }
-
-                previousWasDot = false;
-            }
-
-            return true;
-        }
-
-        private static bool IsDottedHost(ReadOnlySpan<char> host)
-        {
-            var labelLength = 0;
-            var dots = 0;
-            var previous = '\0';
-
-            foreach (var character in host)
-            {
-                if (character == '.')
-                {
-                    if (labelLength == 0 || previous == '-')
-                    {
-                        return false;
-                    }
-
-                    dots++;
-                    labelLength = 0;
-                    previous = character;
-                    continue;
-                }
-
-                if (labelLength == 0 && character == '-')
-                {
-                    return false;
-                }
-
-                if (!char.IsAsciiLetterOrDigit(character) && character != '-')
-                {
-                    return false;
-                }
-
-                labelLength++;
-                previous = character;
-            }
-
-            return dots > 0 && labelLength > 0 && previous != '-';
-        }
-
-        private static bool TryGetBareAddress(string value, [NotNullWhen(true)] out MailAddress? address)
-        {
-            if (MailAddress.TryCreate(value, out var parsed) && string.Equals(parsed.Address, value, StringComparison.Ordinal))
-            {
-                address = parsed;
-                return true;
-            }
-
-            address = null;
-            return false;
-        }
-
-        private static string? TopLevelDomainOf(MailAddress address)
-        {
-            var host = address.Host;
-
-            if (host.StartsWith('['))
-            {
-                return null;
-            }
-
-            var lastDot = host.LastIndexOf('.');
-
-            return lastDot >= 0 && lastDot < host.Length - 1 ? host[(lastDot + 1)..] : null;
-        }
-
-        private static FrozenSet<string> ToTopLevelDomains(string[] topLevelDomains, string parameterName)
-        {
-            var terms = RequireTerms(topLevelDomains, parameterName);
-            var normalized = new HashSet<string>(terms.Length, StringComparer.OrdinalIgnoreCase);
-
-            foreach (var topLevelDomain in terms)
-            {
-                normalized.Add(topLevelDomain.TrimStart('.'));
-            }
-
-            return normalized.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-        }
-
-        private static string[] RequireTerms(string[] values, string parameterName)
-        {
-            ArgumentNullException.ThrowIfNull(values, parameterName);
-
-            if (values.Length == 0)
-            {
-                throw new ArgumentException("Name at least one entry; a rule with nothing to look for judges nothing.", parameterName);
-            }
-
-            foreach (var value in values)
-            {
-                if (string.IsNullOrWhiteSpace(value))
-                {
-                    throw new ArgumentException("A blank entry matches everything, which is never what was meant.", parameterName);
-                }
-            }
-
-            return values;
         }
     }
 }

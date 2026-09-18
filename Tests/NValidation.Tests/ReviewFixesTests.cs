@@ -288,9 +288,10 @@ namespace NValidation.Tests
         public void RuleArguments_WhichCannotDescribeAnything_AreRefusedWhereTheyAreWritten()
         {
             // Arrange
-            var builder = default(PropertyRuleBuilder<Car, string?>);
-            var collection = default(PropertyRuleBuilder<Car, List<Guid>?>);
-            var number = default(PropertyRuleBuilder<Car, int>);
+            var validator = new TestValidator<Car>();
+            var builder = validator.Property(c => c.Vin);
+            var collection = validator.Property(c => c.FeatureIds);
+            var number = validator.Property(c => c.Mileage);
 
             // Act
             var acts = new Action[]

@@ -21,7 +21,7 @@ namespace NValidation.TestData
         public string? ContactEmail { get; set; }
 
         /// <summary>
-        /// Free-form enough that only a pattern describes it, which is what <c>Matches</c> is for.
+        /// The subject for <c>Url</c>, and for the scheme and host rules that refine it.
         /// </summary>
         public string? Website { get; set; }
     }

@@ -284,7 +284,7 @@ namespace NValidation.Internals
             return new RuleContext<T, TProperty>(frame, messageProvider, this, ruleCheck, value, errorCountAtStart);
         }
 
-        private void ThrowIfFrozen()
+        public void ThrowIfFrozen()
         {
             if (this.frozenChecks != null)
             {

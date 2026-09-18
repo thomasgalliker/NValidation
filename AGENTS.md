@@ -130,6 +130,9 @@
   day someone adds `--filter`.
 - Tests which change the ambient culture carry `[Collection(Collections.CultureSpecific)]`, because the
   culture is process-wide.
+- A lone surrogate cannot travel as theory data: xUnit serializes `[InlineData]`, and the round trip
+  turns `"\uD800"` into U+FFFD, so the test silently judges a different value. Build such a value in
+  the test body instead.
 - Tests which configure `NValidationOptions.Default` carry `[Collection(Collections.ValidationDefaults)]`
   **and** install a fresh instance in their constructor, keeping the original in a field to assign back
   in `Dispose`. The collection stops them running beside the ~100 assertions on the built-in English.

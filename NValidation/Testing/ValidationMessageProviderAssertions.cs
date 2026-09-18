@@ -201,6 +201,9 @@ namespace NValidation.Testing
             ValidationErrorCodes.EmailAddress,
             ValidationErrorCodes.EmailTopLevelDomain,
             ValidationErrorCodes.EmailTopLevelDomainNotAllowed,
+            ValidationErrorCodes.Url,
+            ValidationErrorCodes.UrlScheme,
+            ValidationErrorCodes.UrlHost,
             ValidationErrorCodes.NotContaining,
             ValidationErrorCodes.GreaterThan,
             ValidationErrorCodes.GreaterThanOrEqualTo,
@@ -247,6 +250,8 @@ namespace NValidation.Testing
             ValidationMessagePlaceholders.MaxCount,
             ValidationMessagePlaceholders.TopLevelDomains,
             ValidationMessagePlaceholders.TopLevelDomain,
+            ValidationMessagePlaceholders.Schemes,
+            ValidationMessagePlaceholders.Hosts,
             ValidationMessagePlaceholders.OtherValue,
             ValidationMessagePlaceholders.OtherPropertyName,
         ];

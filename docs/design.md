@@ -119,3 +119,104 @@ asked for promotion by name, which is why the setting is a tri-state underneath 
 the library needs to tell "on by default" from "on because you said so". Registration is order-independent: an explicit
 `AddValidator` wins over a scan wherever it is written, and two explicit registrations for one payload
 are refused.
+
+## The email grammar is the library's own
+
+`EmailAddress()` reads a value with a scanner of its own — RFC 5321 §4.1.2 `Mailbox`, with UTF-8 where
+RFC 6531 admits it — rather than handing it to `System.Net.Mail.MailAddress`. That parser is a fine
+reader of mail headers and errs permissive as a validator: it accepts a trailing dot in the local part
+(its source calls this a deliberate departure, for compatibility with other mail clients), a domain
+label beginning or ending with a hyphen, any bracketed text as an address literal, a local part or a
+domain of any length, and any non-ASCII domain without asking whether it is a well-formed
+internationalized name. None of that can be tightened from outside, because the parser *is* the
+definition. Owning the grammar is what lets the rule say what it accepts.
+
+Full conformance is not the default, though. The RFC grammar admits comments, folding whitespace,
+quoted local parts and address literals — forms that are legal, that no provider issues, and that a
+contact-email field never means. The default is the everyday shape: a dot-separated local part, one
+`@`, a domain of two or more labels. Each legal form it leaves out is admitted by a refinement, and the
+three refinements together are exactly the RFC's `Mailbox`, so a caller who wants full conformance is
+one chain away from it rather than in a different mode.
+
+The refinements sit on `EmailAddressRuleBuilder<T>`, which derives from the plain builder, so they exist
+only where they apply and their misuse is a compile error: the plain builder's own members return the
+plain builder, which does not have them. That is why `PropertyRuleBuilder<T, TProperty>` is a class
+rather than a `readonly struct`. A struct cannot be derived from, and a wrapper does not work either —
+C# does not apply extension methods through a user-defined conversion, and every rule in the library is
+an extension method, so a wrapper would have ended every chain at the first refinement. The class costs
+one 24-byte object per declared property, once, when the validator is built — the path
+`ValidatorResolutionBenchmark` measures at some 26 KB per graph, and the reason validators are promoted
+to singletons. It costs nothing where it matters: the builder is never touched while validating, and
+`RuleContext`, the struct that keeps a rule run allocation-free, is unchanged.
+
+The domain rules are refinements of the same rule rather than rules of their own. Two rules would parse
+the value twice, could report two failures for one bad value, and had an order that mattered — a domain
+rule written before the address rule silently passed everything. One rule parses once, asks each
+constraint in turn over that parse, reports the first to object under its own error code, and cannot be
+written in the wrong order.
+
+An internationalized domain is the one place the scanner reaches outside itself: `IdnMapping.GetAscii`
+is what knows the IDNA rules, and it reports a malformed name by throwing, with no `Try` form on any
+target framework. The `catch` around it is how its answer is heard, not an error being swallowed, and it
+is reached only when a domain carries a character beyond ASCII — which, in practice, is almost never.
+
+## The URL grammar is the library's own, and stays a subset of `Uri`
+
+`Url()` reads a value with a scanner of its own — RFC 3986, with the non-ASCII RFC 3987 admits — rather
+than handing it to `Uri`. The reasoning is the email rule's, with one fact that settles it on its own.
+
+**The verdict would depend on the operating system.** On Linux and macOS, `Uri.TryCreate("/orders/42",
+UriKind.Absolute, out _)` succeeds and yields `file:///orders/42`, because a rooted path reads as a Unix
+file path; so do `//example.com/path` and `C:\temp`. On Windows it answers differently. A rule whose
+verdict depends on the build agent is not one anybody can reason about, and nothing outside the parser can
+correct it.
+
+The rest is the familiar shape of a reader pressed into service as a validator. `Uri` accepts
+`javascript:alert(1)`, `data:text/html;base64,…`, `about:blank` and any invented scheme, which is the
+stored-XSS sink a link field turns into. It trims surrounding whitespace, so a value that round-trips
+through it is not the value that was validated. It accepts hosts DNS refuses — `my_host.example`,
+`-example.com`, `example.com.`, the malformed punycode `xn--a.com` that `IdnMapping` itself throws on —
+and it enforces no length limit on anything. And it rewrites what it just approved: `http://0x7f.1/` and
+`http://2130706433/` become `127.0.0.1`, `http://1.2.3/` becomes `1.2.0.3`, `/%zz` becomes `/%25zz`,
+`%2e%2e/%2e%2e/etc` becomes `/etc`, and `http://example.com@evil.example/` points at `evil.example`. The
+application then stores the string it was given, not the one the parser read.
+
+Pairing it with a round-trip check, as the email rule once did with `MailAddress`, does not work here:
+`https://aurora-motors.example` has an `AbsoluteUri` of `https://aurora-motors.example/`, so the check
+would refuse the most ordinary way anyone writes a URL.
+
+It also allocates. `Uri.TryCreate` costs 56 bytes per call, so a validator with one URL rule would stop
+being a pass that allocates the frame and nothing else. The scanner adds nothing over an empty pass.
+
+**What makes owning the grammar safe is that the scanner accepts a strict subset of what `Uri` accepts.**
+A value the rule approves is one the application can hand to `Uri` afterwards. That is a property rather
+than a hope: `UrlsTests` sweeps every string up to five characters over an alphabet covering each
+character class the scanner distinguishes, and fails if any accepted value is one `Uri` refuses. A second
+test pins the stronger claim where it matters — for `http` and `https`, the two read the same scheme and
+the same host.
+
+A few decisions inside the grammar are worth stating, because none of them follows from the RFC alone:
+
+- **A host whose last label is all digits is an address, never a name.** No top-level domain is numeric,
+  and RFC 3986 reads a host of that shape as IPv4. One line refuses `1.2.3`, `123.456.789.0`, `0x7f.1`
+  and `2130706433` as names, which is exactly the set another parser expands into an address nobody wrote,
+  and it leaves the real dotted-quad form to `AllowIPAddress()`, where it is parsed rather than guessed at.
+- **`[` and `]` are admitted in a query and a fragment**, which RFC 3986 reserves for the host. A query of
+  the form `?ids[]=1` is everywhere and every browser sends it; refusing what the rest of the stack
+  accepts would only be a false alarm. They stay refused in a path.
+- **Credentials before the host are refused by default.** `https://example.com@evil.example/` reads to a
+  person as a URL for one host and points at another, and a field that never carries credentials should
+  not accept the shape. `AllowUserInfo()` is one method for the field that does.
+- **A network-path reference stays refused even under `AllowRelative()`.** `//example.com/x` is a legal
+  relative reference, and it names a host, which is how a field meant to hold a path sends a reader
+  somewhere else.
+
+What a host is lives in `HostNames`, shared with `EmailAddress()`: the DNS label grammar, the octet
+limits, IDNA for a name beyond ASCII, and the two address forms. Two definitions of a valid host name in
+one library drift, and the day they disagree is the day a value passes one rule and fails the other. A
+test holds the two rules to the same answer.
+
+The library ships nothing that claims to make a URL safe to fetch. A name resolves when the request is
+made, it can point anywhere, and a redirect can move it again, so no rule about the text can decide where
+a request ends up. A `RefusePrivateNetwork()` would read as a guarantee and deliver none, and the caller
+who relied on it would be worse off than the one who knew they had to check at the socket.

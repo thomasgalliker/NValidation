@@ -142,3 +142,40 @@
   IValidationMessageProvider; ErrorCodeProvider, for assertions independent of any translation;
   TestTimeProvider, for the date rules; and ShouldResolveEveryCoreErrorCode, which holds an
   application's own message provider to every key this core can report.
+- EmailAddress reads the value with a scanner of its own against RFC 5321 instead of through
+  System.Net.Mail.MailAddress, and its default is the everyday shape: a dot-separated local part, one
+  @, a domain of two or more labels, an internationalized domain checked against IDNA. Four things the
+  rule accepted before and the RFC does not are now refused - a trailing dot in the local part, a domain
+  label beginning or ending with a hyphen, a bracketed domain that is not an IP address, a local part
+  over 64 octets or a domain over 255. Three legal forms the default leaves out are admitted by
+  refinements on the builder EmailAddress() now returns - AllowQuotedLocalPart, AllowAddressLiteral and
+  AllowSingleLabelDomain - which together read exactly RFC 5321's Mailbox. Write them right after
+  EmailAddress(); every other rule and decoration returns the plain builder. The scanner allocates
+  nothing to accept or refuse an ASCII address, refuses a value it cannot read in a third of the time
+  the parser took, and costs about 6 ns more than before to accept the everyday address, which is the
+  price of reading the whole grammar for it.
+- EmailTopLevelDomainIn and EmailTopLevelDomainNotIn are now RequireTopLevelDomain and
+  RefuseTopLevelDomain on that same builder: refinements of the one address rule rather than rules of
+  their own, so a value is parsed once, reports at most one failure, and there is no order to get wrong.
+  Error codes, placeholders and messages are unchanged.
+- PropertyRuleBuilder<T, TProperty> is a class rather than a readonly struct, so that a rule can return
+  a builder derived from it. Nothing on the validation path changes; building a validator costs one
+  small object more per declared property.
+- Url validates a URL, reading the value with a scanner of its own against RFC 3986 rather than through
+  Uri. Its default is a URL that names a host: an http or https scheme, a host of two or more labels
+  with an internationalized host checked against IDNA, an optional port, and a path, query and fragment
+  whose percent-escapes are well formed. Surrounding whitespace, control characters, credentials before
+  the host, an address in place of a name and a host of a single label are all refused; five refinements
+  on the builder Url() returns admit them - AllowUserInfo, AllowIPAddress, AllowLoopback,
+  AllowSingleLabelHost and AllowRelative. Write them right after Url(); every other rule and decoration
+  returns the plain builder.
+- RequireScheme, RequireHost and RequireDomain narrow which schemes and hosts a URL may use, as
+  refinements of the same rule rather than rules of their own, so a value is parsed once, reports at
+  most one failure, and there is no order to get wrong. RequireScheme replaces the default http and
+  https pair rather than adding to it. RequireDomain cuts at a label boundary, so api.example.com sits
+  under example.com and evil-example.com does not.
+- Three new error codes with their built-in English: Url, UrlScheme and UrlHost, plus the placeholders
+  Schemes and Hosts. A well-formed URL whose scheme is not allowed reports UrlScheme rather than Url,
+  so the message can name the allowed schemes even where nobody wrote RequireScheme.
+- What a host is now lives in one place, shared by EmailAddress and Url: the DNS label grammar, the
+  octet limits, IDNA for a name beyond ASCII and the two address forms. No rule changed its verdict.

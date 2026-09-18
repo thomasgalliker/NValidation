@@ -503,7 +503,7 @@ namespace NValidation
             StringComparison comparison,
             params string[] values)
         {
-            var allowed = RequireTerms(values, nameof(values));
+            var allowed = Terms.Require(values, nameof(values));
 
             return builder.Add(context =>
             {

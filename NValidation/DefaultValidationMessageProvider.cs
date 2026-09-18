@@ -33,6 +33,10 @@ namespace NValidation
             [ValidationErrorCodes.EmailTopLevelDomainNotAllowed] = "{PropertyName} must not use the top-level domain {TopLevelDomain}.",
             [ValidationErrorCodes.NotContaining] = "{PropertyName} contains text that is not allowed.",
 
+            [ValidationErrorCodes.Url] = "{PropertyName} is not a valid URL.",
+            [ValidationErrorCodes.UrlScheme] = "{PropertyName} must use one of the following schemes: {Schemes}.",
+            [ValidationErrorCodes.UrlHost] = "{PropertyName} must point at one of the following hosts: {Hosts}.",
+
             [ValidationErrorCodes.GreaterThan] = "{PropertyName} must be greater than {OtherValue}.",
             [ValidationErrorCodes.GreaterThanOrEqualTo] = "{PropertyName} must be greater than or equal to {OtherValue}.",
             [ValidationErrorCodes.LessThan] = "{PropertyName} must be less than {OtherValue}.",

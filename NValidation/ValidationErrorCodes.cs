@@ -46,6 +46,24 @@ namespace NValidation
         public const string EmailTopLevelDomainNotAllowed = "EmailTopLevelDomainNotAllowed";
 
         /// <summary>
+        /// A value is not a URL of the shape the rule accepts. The refinements that admit a further shape
+        /// widen this one failure rather than reporting one each.
+        /// </summary>
+        public const string Url = "Url";
+
+        /// <summary>
+        /// A URL does not use one of the schemes the rule allows. Reported for a value that is otherwise a
+        /// well-formed URL, so an <c>ftp://</c> address is told apart from text that is not a URL at all.
+        /// </summary>
+        public const string UrlScheme = "UrlScheme";
+
+        /// <summary>
+        /// A URL does not point at one of the hosts the rule allows, whether named exactly or as a domain
+        /// to sit under.
+        /// </summary>
+        public const string UrlHost = "UrlHost";
+
+        /// <summary>
         /// Text carries one of the terms a rule refuses. The message names none of them: a blocklist
         /// which reports its own entries is one the next value works around.
         /// </summary>

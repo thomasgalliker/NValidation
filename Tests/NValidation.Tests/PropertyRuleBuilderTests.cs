@@ -7,20 +7,28 @@ namespace NValidation.Tests
     public partial class PropertyRuleBuilderTests
     {
         /// <summary>
-        /// The builder is a struct, so a caller can write <c>default</c> — which carries no rule to
-        /// append to. Saying so beats a null reference from somewhere inside the library.
+        /// A rule may return a builder derived from the plain one, carrying refinements of its own. The
+        /// rules written after it still chain — they are extension methods on the base — and judge the
+        /// same property: the refinement admits the value, and only the rule after it objects.
         /// </summary>
         [Fact]
-        public void Add_WhenTheBuilderIsDefault_SaysWhereOneComesFrom()
+        public async Task ADerivedBuilder_ContinuesTheChainOfTheSameProperty()
         {
             // Arrange
-            var builder = default(PropertyRuleBuilder<Car, string?>);
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.ContactEmail)
+                .EmailAddress()
+                .AllowQuotedLocalPart()
+                .MaximumLength(24);
+
+            var manufacturer = Cars.Manufacturer();
+            manufacturer.ContactEmail = "\"john and jane doe\"@example.com";
 
             // Act
-            var act = () => builder.NotEmpty();
+            var result = await validator.ValidateAsync(manufacturer);
 
             // Assert
-            act.Should().Throw<InvalidOperationException>().WithMessage("*Property*");
+            result.ShouldReportErrorCode("ContactEmail", "MaximumLength");
         }
     }
 }

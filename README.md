@@ -1,4 +1,5 @@
 # NValidation
+
 [![Version](https://img.shields.io/nuget/v/NValidation.svg)](https://www.nuget.org/packages/NValidation)
 [![Downloads](https://img.shields.io/nuget/dt/NValidation.svg)](https://www.nuget.org/packages/NValidation)
 [![Buy Me a Coffee](https://img.shields.io/badge/support-buy%20me%20a%20coffee-FFDD00)](https://buymeacoffee.com/thomasgalliker)
@@ -36,11 +37,11 @@ And for an ASP.NET Core application:
 
     PM> Install-Package NValidation.AspNetCore
 
-| Package | What it adds | Depends on |
-|---------|--------------|------------|
-| [`NValidation`](https://www.nuget.org/packages/NValidation/) | The validators, rules and messages, and helper methods for unit tests. | **nothing** |
-| [`NValidation.DependencyInjection`](https://www.nuget.org/packages/NValidation.DependencyInjection/) | `AddNValidation`: registering validators with an `IServiceCollection`, and binding the registration from `IConfiguration`. | `NValidation` |
-| [`NValidation.AspNetCore`](https://www.nuget.org/packages/NValidation.AspNetCore/) | The RFC7807 problem details response, and the MVC filter that validates a payload before the action runs. | `NValidation.DependencyInjection` |
+| Package                                                                                              | What it adds                                                                                                               | Depends on                        |
+|------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|-----------------------------------|
+| [`NValidation`](https://www.nuget.org/packages/NValidation/)                                         | The validators, rules and messages, and helper methods for unit tests.                                                     | **nothing**                       |
+| [`NValidation.DependencyInjection`](https://www.nuget.org/packages/NValidation.DependencyInjection/) | `AddNValidation`: registering validators with an `IServiceCollection`, and binding the registration from `IConfiguration`. | `NValidation`                     |
+| [`NValidation.AspNetCore`](https://www.nuget.org/packages/NValidation.AspNetCore/)                   | The RFC7807 problem details response, and the MVC filter that validates a payload before the action runs.                  | `NValidation.DependencyInjection` |
 
 The core package has no dependencies at all, so a host which only constructs validators does not acquire
 a container's abstractions in order to do it. Each package pulls in the one above it, so installing
@@ -56,7 +57,7 @@ All three target .NET 8 and .NET 10.
 - [Built-in validators](#built-in-validators)
 - [Custom validators](#custom-validators)
 - [Overriding defaults](#overriding-defaults)
-  - [Validation options](#validation-options)
+    - [Validation options](#validation-options)
 - [Localization](#localization)
 - [Dependency injection](#dependency-injection)
 - [ASP.NET Core integration](#aspnet-core-integration)
@@ -364,14 +365,14 @@ this.Property(c => c.ServiceHistory).ForEach(serviceRecordValidator);
 Inside `ForEach` you are handed an `ElementRuleBuilder<TElement>`, whose whole surface is these six
 members:
 
-| Member | What it does |
-|--------|--------------|
-| `Property(expression)` | A rule chain on one property of the entry, exactly as on a validator |
-| `Element()` | A rule chain on the entry itself, for a collection of scalars |
-| `Where(predicate)` | Restricts which entries are judged; repeated calls are and-ed |
-| `SetValidator(validator)` | Hands each entry to a validator of its own |
-| `WithIndexer(indexer)` | Identifies an entry by something other than its position |
-| `ValidationBehaviors` | What *one entry* reports — see [validation behavior](#validation-behavior) |
+| Member                    | What it does                                                               |
+|---------------------------|----------------------------------------------------------------------------|
+| `Property(expression)`    | A rule chain on one property of the entry, exactly as on a validator       |
+| `Element()`               | A rule chain on the entry itself, for a collection of scalars              |
+| `Where(predicate)`        | Restricts which entries are judged; repeated calls are and-ed              |
+| `SetValidator(validator)` | Hands each entry to a validator of its own                                 |
+| `WithIndexer(indexer)`    | Identifies an entry by something other than its position                   |
+| `ValidationBehaviors`     | What *one entry* reports — see [validation behavior](#validation-behavior) |
 
 For a collection of scalars there is no property to name, so the element itself is the subject:
 
@@ -489,34 +490,19 @@ through `ForEach` — inherits what its composer resolved, unless it declared ot
 One caution for an HTTP payload: a stopping validator produces a problem details body naming a single
 field. That is often right for a machine caller, and usually wrong for a form a person is filling in.
 
-### What is deliberately not here
-
-Some things a reader coming from another library will look for do not exist, and the alternative is
-always an ordinary language feature:
-
-| Not here | Instead |
-|----------|---------|
-| Rule sets — naming a subset of rules to run | A validator per thing being validated, or a `When` over a property of the payload |
-| Inheritance / polymorphic validators | `Must` that dispatches, or a validator per concrete type resolved by the caller |
-| `Include`, to merge one validator's rules into another | `SetValidator` on the property, or an extension method holding the shared chain |
-| A pre-validation hook | The first rule of the chain |
-| A global configuration object that is the *only* place to look | [`NValidationOptions.Default`](#validation-options) exists, but as the bottom rung of [a short ladder](#the-override-ladder) — the validator itself, the options of a call and the registration all outrank it, so what a validator does is still readable from its own source |
-| A validator serving two payloads | A validator per payload; a shared chain is an extension method |
-| Requiring a property because the model declares it non-nullable | `NotNull()` or `NotEmpty()`, written on the chain. A nullable annotation is a claim about the code that declares it; a deserialized payload can still carry `null`, so presence is asked for where every other rule is |
-
 ## Validation results
 
 A run answers with a `ValidationResult`. It is immutable, it is never null, and a successful one carries
 an empty list rather than a null one.
 
-| Member | Type | What it is |
-|--------|------|------------|
-| `Succeeded` | `bool` | `true` when nothing was reported |
-| `Errors` | `IReadOnlyList<ValidationError>` | Every failure, in the order the rules produced them |
-| `ThrowIfInvalid()` | `void` | Throws a `ValidationException` when it failed; does nothing when it did not |
-| `ToErrorsDictionary()` | `IReadOnlyDictionary<string, string[]>` | The messages grouped by property name |
-| `ValidationResult.Success` | `static ValidationResult` | The shared empty result |
-| `ValidationResult.FromValidationErrors(...)` | `static ValidationResult` | Builds one from errors you produced yourself — takes `params ValidationError[]` or an `IEnumerable<ValidationError>` |
+| Member                                       | Type                                    | What it is                                                                                                           |
+|----------------------------------------------|-----------------------------------------|----------------------------------------------------------------------------------------------------------------------|
+| `Succeeded`                                  | `bool`                                  | `true` when nothing was reported                                                                                     |
+| `Errors`                                     | `IReadOnlyList<ValidationError>`        | Every failure, in the order the rules produced them                                                                  |
+| `ThrowIfInvalid()`                           | `void`                                  | Throws a `ValidationException` when it failed; does nothing when it did not                                          |
+| `ToErrorsDictionary()`                       | `IReadOnlyDictionary<string, string[]>` | The messages grouped by property name                                                                                |
+| `ValidationResult.Success`                   | `static ValidationResult`               | The shared empty result                                                                                              |
+| `ValidationResult.FromValidationErrors(...)` | `static ValidationResult`               | Builds one from errors you produced yourself — takes `params ValidationError[]` or an `IEnumerable<ValidationError>` |
 
 `ToErrorsDictionary()` is the shape a client expects and the shape the problem details response carries:
 
@@ -534,11 +520,11 @@ straight to whatever renders it.
 
 A `ValidationError` answers three questions:
 
-| Member | Answers | Example |
-|--------|---------|---------|
-| `PropertyName` | where the failure is | `Vin`, `Model.Manufacturer.Name`, `ServiceHistory[1].Workshop` |
-| `ErrorCode` | which rule failed | `NotEmpty`, `GreaterThan` |
-| `Message` | what to show a reader | `Vin is required.` |
+| Member         | Answers               | Example                                                        |
+|----------------|-----------------------|----------------------------------------------------------------|
+| `PropertyName` | where the failure is  | `Vin`, `Model.Manufacturer.Name`, `ServiceHistory[1].Workshop` |
+| `ErrorCode`    | which rule failed     | `NotEmpty`, `GreaterThan`                                      |
+| `Message`      | what to show a reader | `Vin is required.`                                             |
 
 `PropertyName` is the C# property path, so a client can bind each message to the input it belongs to.
 `ErrorCode` is what a client branches on, because it does not change when a translation lands — which
@@ -562,13 +548,13 @@ Everything the shipped rules report carries all four.
 The reported name is the member path of the expression the chain was declared with, and it is built the
 same way wherever the failure came from:
 
-| Declared | Reported |
-|----------|----------|
-| `this.Property(c => c.Vin)` | `Vin` |
-| `this.Property(c => c.Model.Manufacturer.Name)` | `Model.Manufacturer.Name` |
-| `SetValidator` on `Model`, which reports `Name` | `Model.Name` |
+| Declared                                                        | Reported                     |
+|-----------------------------------------------------------------|------------------------------|
+| `this.Property(c => c.Vin)`                                     | `Vin`                        |
+| `this.Property(c => c.Model.Manufacturer.Name)`                 | `Model.Manufacturer.Name`    |
+| `SetValidator` on `Model`, which reports `Name`                 | `Model.Name`                 |
 | `ForEach` over `ServiceHistory`, whose entry reports `Workshop` | `ServiceHistory[1].Workshop` |
-| `Element()` on a collection of scalars | `ServiceMileages[1]` |
+| `Element()` on a collection of scalars                          | `ServiceMileages[1]`         |
 
 A nested validator keeps its own flat names and the composer prefixes them, so the same validator reports
 `Name` on its own and `Model.Manufacturer.Name` two levels down. `WithPropertyName` overrides the whole
@@ -621,17 +607,18 @@ problem details response — see [ASP.NET Core integration](#aspnet-core-integra
 The rules are grouped by the question they ask rather than listed alphabetically, because that is how you
 go looking for one: *is it there*, *is it the right shape*, *is it in range*, *is it one of these*.
 
-| Group | Rules |
-|-------|-------|
-| [Presence](#presence) | `NotNull`, `NotEmpty`, `NotDefault` |
-| [Text](#text) | `MinimumLength`, `MaximumLength`, `Length`, `Matches`, `NotContaining` |
-| [Email addresses](#email-addresses) | `EmailAddress`, `EmailTopLevelDomainIn`, `EmailTopLevelDomainNotIn` |
-| [Comparison](#comparison) | `GreaterThan`, `GreaterThanOrEqualTo`, `LessThan`, `LessThanOrEqualTo`, `Between`, `EqualTo`, `NotEqualTo`, `OneOf` |
-| [Numbers](#numbers) | `MultipleOf`, `NotNaN`, `PrecisionScale` |
-| [Dates](#dates) | `InThePast`, `InTheFuture` |
-| [Collections](#collections) | `MinimumCount`, `MaximumCount`, `NoDuplicates`, `ForEach` |
-| [Enums](#enums) | `IsInEnum` |
-| [Custom](#custom-validators) | `Must`, `MustAsync`, `SetValidator` |
+| Group                               | Rules                                                                                                                                                          |
+|-------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [Presence](#presence)               | `NotNull`, `NotEmpty`, `NotDefault`                                                                                                                            |
+| [Text](#text)                       | `MinimumLength`, `MaximumLength`, `Length`, `Matches`, `NotContaining`                                                                                         |
+| [Email addresses](#email-addresses) | `EmailAddress`, refined by `AllowQuotedLocalPart`, `AllowAddressLiteral`, `AllowSingleLabelDomain`, `RequireTopLevelDomain`, `RefuseTopLevelDomain`            |
+| [URLs](#urls)                       | `Url`, refined by `AllowUserInfo`, `AllowIPAddress`, `AllowLoopback`, `AllowSingleLabelHost`, `AllowRelative`, `RequireScheme`, `RequireHost`, `RequireDomain` |
+| [Comparison](#comparison)           | `GreaterThan`, `GreaterThanOrEqualTo`, `LessThan`, `LessThanOrEqualTo`, `Between`, `EqualTo`, `NotEqualTo`, `OneOf`                                            |
+| [Numbers](#numbers)                 | `MultipleOf`, `NotNaN`, `PrecisionScale`                                                                                                                       |
+| [Dates](#dates)                     | `InThePast`, `InTheFuture`                                                                                                                                     |
+| [Collections](#collections)         | `MinimumCount`, `MaximumCount`, `NoDuplicates`, `ForEach`                                                                                                      |
+| [Enums](#enums)                     | `IsInEnum`                                                                                                                                                     |
+| [Custom](#custom-validators)        | `Must`, `MustAsync`, `SetValidator`                                                                                                                            |
 
 Two things hold for every rule below, and are worth reading once rather than thirty-five times:
 
@@ -727,8 +714,8 @@ Error code `Length` · `{PropertyName}`, `{Length}`
 
 **`Length(int minimumLength, int maximumLength)`** — `string?`
 
-Fails outside the range; **both bounds are inclusive**. Note that this overload reports
-**`LengthBetween`**, not `Length` — the two say different things, so they resolve different messages.
+Fails outside the range; **both bounds are inclusive**. Note that this overload reports **`LengthBetween`**, not
+`Length` — the two say different things, so they resolve different messages.
 
 ```csharp
 this.Property(c => c.RegistrationPlate).Length(2, 10);
@@ -743,7 +730,7 @@ Fails when the pattern does not match. A value that is null **or only whitespace
 never doubles as a presence rule.
 
 ```csharp
-this.Property(m => m.Website).Matches(@"^https?://");
+this.Property(c => c.Vin).Matches("^[A-HJ-NPR-Z0-9]{17}$");
 ```
 
 The pattern is compiled once where the rule is declared, not once per validation, and it carries a **one
@@ -753,8 +740,8 @@ validation failure rather than an unhandled exception on the request thread.
 Error code `Matches` · `{PropertyName}`, and `{Pattern}` — which the built-in English does not use, on the
 grounds that a regular expression is not an explanation, but which your own provider can pick up.
 
-**`NotContaining(params string[] values)`**,
-**`NotContaining(StringComparison comparison, params string[] values)`** — `string?`
+**`NotContaining(params string[] values)`**, **`NotContaining(StringComparison comparison, params string[] values)`** —
+`string?`
 
 Fails when the value contains any of the terms. The general form for text a field will not carry, wherever
 it comes from:
@@ -773,48 +760,176 @@ Error code `NotContaining` · `{PropertyName}`
 
 **`EmailAddress()`** — `string?`
 
-`EmailAddress` parses the value with `System.Net.Mail.MailAddress` rather than matching it against a
-pattern. The address forms that are legal are far broader than a hand-written pattern allows — a quoted
-local part, an IP literal, an internationalized domain — and a pattern wide enough to admit them is one
-nobody can read, let alone review. A parser also cannot be made to backtrack by a hostile value.
-
-The value has to be the address **alone**. `MailAddress` parses the header forms too, so `Foo <a@b.com>`,
-`a@b.com, c@d.com` and a value with surrounding whitespace all parse — and each is something other than
-the single address the field asked for. They are rejected.
+`EmailAddress` reads the value against RFC 5321's grammar for a mailbox with a scanner of its own rather
+than a pattern: one pass over the characters, nothing allocated, and nothing a hostile value can make it
+backtrack on. What it accepts by default is the everyday shape — a dot-separated local part, one `@`,
+then a domain of two or more labels — because that is what a contact-email field means, and the legal
+forms it leaves out are ones no provider issues.
 
 ```csharp
 this.Property(m => m.ContactEmail).EmailAddress();
 ```
 
+The value has to be the address **alone**: `Foo <a@b.com>`, `a@b.com, c@d.com` and a value with
+surrounding whitespace are each something other than the single address the field asked for, and are
+rejected. So are the things that look like addresses and are not: a trailing dot in the local part, a
+domain label beginning or ending with a hyphen, a bracketed domain that is not an IP address, a local
+part over 64 octets or a domain over 255. A domain beyond ASCII — `verkauf@aurora-motörs.example` — is
+checked against IDNA rather than waved through.
+
 Error code `EmailAddress` · `{PropertyName}`
 
-Which domains you accept is a separate decision, and a separate rule:
+`EmailAddress()` returns a builder of its own, carrying the refinements below. Write them right after
+it: every other rule and decoration returns the plain builder, which does not have them, so a
+refinement in the wrong place is a compile error rather than a surprise.
+
+Three admit a legal form the plain rule refuses:
+
+| Refinement                 | Admits                                                                        |
+|----------------------------|-------------------------------------------------------------------------------|
+| `AllowQuotedLocalPart()`   | `"john doe"@example.com` — and with it `"a@b"@example.com`                    |
+| `AllowAddressLiteral()`    | `parts@[192.0.2.1]`, `parts@[IPv6:2001:db8::1]`, checked to be real addresses |
+| `AllowSingleLabelDomain()` | `root@localhost`                                                              |
+
+All three together are exactly what RFC 5321 calls a `Mailbox`:
+
+```csharp
+this.Property(m => m.ContactEmail)
+    .EmailAddress()
+    .AllowQuotedLocalPart()
+    .AllowAddressLiteral()
+    .AllowSingleLabelDomain();
+```
+
+Which domains you accept is a separate decision, and two refinements carry it:
 
 ```csharp
 this.Property(m => m.ContactEmail)
     .NotEmpty()
     .EmailAddress()
-    .EmailTopLevelDomainNotIn("test", "invalid", "example");
+    .RefuseTopLevelDomain("test", "invalid", "example");
 ```
 
-**`EmailTopLevelDomainIn(params string[] topLevelDomains)`** — `string?`
+**`RequireTopLevelDomain(params string[] topLevelDomains)`** — the address must sit under one of those
+listed. Entries are compared without regard to case and a leading dot is optional, so `.ch` and `ch`
+mean the same thing. An address with no top-level domain — a single label, or an address literal — is
+under none of them and fails.
 
-Fails when the address's top-level domain is not one of those listed. Entries are compared without regard
-to case and a leading dot is optional, so `.ch` and `ch` mean the same thing. An address whose host has no
-dot at all, or is an IP literal, has no top-level domain and therefore fails this rule.
+Error code **`EmailTopLevelDomain`** · `{PropertyName}`, `{TopLevelDomains}` — the entries as they were
+written, without their dots and without repeats.
 
-Error code **`EmailTopLevelDomain`** · `{PropertyName}`, `{TopLevelDomains}`
-
-**`EmailTopLevelDomainNotIn(params string[] topLevelDomains)`** — `string?`
-
-The blocklist counterpart. An address with no top-level domain has nothing on the list and passes; pair it
-with `EmailAddress()` where that matters.
+**`RefuseTopLevelDomain(params string[] topLevelDomains)`** — the blocklist counterpart. An address with
+no top-level domain has nothing on the list and passes.
 
 Error code **`EmailTopLevelDomainNotAllowed`** · `{PropertyName}`, `{TopLevelDomain}` — the one that
-matched, singular.
+matched, as the address wrote it.
 
-A value that is not a bare address is left to `EmailAddress` to report, so both domain rules pass it
-rather than reporting the same value twice.
+The refinements change the one rule `EmailAddress()` declared rather than adding rules of their own, so
+a value is parsed once and reports at most one failure: a value that is not an address reports that, and
+nothing about its domain.
+
+A syntax rule says an address is *well-formed*. It does not say the address exists, or that the person
+typing it owns it; the only check that settles either is a message to it with a link to confirm.
+
+### URLs
+
+**`Url()`** — `string?`
+
+`Url` reads the value against RFC 3986 with a scanner of its own rather than a pattern: one pass over the
+characters, nothing allocated, and nothing a hostile value can make it backtrack on. What it accepts by
+default is a URL that names a host — `http` or `https`, then a host of two or more labels, then whatever
+path, query and fragment it carries — because that is what a link field means.
+
+```csharp
+this.Property(m => m.Website).Url();
+```
+
+Handing the value to `Uri` instead would accept a great deal a link field never means, and none of it
+could be tightened from outside, because that parser *is* the definition. It reads `javascript:alert(1)`
+and `data:text/html;base64,…` as URLs. It trims surrounding whitespace. It reads `/orders/42` as an
+absolute `file:` URL on Linux and macOS but not on Windows, so the same payload would get a different
+verdict per platform. And it rewrites what it just approved: `http://0x7f.1/` becomes `127.0.0.1`,
+`…/%zz` becomes `…/%25zz`, and `http://example.com@evil.example/` points at `evil.example`.
+
+So the value has to be one URL **alone**, and one that says what it means:
+
+| Refused                                                                    | Because                                        |
+|----------------------------------------------------------------------------|------------------------------------------------|
+| `https://example.com `, `https://exa mple.com/`, a tab or newline anywhere | whitespace is not part of a URL                |
+| `https://example.com/%zz`, `…/%2`                                          | a percent-escape that is not one               |
+| `https://-example.com/`, `https://example-.com/`, `https://example.com./`  | a label begins and ends with a letter or digit |
+| `http://my_host.example/`                                                  | an underscore is not a host-name character     |
+| `http://1.2.3/`, `http://0x7f.1/`, `http://2130706433/`                    | shaped like an address, and not one            |
+| `//example.com/path`, `/orders/42`                                         | no scheme, which `AllowRelative()` covers      |
+| `javascript:alert(1)`, `mailto:a@b.com`, `about:blank`                     | no host, so there is nothing to point at       |
+
+Error code `Url` · `{PropertyName}`
+
+A host whose last label is all digits is read as an address and never as a name, which is what tells
+`192.0.2.1` from `example.com`: no top-level domain is numeric. A host beyond ASCII —
+`https://aurora-motörs.example/` — is checked against IDNA rather than waved through, by the same grammar
+`EmailAddress()` reads a domain with.
+
+`Url()` returns a builder of its own, carrying the refinements below. Write them right after it: every
+other rule and decoration returns the plain builder, which does not have them, so a refinement in the
+wrong place is a compile error rather than a surprise.
+
+Five admit a form the plain rule refuses:
+
+| Refinement               | Admits                                                                         |
+|--------------------------|--------------------------------------------------------------------------------|
+| `AllowUserInfo()`        | `https://user:pass@example.com/`                                               |
+| `AllowIPAddress()`       | `http://192.0.2.1/`, `http://[2001:db8::1]/`, checked to be real addresses     |
+| `AllowLoopback()`        | `http://localhost:5001/`, anything in `127.0.0.0/8`, `[::1]`, and nothing else |
+| `AllowSingleLabelHost()` | `http://intranet/`                                                             |
+| `AllowRelative()`        | `/orders/42`, `../a`, `?page=2`, `#top`                                        |
+
+The plain rule refuses credentials because `https://example.com@evil.example/` reads to a person as a URL
+for `example.com` and points somewhere else; opt in only where the field is known to carry them.
+
+`AllowLoopback()` is narrower than the two around it on purpose, so a development configuration can take
+`http://localhost:5001` without also taking every bare name and every address.
+
+`AllowRelative()` still refuses `//example.com/x`, although that is a legal relative reference: it names a
+host, which is how a field meant to hold a path sends a reader somewhere else.
+
+Which schemes and hosts you accept is a separate decision, and three refinements carry it:
+
+```csharp
+this.Property(m => m.Website)
+    .NotEmpty()
+    .Url()
+    .RequireScheme("https")
+    .RequireDomain("aurora-motors.example");
+```
+
+**`RequireScheme(params string[] schemes)`** — replaces the `http` and `https` the plain rule allows
+rather than adding to them. Entries are compared without regard to case, and may be written with or
+without their trailing `:` or `://`.
+
+Error code **`UrlScheme`** · `{PropertyName}`, `{Schemes}`. A well-formed URL whose scheme is not allowed
+reports this rather than `Url`, which is what lets the message name the schemes it allows even where
+nobody wrote `RequireScheme`: `ftp://files.example.com/a` is told apart from text that is not a URL.
+
+**`RequireHost(params string[] hosts)`** — the host must be one of those listed, exactly.
+`api.example.com` does not satisfy `example.com`.
+
+**`RequireDomain(params string[] domains)`** — the host must be one of those listed, or a label under one.
+The boundary is a label, so `api.example.com` sits under `example.com` and `evil-example.com` does not.
+Entries may be written with or without their leading dot.
+
+Error code **`UrlHost`** · `{PropertyName}`, `{Hosts}` — both lists, as they were written. Where both are
+declared, a host satisfying either one passes.
+
+The refinements change the one rule `Url()` declared rather than adding rules of their own, so a value is
+parsed once and reports at most one failure: a value that is not a URL reports that, and nothing about its
+scheme or its host. A relative reference names neither, so the scheme and host rules have nothing to judge
+and pass it.
+
+A syntax rule says a URL is *well-formed*. It does not say it resolves, and it does not say it is safe to
+fetch: the host is resolved when the request is made, a name can point anywhere, and a redirect can move
+it again. Guarding a request against where it ends up is the job of the code making the request, and no
+rule about the text can stand in for it.
 
 ### Comparison
 
@@ -837,12 +952,12 @@ Each fails when the comparison does not hold. Each has six overloads: the proper
 `TValue?`, and the thing compared against may be a constant or another property, itself of either
 nullability.
 
-| Rule | Against a value | Against another property |
-|------|-----------------|--------------------------|
-| `GreaterThan` | `GreaterThan` | `GreaterThanOtherProperty` |
+| Rule                   | Against a value        | Against another property            |
+|------------------------|------------------------|-------------------------------------|
+| `GreaterThan`          | `GreaterThan`          | `GreaterThanOtherProperty`          |
 | `GreaterThanOrEqualTo` | `GreaterThanOrEqualTo` | `GreaterThanOrEqualToOtherProperty` |
-| `LessThan` | `LessThan` | `LessThanOtherProperty` |
-| `LessThanOrEqualTo` | `LessThanOrEqualTo` | `LessThanOrEqualToOtherProperty` |
+| `LessThan`             | `LessThan`             | `LessThanOtherProperty`             |
+| `LessThanOrEqualTo`    | `LessThanOrEqualTo`    | `LessThanOrEqualToOtherProperty`    |
 
 `{PropertyName}` and `{OtherValue}` for the value forms; `{PropertyName}` and `{OtherPropertyName}` for
 the other-property forms.
@@ -869,18 +984,18 @@ this.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
 // reports: SoldDate -> "SoldDate must be greater than or equal to Registration date."
 ```
 
-**`Between(TValue from, TValue to)`**, **`Between(from, to, bool inclusive)`**,
-**`Between(from, to, bool inclusiveFrom, bool inclusiveTo)`**
+**`Between(TValue from, TValue to)`**, **`Between(from, to, bool inclusive)`**, **
+`Between(from, to, bool inclusiveFrom, bool inclusiveTo)`**
 
 Fails outside the range. With no bool, **both bounds are inclusive**. Which bounds are included changes
 which code is reported, because a message naming a range it has just refused would be worse than useless:
 
-| `inclusiveFrom` | `inclusiveTo` | Error code | Default English |
-|---|---|---|---|
-| `true` | `true` | `Between` | *{PropertyName} must be between {From} and {To}.* |
-| `false` | `false` | `BetweenExclusive` | *{PropertyName} must be greater than {From} and less than {To}.* |
-| `false` | `true` | `BetweenExclusiveFrom` | *{PropertyName} must be greater than {From} and at most {To}.* |
-| `true` | `false` | `BetweenExclusiveTo` | *{PropertyName} must be at least {From} and less than {To}.* |
+| `inclusiveFrom` | `inclusiveTo` | Error code             | Default English                                                  |
+|-----------------|---------------|------------------------|------------------------------------------------------------------|
+| `true`          | `true`        | `Between`              | *{PropertyName} must be between {From} and {To}.*                |
+| `false`         | `false`       | `BetweenExclusive`     | *{PropertyName} must be greater than {From} and less than {To}.* |
+| `false`         | `true`        | `BetweenExclusiveFrom` | *{PropertyName} must be greater than {From} and at most {To}.*   |
+| `true`          | `false`       | `BetweenExclusiveTo`   | *{PropertyName} must be at least {From} and less than {To}.*     |
 
 ```csharp
 this.Property(m => m.SeatCount).Between(1, 9);                       // 1 and 9 both allowed
@@ -903,10 +1018,10 @@ this.Property(c => c.RegistrationPlate)
 
 A null string passes both, so `NotEqualTo("X")` does not fire on a value that is not there.
 
-| Rule | Against a value | Against another property |
-|------|-----------------|--------------------------|
-| `EqualTo` | `EqualTo` | `EqualToOtherProperty` |
-| `NotEqualTo` | `NotEqualTo` | `NotEqualToOtherProperty` |
+| Rule         | Against a value | Against another property  |
+|--------------|-----------------|---------------------------|
+| `EqualTo`    | `EqualTo`       | `EqualToOtherProperty`    |
+| `NotEqualTo` | `NotEqualTo`    | `NotEqualToOtherProperty` |
 
 **`OneOf(params TValue[] values)`** — any value type, `string`, and their nullable forms
 
@@ -969,8 +1084,8 @@ Error code `NotNaN` · `{PropertyName}`
 
 ### Dates
 
-**`InThePast()`**, **`InThePast(TimeProvider timeProvider)`**,
-**`InTheFuture()`**, **`InTheFuture(TimeProvider timeProvider)`**
+**`InThePast()`**, **`InThePast(TimeProvider timeProvider)`**, **`InTheFuture()`**, **
+`InTheFuture(TimeProvider timeProvider)`**
 — `DateTime`, `DateTime?`, `DateTimeOffset`, `DateTimeOffset?`
 
 `InThePast` and `InTheFuture` compare in UTC, and each has an overload taking a `TimeProvider`, so a test
@@ -1045,52 +1160,55 @@ message is rendered from. This is also the checklist a provider of your own has 
 `ShouldResolveEveryCoreErrorCode` is how a test holds it to that, so the table does not have to be copied
 anywhere.
 
-| Error code | Default English message | Placeholders |
-|------------|-------------------------|--------------|
-| `Must` | {PropertyName} is not valid. | `{PropertyName}` |
-| `NotEmpty` | {PropertyName} is required. | `{PropertyName}` |
-| `NotNull` | {PropertyName} is required. | `{PropertyName}` |
-| `NotDefault` | {PropertyName} is required. | `{PropertyName}` |
-| `NotNaN` | {PropertyName} must be a number. | `{PropertyName}` |
-| `MinimumLength` | {PropertyName} must be at least {MinLength} characters long. | `{PropertyName}`, `{MinLength}` |
-| `MaximumLength` | {PropertyName} must not exceed {MaxLength} characters. | `{PropertyName}`, `{MaxLength}` |
-| `Length` | {PropertyName} must be exactly {Length} characters long. | `{PropertyName}`, `{Length}` |
-| `LengthBetween` | {PropertyName} must be between {MinLength} and {MaxLength} characters long. | `{PropertyName}`, `{MinLength}`, `{MaxLength}` |
-| `Matches` | {PropertyName} has an invalid format. | `{PropertyName}`, `{Pattern}` |
-| `EmailAddress` | {PropertyName} is not a valid email address. | `{PropertyName}` |
-| `EmailTopLevelDomain` | {PropertyName} must use one of the following top-level domains: {TopLevelDomains}. | `{PropertyName}`, `{TopLevelDomains}` |
-| `EmailTopLevelDomainNotAllowed` | {PropertyName} must not use the top-level domain {TopLevelDomain}. | `{PropertyName}`, `{TopLevelDomain}` |
-| `NotContaining` | {PropertyName} contains text that is not allowed. | `{PropertyName}` |
-| `GreaterThan` | {PropertyName} must be greater than {OtherValue}. | `{PropertyName}`, `{OtherValue}` |
-| `GreaterThanOrEqualTo` | {PropertyName} must be greater than or equal to {OtherValue}. | `{PropertyName}`, `{OtherValue}` |
-| `LessThan` | {PropertyName} must be less than {OtherValue}. | `{PropertyName}`, `{OtherValue}` |
-| `LessThanOrEqualTo` | {PropertyName} must be less than or equal to {OtherValue}. | `{PropertyName}`, `{OtherValue}` |
-| `Between` | {PropertyName} must be between {From} and {To}. | `{PropertyName}`, `{From}`, `{To}` |
-| `BetweenExclusive` | {PropertyName} must be greater than {From} and less than {To}. | `{PropertyName}`, `{From}`, `{To}` |
-| `BetweenExclusiveFrom` | {PropertyName} must be greater than {From} and at most {To}. | `{PropertyName}`, `{From}`, `{To}` |
-| `BetweenExclusiveTo` | {PropertyName} must be at least {From} and less than {To}. | `{PropertyName}`, `{From}`, `{To}` |
-| `EqualTo` | {PropertyName} must be {OtherValue}. | `{PropertyName}`, `{OtherValue}` |
-| `NotEqualTo` | {PropertyName} must not be {OtherValue}. | `{PropertyName}`, `{OtherValue}` |
-| `GreaterThanOtherProperty` | {PropertyName} must be greater than {OtherPropertyName}. | `{PropertyName}`, `{OtherPropertyName}` |
-| `GreaterThanOrEqualToOtherProperty` | {PropertyName} must be greater than or equal to {OtherPropertyName}. | `{PropertyName}`, `{OtherPropertyName}` |
-| `LessThanOtherProperty` | {PropertyName} must be less than {OtherPropertyName}. | `{PropertyName}`, `{OtherPropertyName}` |
-| `LessThanOrEqualToOtherProperty` | {PropertyName} must be less than or equal to {OtherPropertyName}. | `{PropertyName}`, `{OtherPropertyName}` |
-| `EqualToOtherProperty` | {PropertyName} must match {OtherPropertyName}. | `{PropertyName}`, `{OtherPropertyName}` |
-| `NotEqualToOtherProperty` | {PropertyName} must not match {OtherPropertyName}. | `{PropertyName}`, `{OtherPropertyName}` |
-| `MultipleOf` | {PropertyName} must be a multiple of {Step}. | `{PropertyName}`, `{Step}` |
-| `InThePast` | {PropertyName} must be a date in the past. | `{PropertyName}` |
-| `InTheFuture` | {PropertyName} must be a date in the future. | `{PropertyName}` |
-| `IsInEnum` | {PropertyName} has an invalid value. | `{PropertyName}` |
-| `MinimumCount` | {PropertyName} must contain at least {MinCount} entries. | `{PropertyName}`, `{MinCount}` |
-| `MaximumCount` | {PropertyName} must not contain more than {MaxCount} entries. | `{PropertyName}`, `{MaxCount}` |
-| `NoDuplicates` | {PropertyName} must not contain duplicate entries. | `{PropertyName}` |
+| Error code                          | Default English message                                                            | Placeholders                                   |
+|-------------------------------------|------------------------------------------------------------------------------------|------------------------------------------------|
+| `Must`                              | {PropertyName} is not valid.                                                       | `{PropertyName}`                               |
+| `NotEmpty`                          | {PropertyName} is required.                                                        | `{PropertyName}`                               |
+| `NotNull`                           | {PropertyName} is required.                                                        | `{PropertyName}`                               |
+| `NotDefault`                        | {PropertyName} is required.                                                        | `{PropertyName}`                               |
+| `NotNaN`                            | {PropertyName} must be a number.                                                   | `{PropertyName}`                               |
+| `MinimumLength`                     | {PropertyName} must be at least {MinLength} characters long.                       | `{PropertyName}`, `{MinLength}`                |
+| `MaximumLength`                     | {PropertyName} must not exceed {MaxLength} characters.                             | `{PropertyName}`, `{MaxLength}`                |
+| `Length`                            | {PropertyName} must be exactly {Length} characters long.                           | `{PropertyName}`, `{Length}`                   |
+| `LengthBetween`                     | {PropertyName} must be between {MinLength} and {MaxLength} characters long.        | `{PropertyName}`, `{MinLength}`, `{MaxLength}` |
+| `Matches`                           | {PropertyName} has an invalid format.                                              | `{PropertyName}`, `{Pattern}`                  |
+| `EmailAddress`                      | {PropertyName} is not a valid email address.                                       | `{PropertyName}`                               |
+| `EmailTopLevelDomain`               | {PropertyName} must use one of the following top-level domains: {TopLevelDomains}. | `{PropertyName}`, `{TopLevelDomains}`          |
+| `EmailTopLevelDomainNotAllowed`     | {PropertyName} must not use the top-level domain {TopLevelDomain}.                 | `{PropertyName}`, `{TopLevelDomain}`           |
+| `Url`                               | {PropertyName} is not a valid URL.                                                 | `{PropertyName}`                               |
+| `UrlScheme`                         | {PropertyName} must use one of the following schemes: {Schemes}.                   | `{PropertyName}`, `{Schemes}`                  |
+| `UrlHost`                           | {PropertyName} must point at one of the following hosts: {Hosts}.                  | `{PropertyName}`, `{Hosts}`                    |
+| `NotContaining`                     | {PropertyName} contains text that is not allowed.                                  | `{PropertyName}`                               |
+| `GreaterThan`                       | {PropertyName} must be greater than {OtherValue}.                                  | `{PropertyName}`, `{OtherValue}`               |
+| `GreaterThanOrEqualTo`              | {PropertyName} must be greater than or equal to {OtherValue}.                      | `{PropertyName}`, `{OtherValue}`               |
+| `LessThan`                          | {PropertyName} must be less than {OtherValue}.                                     | `{PropertyName}`, `{OtherValue}`               |
+| `LessThanOrEqualTo`                 | {PropertyName} must be less than or equal to {OtherValue}.                         | `{PropertyName}`, `{OtherValue}`               |
+| `Between`                           | {PropertyName} must be between {From} and {To}.                                    | `{PropertyName}`, `{From}`, `{To}`             |
+| `BetweenExclusive`                  | {PropertyName} must be greater than {From} and less than {To}.                     | `{PropertyName}`, `{From}`, `{To}`             |
+| `BetweenExclusiveFrom`              | {PropertyName} must be greater than {From} and at most {To}.                       | `{PropertyName}`, `{From}`, `{To}`             |
+| `BetweenExclusiveTo`                | {PropertyName} must be at least {From} and less than {To}.                         | `{PropertyName}`, `{From}`, `{To}`             |
+| `EqualTo`                           | {PropertyName} must be {OtherValue}.                                               | `{PropertyName}`, `{OtherValue}`               |
+| `NotEqualTo`                        | {PropertyName} must not be {OtherValue}.                                           | `{PropertyName}`, `{OtherValue}`               |
+| `GreaterThanOtherProperty`          | {PropertyName} must be greater than {OtherPropertyName}.                           | `{PropertyName}`, `{OtherPropertyName}`        |
+| `GreaterThanOrEqualToOtherProperty` | {PropertyName} must be greater than or equal to {OtherPropertyName}.               | `{PropertyName}`, `{OtherPropertyName}`        |
+| `LessThanOtherProperty`             | {PropertyName} must be less than {OtherPropertyName}.                              | `{PropertyName}`, `{OtherPropertyName}`        |
+| `LessThanOrEqualToOtherProperty`    | {PropertyName} must be less than or equal to {OtherPropertyName}.                  | `{PropertyName}`, `{OtherPropertyName}`        |
+| `EqualToOtherProperty`              | {PropertyName} must match {OtherPropertyName}.                                     | `{PropertyName}`, `{OtherPropertyName}`        |
+| `NotEqualToOtherProperty`           | {PropertyName} must not match {OtherPropertyName}.                                 | `{PropertyName}`, `{OtherPropertyName}`        |
+| `MultipleOf`                        | {PropertyName} must be a multiple of {Step}.                                       | `{PropertyName}`, `{Step}`                     |
+| `InThePast`                         | {PropertyName} must be a date in the past.                                         | `{PropertyName}`                               |
+| `InTheFuture`                       | {PropertyName} must be a date in the future.                                       | `{PropertyName}`                               |
+| `IsInEnum`                          | {PropertyName} has an invalid value.                                               | `{PropertyName}`                               |
+| `MinimumCount`                      | {PropertyName} must contain at least {MinCount} entries.                           | `{PropertyName}`, `{MinCount}`                 |
+| `MaximumCount`                      | {PropertyName} must not contain more than {MaxCount} entries.                      | `{PropertyName}`, `{MaxCount}`                 |
+| `NoDuplicates`                      | {PropertyName} must not contain duplicate entries.                                 | `{PropertyName}`                               |
 
 Each of these is a constant on `ValidationErrorCodes`, so a provider keys off `ValidationErrorCodes.NotEmpty`
 rather than off the string.
 
 Two placeholders are supplied to a message without any built-in text using them, and are there for a
-provider of your own: **`{Pattern}`**, the regular expression a `Matches` rule was declared with, and
-**`{CollectionIndex}`**, the zero-based position of the entry under judgement inside any `ForEach`. A
+provider of your own: **`{Pattern}`**, the regular expression a `Matches` rule was declared with, and **
+`{CollectionIndex}`**, the zero-based position of the entry under judgement inside any `ForEach`. A
 message that names `{CollectionIndex}` gets it whichever way the element's rules were declared, including
 from a validator composed in with `ForEach(validator)`.
 
@@ -1099,11 +1217,11 @@ from a validator composed in with `ForEach(validator)`.
 Most of what an application validates is not a length or a range but a rule of its own. There are three
 ways to write one, and which to reach for depends on how often you will write it:
 
-| | For |
-|---|---|
-| `Must` | A rule this one property has, written where it is used |
-| An extension method over `PropertyRuleBuilder` | A rule several properties or several validators share |
-| `Add` / `AddAsync` | The body of either, when it has more to say than a `bool` |
+|                                                | For                                                       |
+|------------------------------------------------|-----------------------------------------------------------|
+| `Must`                                         | A rule this one property has, written where it is used    |
+| An extension method over `PropertyRuleBuilder` | A rule several properties or several validators share     |
+| `Add` / `AddAsync`                             | The body of either, when it has more to say than a `bool` |
 
 ### A one-off rule: `Must`
 
@@ -1266,17 +1384,17 @@ both construct it through the container.
 
 What the body of a custom rule is handed:
 
-| Member | What it is |
-|--------|------------|
-| `Value` | The value of the property this chain was declared for |
-| `Instance` | The whole object being validated, for a rule about more than one property |
-| `PropertyName` | What a failure of this property is reported under |
-| `DisplayName` | What a message calls it — the `WithDisplayName` name, or the property name |
-| `HasFailed` | `true` once a rule in this chain has failed |
-| `ValidationMessageProvider` | The message provider, for a rule building a `ValidationError` itself |
-| `AddError(errorCode, params (string Name, object? Value)[])` | Reports a failure, resolving the message from the code and the arguments |
-| `AddError(ValidationError)` | Reports a failure the rule composed itself — used by rules reporting per element |
-| `GetDisplayName(propertyName)` | What a message should call *another* property, for a rule comparing two |
+| Member                                                       | What it is                                                                       |
+|--------------------------------------------------------------|----------------------------------------------------------------------------------|
+| `Value`                                                      | The value of the property this chain was declared for                            |
+| `Instance`                                                   | The whole object being validated, for a rule about more than one property        |
+| `PropertyName`                                               | What a failure of this property is reported under                                |
+| `DisplayName`                                                | What a message calls it — the `WithDisplayName` name, or the property name       |
+| `HasFailed`                                                  | `true` once a rule in this chain has failed                                      |
+| `ValidationMessageProvider`                                  | The message provider, for a rule building a `ValidationError` itself             |
+| `AddError(errorCode, params (string Name, object? Value)[])` | Reports a failure, resolving the message from the code and the arguments         |
+| `AddError(ValidationError)`                                  | Reports a failure the rule composed itself — used by rules reporting per element |
+| `GetDisplayName(propertyName)`                               | What a message should call *another* property, for a rule comparing two          |
 
 `AddError(errorCode, ...)` seeds `{PropertyName}` from the property's display name before your arguments,
 so a template never has to be told the name of the thing it is about. Your arguments may override it if
@@ -1300,12 +1418,12 @@ The message reads `REQUIRED` because the code is also the key the message is res
 built-in provider has no text for `REQUIRED`. Give your own provider one and the wording is yours. A raw
 code showing up in a response is the reminder that a key still needs a text.
 
-| | Applies to | Changes |
-|---|---|---|
-| `WithDisplayName(name)` | the whole property, wherever in the chain it is written | `{PropertyName}` in every message of that property |
-| `WithPropertyName(name)` | the whole property | `ValidationError.PropertyName` — what the failure is reported under |
-| `WithErrorCode(code)` | the one rule it follows | `ValidationError.ErrorCode`, and the key the message is resolved under |
-| `WithMessage(message)` | the one rule it follows | the text, substituted against the rule's arguments |
+|                          | Applies to                                              | Changes                                                                |
+|--------------------------|---------------------------------------------------------|------------------------------------------------------------------------|
+| `WithDisplayName(name)`  | the whole property, wherever in the chain it is written | `{PropertyName}` in every message of that property                     |
+| `WithPropertyName(name)` | the whole property                                      | `ValidationError.PropertyName` — what the failure is reported under    |
+| `WithErrorCode(code)`    | the one rule it follows                                 | `ValidationError.ErrorCode`, and the key the message is resolved under |
+| `WithMessage(message)`   | the one rule it follows                                 | the text, substituted against the rule's arguments                     |
 
 Because `WithErrorCode` and `WithMessage` bind to the rule before them, each rule of a chain can carry its
 own:
@@ -1325,16 +1443,16 @@ that depends on what was actually sent.
 
 Settings that exist at more than one level are resolved from the most specific one that names them:
 
-| Default | Out of the box | Overridden at |
-|---|---|---|
-| Message text | the built-in English | `NValidationOptions.Default` → `AddNValidation` → what the pass inherits: the options passed to the call, or the settings of the validator this one is composed into → the validator's `ValidationMessageProvider` → `WithMessage` for one rule |
-| Display name | the property's member path | `WithDisplayName`, per property |
-| Reported property name | the property's member path | `WithPropertyName`, per property |
-| `ValidationBehaviors.Class` | `All` | the same ladder, ending at the validator and then `WithValidationBehavior` on a chain |
-| `ValidationBehaviors.Property` | `StopAtFirstError` | the same ladder |
-| Validator lifetime | `ServiceLifetime.Scoped` | `o.ValidatorLifetime`, or per registration |
-| Element index | the zero-based position | `WithIndexer`, per `ForEach` |
-| Missing-validator behavior | `Ignore` | `AddValidationFilter` |
+| Default                        | Out of the box             | Overridden at                                                                                                                                                                                                                                   |
+|--------------------------------|----------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Message text                   | the built-in English       | `NValidationOptions.Default` → `AddNValidation` → what the pass inherits: the options passed to the call, or the settings of the validator this one is composed into → the validator's `ValidationMessageProvider` → `WithMessage` for one rule |
+| Display name                   | the property's member path | `WithDisplayName`, per property                                                                                                                                                                                                                 |
+| Reported property name         | the property's member path | `WithPropertyName`, per property                                                                                                                                                                                                                |
+| `ValidationBehaviors.Class`    | `All`                      | the same ladder, ending at the validator and then `WithValidationBehavior` on a chain                                                                                                                                                           |
+| `ValidationBehaviors.Property` | `StopAtFirstError`         | the same ladder                                                                                                                                                                                                                                 |
+| Validator lifetime             | `ServiceLifetime.Scoped`   | `o.ValidatorLifetime`, or per registration                                                                                                                                                                                                      |
+| Element index                  | the zero-based position    | `WithIndexer`, per `ForEach`                                                                                                                                                                                                                    |
+| Missing-validator behavior     | `Ignore`                   | `AddValidationFilter`                                                                                                                                                                                                                           |
 
 Both settings of `NValidationOptions` travel that ladder identically, and each rung is asked only
 about what it named: options that set a behavior and no provider change the behavior and leave the
@@ -1419,18 +1537,18 @@ client or a database has no business carrying one.
 A message is a template with named placeholders. Fifteen names exist, each a constant on
 `ValidationMessagePlaceholders`, and a message uses only the ones it needs:
 
-| Placeholder | Carries | Supplied by |
-|---|---|---|
-| `{PropertyName}` | the property's display name | every rule |
-| `{CollectionIndex}` | the entry's zero-based position | every rule inside a `ForEach` |
-| `{MinLength}` / `{MaxLength}` / `{Length}` | a character count | the text length rules |
-| `{Pattern}` | the regular expression | `Matches` |
-| `{From}` / `{To}` | the bounds | `Between` |
-| `{Step}` | the step | `MultipleOf` |
-| `{MinCount}` / `{MaxCount}` | an entry count | the collection count rules |
-| `{TopLevelDomains}` / `{TopLevelDomain}` | the allowed list / the offending one | the email domain rules |
-| `{OtherValue}` | the value compared against | the comparison rules |
-| `{OtherPropertyName}` | the display name of the property compared against | the cross-property comparison rules |
+| Placeholder                                | Carries                                           | Supplied by                         |
+|--------------------------------------------|---------------------------------------------------|-------------------------------------|
+| `{PropertyName}`                           | the property's display name                       | every rule                          |
+| `{CollectionIndex}`                        | the entry's zero-based position                   | every rule inside a `ForEach`       |
+| `{MinLength}` / `{MaxLength}` / `{Length}` | a character count                                 | the text length rules               |
+| `{Pattern}`                                | the regular expression                            | `Matches`                           |
+| `{From}` / `{To}`                          | the bounds                                        | `Between`                           |
+| `{Step}`                                   | the step                                          | `MultipleOf`                        |
+| `{MinCount}` / `{MaxCount}`                | an entry count                                    | the collection count rules          |
+| `{TopLevelDomains}` / `{TopLevelDomain}`   | the allowed list / the offending one              | the email domain rules              |
+| `{OtherValue}`                             | the value compared against                        | the comparison rules                |
+| `{OtherPropertyName}`                      | the display name of the property compared against | the cross-property comparison rules |
 
 A placeholder takes a .NET format specifier after a colon — `{Step:0.00}`, `{To:yyyy-MM-dd}` — and values
 are rendered in `CultureInfo.CurrentCulture`, so a number or a date follows the culture of the request
@@ -1620,7 +1738,10 @@ services.AddNValidation(builder.Configuration.GetSection("NValidation"), o =>
   "NValidation": {
     "ValidatorLifetime": "Singleton",
     "PromoteSafeValidatorsToSingleton": true,
-    "ValidationBehaviors": { "Class": "All", "Property": "StopAtFirstError" }
+    "ValidationBehaviors": {
+      "Class": "All",
+      "Property": "StopAtFirstError"
+    }
   }
 }
 ```
@@ -1643,12 +1764,12 @@ services.AddNValidation(o => o
     .AddValidator<CarValidator>());
 ```
 
-| Overload | For |
-|----------|-----|
-| `AddValidator<TValidator>()` | The common case — the validated type is read off the validator |
-| `AddValidator<TInstance, TValidator>()` | Naming both, where you would rather the compiler checked that a validator really does validate what you think it does |
-| `AddValidator(Type validatorType)` | A type decided at run time |
-| `AddValidatorsFromAssembly(params Assembly[])` | Every `IValidator<T>` in an assembly, each with its own dependencies resolved |
+| Overload                                       | For                                                                                                                   |
+|------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| `AddValidator<TValidator>()`                   | The common case — the validated type is read off the validator                                                        |
+| `AddValidator<TInstance, TValidator>()`        | Naming both, where you would rather the compiler checked that a validator really does validate what you think it does |
+| `AddValidator(Type validatorType)`             | A type decided at run time                                                                                            |
+| `AddValidatorsFromAssembly(params Assembly[])` | Every `IValidator<T>` in an assembly, each with its own dependencies resolved                                         |
 
 Each of them also has an overload taking a `ServiceLifetime`, for the one registration that cannot follow
 the default.
@@ -1924,19 +2045,20 @@ app.MapPost("/cars/checked", async (Car car, IValidator<Car> validator, Cancella
 
 ### What the package contains
 
-| Type | What it is for |
-|------|----------------|
-| `ValidationExceptionHandler` | An `IExceptionHandler` turning a `ValidationException` into a 400 problem details response |
-| `ValidationActionFilter` | An MVC filter validating every body- and form-bound parameter before the action runs |
-| `AddValidationFilter(...)` | Registers that filter from inside `AddNValidation` — with a delegate, an `IConfiguration` section, or neither |
-| `ValidationFilterOptions` | What the filter is configured with: `MissingValidatorBehavior` |
-| `MissingValidatorBehavior` | `Ignore`, `Log` or `Throw` for a payload with no validator |
-| `SkipNValidationAttribute` | `[SkipNValidation]` on a parameter, an action or a controller |
-| `ToProblemDetails()` | The problem details body for a `ValidationResult` or a `ValidationException` |
-| `ValidationProblem(result)` | The `ControllerBase` shortcut for returning one |
+| Type                         | What it is for                                                                                                |
+|------------------------------|---------------------------------------------------------------------------------------------------------------|
+| `ValidationExceptionHandler` | An `IExceptionHandler` turning a `ValidationException` into a 400 problem details response                    |
+| `ValidationActionFilter`     | An MVC filter validating every body- and form-bound parameter before the action runs                          |
+| `AddValidationFilter(...)`   | Registers that filter from inside `AddNValidation` — with a delegate, an `IConfiguration` section, or neither |
+| `ValidationFilterOptions`    | What the filter is configured with: `MissingValidatorBehavior`                                                |
+| `MissingValidatorBehavior`   | `Ignore`, `Log` or `Throw` for a payload with no validator                                                    |
+| `SkipNValidationAttribute`   | `[SkipNValidation]` on a parameter, an action or a controller                                                 |
+| `ToProblemDetails()`         | The problem details body for a `ValidationResult` or a `ValidationException`                                  |
+| `ValidationProblem(result)`  | The `ControllerBase` shortcut for returning one                                                               |
 
 A runnable end-to-end example lives in
-[`Samples/NValidation.SampleApi`](https://github.com/thomasgalliker/NValidation/tree/develop/Samples/NValidation.SampleApi).
+[
+`Samples/NValidation.SampleApi`](https://github.com/thomasgalliker/NValidation/tree/develop/Samples/NValidation.SampleApi).
 
 ## Testing your own rules
 

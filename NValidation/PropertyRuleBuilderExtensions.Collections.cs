@@ -103,7 +103,7 @@ namespace NValidation
         /// <c>null</c> element, and the collection is enumerated once.
         /// </remarks>
         public static void ForEach<TElement>(
-            this IPropertyRuleTarget<IEnumerable<TElement>> target,
+            this IPropertyRuleTarget<IEnumerable<TElement>?> target,
             Action<ElementRuleBuilder<TElement>> declareRules)
         {
             ArgumentNullException.ThrowIfNull(target);
@@ -122,7 +122,7 @@ namespace NValidation
         /// </summary>
         /// <inheritdoc cref="ForEach{TElement}(IPropertyRuleTarget{IEnumerable{TElement}}, Action{ElementRuleBuilder{TElement}})" path="/remarks"/>
         public static void ForEach<TElement>(
-            this IPropertyRuleTarget<IEnumerable<TElement>> target,
+            this IPropertyRuleTarget<IEnumerable<TElement>?> target,
             IValidator<TElement> validator)
         {
             ArgumentNullException.ThrowIfNull(target);
