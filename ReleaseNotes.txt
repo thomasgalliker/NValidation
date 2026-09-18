@@ -1,0 +1,181 @@
+1.0
+- Initial release.
+- ValidationError now answers three questions rather than one: PropertyName (where the failure is,
+  the dotted member path that was previously called Code), ErrorCode (which rule failed) and Message.
+  Arguments carries the values the message was rendered from. Renamed accordingly:
+  ValidationMessageKeys -> ValidationErrorCodes, MessageKeyProvider -> ErrorCodeProvider,
+  IValidationMessageProvider.GetMessage(messageKey, ...) -> GetMessage(errorCode, ...).
+- WithErrorCode now names the rule that failed rather than moving the reported property name. What it
+  used to do is WithPropertyName. The error code is also the key the message is resolved under, so a
+  Must rule localizes by being named instead of by carrying a literal.
+- Comparison rules now work for enums. EqualTo, NotEqualTo, GreaterThan, GreaterThanOrEqualTo,
+  LessThan, LessThanOrEqualTo and Between no longer require IComparable<T>/IEquatable<T>, which
+  System.Enum does not implement, so comparing an enum no longer means Must with a hardcoded literal.
+  A value type nothing can order is refused where the rule is declared rather than on the request.
+- Collapsed the comparison overloads from 50 to 38 (the library's rule surface from 104 to 92) by
+  removing the redundant non-nullable other-property forms. Call sites are unaffected: the lambda's
+  value converts to its nullable form and the reported property name is unchanged.
+- Added PrecisionScale for decimals, OneOf for a closed set of values, and MustAsync.
+- Added NValidationBuilder.PromoteSafeValidatorsToSingleton: registers a validator as a singleton when
+  every constructor parameter resolves to a singleton or to another validator that also qualifies.
+  Resolving the sample four-validator graph drops from 8,979 ns / 25,536 B to 23.7 ns / 128 B. It is
+  on by default. A lifetime named explicitly - on AddValidator, or through ValidatorLifetime - is an
+  instruction and is registered as written; setting PromoteSafeValidatorsToSingleton yourself asks for
+  promotion regardless, as it always did.
+- Added Validator<T>.Property(name, accessor) and Property(name, accessor, isReachable): a rule chain
+  for a value that is not a member path — a computed value, a dictionary entry, an indexer.
+- Built-in English is now correct at a count of one ("must contain at least 1 entry"). A message
+  template may select between two forms with {MinCount:entry|entries}, which any provider and any
+  translation can use.
+- ExpectedError now matches an expected message exactly, as AwesomeAssertions' Be does, instead of
+  treating it as a wildcard pattern. ExpectedError.Matching(name, pattern) keeps the wildcards and
+  ExpectedError.Any(name) accepts any message, so a looser assertion says so at the call site.
+- The compiled-accessor and reachability caches are now held per closed generic rather than in a
+  dictionary keyed by Type. A validator declared for a type from a collectible AssemblyLoadContext no
+  longer roots that context for the life of the process.
+- Faster: validating is 1-7% quicker and constructing a validator allocates 14% less, because a
+  synchronous rule is no longer wrapped in a lambda returning a completed ValueTask and a
+  single-segment property name no longer builds a list.
+- Much faster again, and a validation that reports nothing now allocates 64 bytes whatever the
+  validator's width - one object for the pass, and nothing per property:
+    * RuleContext is a readonly struct over a per-pass ValidationFrame instead of a class allocated
+      per property per validation. That was 112 bytes a chain, and it was the term that grew with the
+      payload. Source-compatible for rules, which use the context by value either way; binary-breaking.
+    * A validator whose every rule judges rather than awaits runs with no async state machine anywhere
+      in it. Worth about two thirds of the time on a wide payload.
+    * The rules and their checks are walked as arrays rather than through list enumerators.
+    * The error list is not built until something fails, and a failed result takes the list rather
+      than copying it.
+    * EmailAddress decides the everyday shape over the characters themselves and only asks
+      System.Net.Mail.MailAddress about the rest, so accepting a valid address no longer allocates the
+      parsed address and its parts. Verdicts are unchanged: the span pass only ever answers yes, and
+      anything it is not certain about still goes to the parser.
+  Measured on an Apple M4 Pro, .NET 10: one flat object 235 -> 53 ns and 648 -> 64 B, the sample
+  payload 845 -> 238 ns and 2,272 -> 504 B, a 34-property payload 1,247 -> 225 ns and 3,864 -> 64 B.
+- Collections allocate about 130 bytes an entry, down from about 400: one element scope is reused for
+  the whole collection rather than built per entry, and an entry is named only when it has something to
+  report - which it was not, because the caller asked for the name before knowing. A ForEach itself no
+  longer costs anything per validation beyond the entries: it used to box the rule context and allocate
+  a delegate on every run.
+- A validator composed with SetValidator or ForEach whose every rule judges rather than awaits is now run
+  synchronously as well, so a payload with nested validators and collections stays on the fast path.
+- Rules freeze on the first validation. A rule declared afterwards - a Property on the validator, or a
+  rule on a chain kept from before - used to be silently ignored; it now throws InvalidOperationException.
+- RuleContext.AddError takes params ReadOnlySpan for its arguments, and the placeholder formatter scans
+  the template by hand instead of through a regular expression, so a failure costs less to report.
+- RuleContext.CancellationToken exposes the token the validation was started with.
+- Added WithMessage(Func<T, string>) and WithMessage(Func<T, TProperty, string>),
+  ValidationAssertions.ShouldReportErrorCode, and the BetweenExclusive/BetweenExclusiveFrom/BetweenExclusiveTo
+  codes for the excluded-bound forms. The Must overloads taking a message are gone: Must(predicate) names
+  the rule, and WithMessage words it, with placeholders substituted either way.
+- Renamed SkipValidationAttribute to SkipNValidationAttribute ([SkipNValidation]). .NET 10's shared
+  framework ships Microsoft.Extensions.Validation.SkipValidationAttribute, so importing both
+  namespaces made the shorter name a CS0104 ambiguity rather than a warning.
+- ElementRuleBuilder<T> no longer derives from Validator<T>. It was publicly an IValidator<T> that
+  ignored Where, SetValidator and WithIndexer, so running it directly gave a different verdict than
+  the ForEach it belongs to. Property, Element and ValidationBehaviors are unchanged.
+- Fixed: a message template whose format specifier a value cannot honour rendered as a FormatException
+  out of ValidateAsync, turning a bad request into a server error.
+- Fixed: Between with an excluded bound reported the inclusive wording, naming the two values it had
+  just refused as the permitted range. It now has its own codes for each combination of bounds.
+- Fixed: WithMessage did not substitute placeholders, and replaced the message of every failure a
+  composed validator reported. It now substitutes, and is refused where it follows SetValidator or
+  ForEach.
+- Fixed: an explicit AddValidator written after AddValidatorsFromAssembly was silently ignored.
+  Registration is now order-independent, and two conflicting explicit registrations are refused.
+- Fixed: the problem details body carried its errors in an extension member typed object, which a
+  host publishing ahead of time could not serialize. It is now HttpValidationProblemDetails.
+- Added ValidationBehavior: how much a validator reports, along two axes — across its properties
+  (ValidationBehaviors.Class) and within one property's rule chain (ValidationBehaviors.Property).
+  ValidationBehaviors is a small immutable value assigned as a whole - new() { Class = ... } - whose unset
+  axis inherits. Configurable on the registration, on a validator, and per chain with
+  WithValidationBehavior. Replaces ContinueOnFailure(), which is equivalent to
+  WithValidationBehavior(ValidationBehavior.All). The defaults are unchanged behaviour: every property,
+  one message each.
+- Split the package in two. NValidation now has no dependencies at all; AddNValidation, the registration
+  and the IConfiguration overloads moved to a new NValidation.DependencyInjection package, which is what
+  NValidation.AspNetCore depends on. A host which only constructs validators no longer pulls
+  Microsoft.Extensions.DependencyInjection.Abstractions in to do it. The options object AddNValidation
+  configures is renamed NValidationBuilder, which is what it is: it registers things and returns itself.
+- Added NValidationOptions, which is what a validator falls back to when nothing more specific said —
+  the message provider, and how much it reports. An immutable record: set NValidationOptions.Default once
+  at startup and every validator picks it up, so a host which constructs validators with new no longer
+  configures each instance; derive a variant with `with`. The same type is accepted per call —
+  validator.ValidateAsync(car, options) — for a request whose messages are in its own language.
+  Every setting starts at null, meaning "leave it to the level below", so options which name a behavior
+  and no provider change the behavior and leave the messages alone.
+- One ladder for both settings, and one direction of inheritance: what a validator declared for itself,
+  then what the pass inherits — the options passed to the call, or, for a validator composed into
+  another, what its composer resolved — then what AddNValidation configured, then
+  NValidationOptions.Default, then the built-in English and the built-in behaviors. What a validator
+  resolves is inherited by the validators it composes and by the element chain of a ForEach, so a
+  provider handed to the root of a graph reaches every rule in it, and a nested validator which declared
+  its own keeps it. A validator's own ValidationMessageProvider is now nullable: null means it inherits.
+- AddNValidation no longer registers an IValidationMessageProvider on the host's behalf. A validator the
+  container built is handed the provider the container holds, if any, and otherwise falls through to the
+  options of the call and NValidationOptions.Default while validating — so a default assigned after the
+  container was built still reaches it.
+- ValidationException.Errors has the same shape as ToErrorsDictionary(): { propertyName: string[] }.
+- The lifetime rules are unchanged: a lifetime named on a registration or through ValidatorLifetime is
+  registered as written by the default promotion, and PromoteSafeValidatorsToSingleton set to true by
+  hand lifts a named lifetime too. The resolution benchmark is what holds this to account.
+- IValidator, the non-generic contract, now has the options overload its typed counterpart has:
+  ValidateAsync(instance, options, cancellationToken). A caller which resolved a validator by Type can
+  ask for a wording of its own without reflecting over the closed generic.
+- Renamed Validator<T>.Messages and RuleContext<T, TProperty>.Messages to ValidationMessageProvider,
+  which is what they hold.
+- AddNValidation now takes an IConfiguration section, so ValidatorLifetime,
+  PromoteSafeValidatorsToSingleton and ValidationBehaviors can move to appsettings.json. Which validators
+  are registered and where messages come from stay in code, because a typo in a settings file would turn
+  those into a payload that is silently never validated. A value the setting does not permit is refused at
+  startup and the message names what was permitted. The settings are read key by key rather than through
+  IConfiguration.Bind, which is RequiresUnreferencedCode and would surface as a trimming warning in an
+  ahead-of-time consumer's build.
+- Added NValidation.Testing: assertions over a validation result for unit tests, shipped in the same
+  package and depending on no test framework and no assertion library. result.ShouldReport("Vin",
+  "Vin is required.") states the whole expected result — nothing else may be present, the count is
+  implied, order is ignored — and the same overloads take a ValidationException or a
+  { propertyName: [messages] } dictionary. An expected message is matched with wildcards, so a fragment is as
+  easy to express as the whole of it. A failure throws ValidationAssertionException naming what was
+  missing, what was unexpected, and the near miss in between.
+  Also TestValidator<T>, which declares the rule under test in the test itself and takes an optional
+  IValidationMessageProvider; ErrorCodeProvider, for assertions independent of any translation;
+  TestTimeProvider, for the date rules; and ShouldResolveEveryCoreErrorCode, which holds an
+  application's own message provider to every key this core can report.
+- EmailAddress reads the value with a scanner of its own against RFC 5321 instead of through
+  System.Net.Mail.MailAddress, and its default is the everyday shape: a dot-separated local part, one
+  @, a domain of two or more labels, an internationalized domain checked against IDNA. Four things the
+  rule accepted before and the RFC does not are now refused - a trailing dot in the local part, a domain
+  label beginning or ending with a hyphen, a bracketed domain that is not an IP address, a local part
+  over 64 octets or a domain over 255. Three legal forms the default leaves out are admitted by
+  refinements on the builder EmailAddress() now returns - AllowQuotedLocalPart, AllowAddressLiteral and
+  AllowSingleLabelDomain - which together read exactly RFC 5321's Mailbox. Write them right after
+  EmailAddress(); every other rule and decoration returns the plain builder. The scanner allocates
+  nothing to accept or refuse an ASCII address, refuses a value it cannot read in a third of the time
+  the parser took, and costs about 6 ns more than before to accept the everyday address, which is the
+  price of reading the whole grammar for it.
+- EmailTopLevelDomainIn and EmailTopLevelDomainNotIn are now RequireTopLevelDomain and
+  RefuseTopLevelDomain on that same builder: refinements of the one address rule rather than rules of
+  their own, so a value is parsed once, reports at most one failure, and there is no order to get wrong.
+  Error codes, placeholders and messages are unchanged.
+- PropertyRuleBuilder<T, TProperty> is a class rather than a readonly struct, so that a rule can return
+  a builder derived from it. Nothing on the validation path changes; building a validator costs one
+  small object more per declared property.
+- Url validates a URL, reading the value with a scanner of its own against RFC 3986 rather than through
+  Uri. Its default is a URL that names a host: an http or https scheme, a host of two or more labels
+  with an internationalized host checked against IDNA, an optional port, and a path, query and fragment
+  whose percent-escapes are well formed. Surrounding whitespace, control characters, credentials before
+  the host, an address in place of a name and a host of a single label are all refused; five refinements
+  on the builder Url() returns admit them - AllowUserInfo, AllowIPAddress, AllowLoopback,
+  AllowSingleLabelHost and AllowRelative. Write them right after Url(); every other rule and decoration
+  returns the plain builder.
+- RequireScheme, RequireHost and RequireDomain narrow which schemes and hosts a URL may use, as
+  refinements of the same rule rather than rules of their own, so a value is parsed once, reports at
+  most one failure, and there is no order to get wrong. RequireScheme replaces the default http and
+  https pair rather than adding to it. RequireDomain cuts at a label boundary, so api.example.com sits
+  under example.com and evil-example.com does not.
+- Three new error codes with their built-in English: Url, UrlScheme and UrlHost, plus the placeholders
+  Schemes and Hosts. A well-formed URL whose scheme is not allowed reports UrlScheme rather than Url,
+  so the message can name the allowed schemes even where nobody wrote RequireScheme.
+- What a host is now lives in one place, shared by EmailAddress and Url: the DNS label grammar, the
+  octet limits, IDNA for a name beyond ASCII and the two address forms. No rule changed its verdict.
