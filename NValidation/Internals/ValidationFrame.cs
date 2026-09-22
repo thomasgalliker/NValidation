@@ -7,6 +7,12 @@ namespace NValidation.Internals
         private List<ValidationError>? errors;
 
         /// <summary>
+        /// The run this pass belongs to. A field rather than a property, because reading one member of it
+        /// — the cancellation token, per chain — through a getter would copy the whole struct.
+        /// </summary>
+        public readonly ValidationRun Run;
+
+        /// <summary>
         /// errors: The list to report into where the caller owns one — an entry of a ForEach, or a validator
         /// this one composed — and null for a pass which reports into a list of its own, which is then built
         /// only if something actually fails.
@@ -29,8 +35,6 @@ namespace NValidation.Internals
         /// How many failures have been reported, without building Errors.
         /// </summary>
         public int ErrorCount => this.errors?.Count ?? 0;
-
-        public ValidationRun Run { get; }
 
         /// <summary>
         /// What this pass reported, where it owned the list and there is something in it. The list is handed

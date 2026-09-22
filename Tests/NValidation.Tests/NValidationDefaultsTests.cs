@@ -41,6 +41,59 @@ namespace NValidation.Tests
             result.ShouldReport("Name", "message from the default provider");
         }
 
+        [Fact]
+        public async Task ValidationGroups_ReachAValidatorConstructedWithNew()
+        {
+            // Arrange
+            NValidationOptions.Default = new() { ValidationGroups = "Create" };
+
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).NotEmpty().WithGroup("Create");
+
+            // Act
+            var result = await validator.ValidateAsync(new Manufacturer());
+
+            // Assert
+            result.ShouldReport("Name", "Name is required.");
+        }
+
+        [Fact]
+        public async Task ValidationGroups_AreOutrankedByTheOptionsOfTheCall()
+        {
+            // Arrange
+            NValidationOptions.Default = new() { ValidationGroups = "Create" };
+
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).NotEmpty().WithGroup("Create");
+            validator.Property(m => m.CountryCode).NotEmpty().WithGroup("Update");
+
+            var options = new NValidationOptions { ValidationGroups = "Update" };
+
+            // Act
+            var result = await validator.ValidateAsync(new Manufacturer(), options);
+
+            // Assert
+            result.ShouldReport("CountryCode", "CountryCode is required.");
+        }
+
+        [Fact]
+        public async Task ValidationGroups_ReachANestedValidator()
+        {
+            // Arrange
+            NValidationOptions.Default = new() { ValidationGroups = "Create" };
+
+            var nested = new TestValidator<Manufacturer>();
+            nested.Property(m => m.Name).NotEmpty().WithGroup("Create");
+
+            var validator = new ComposingValidator(nested);
+
+            // Act
+            var result = await validator.ValidateAsync(new CarModel { Manufacturer = new Manufacturer() });
+
+            // Assert
+            result.ShouldReport("Manufacturer.Name", "Name is required.");
+        }
+
         /// <summary>
         /// The validator's own provider is more specific, so it wins.
         /// </summary>

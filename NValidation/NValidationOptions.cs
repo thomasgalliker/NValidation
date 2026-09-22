@@ -1,9 +1,9 @@
 namespace NValidation
 {
     /// <summary>
-    /// The two settings a validator can be given without a container: where its messages come from, and
-    /// how much it reports. Immutable; a variant is derived with <c>with</c>. A setting left <c>null</c>
-    /// means "the level below answers".
+    /// The three settings a validator can be given without a container: where its messages come from,
+    /// how much it reports, and which rule groups it runs. Immutable; a variant is derived with
+    /// <c>with</c>. A setting left <c>null</c> means "the level below answers".
     /// </summary>
     /// <example>
     /// <code>
@@ -21,6 +21,9 @@ namespace NValidation
     /// the container built; then <see cref="Default"/>; then the built-in English and the built-in
     /// behaviors. Everything a validator resolves is inherited by the validators it composes and by the
     /// element chain of a <c>ForEach</c>, unless they declared otherwise for themselves.
+    /// The group selection has no validator level: which rules apply is a fact about the call rather
+    /// than about the validator, so it is named by the options of the call, the registration or
+    /// <see cref="Default"/>, and failing all of those only the chains in no group run.
     /// <see cref="Default"/> is for an application to set, not a library: a package which assigns it
     /// changes the wording every one of its consumers sees.
     /// </remarks>
@@ -60,5 +63,12 @@ namespace NValidation
         /// How much a validator reports. Both axes start at <c>null</c>, meaning the level below answers.
         /// </summary>
         public ValidationBehaviors ValidationBehaviors { get; init; }
+
+        /// <summary>
+        /// Which rule groups a validation runs, or <c>null</c> — the default — to leave it to the level
+        /// below; failing every level, <see cref="ValidationGroups.None"/>, so only the chains in no
+        /// group run. Converted from what is written: <c>ValidationGroups = "Create"</c>.
+        /// </summary>
+        public ValidationGroups? ValidationGroups { get; init; }
     }
 }

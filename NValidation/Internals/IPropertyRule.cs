@@ -7,6 +7,9 @@ namespace NValidation.Internals
         // null unless the property opted into a display name.
         Func<string>? DisplayName { get; }
 
+        // The groups this chain is in, or null for a chain in no group, which runs in every validation.
+        string[]? Groups { get; }
+
         // Whether every rule in this chain judges rather than awaits, so the chain can be run through
         // Validate without an async state machine. Settled while the chain is declared.
         bool IsSynchronous { get; }

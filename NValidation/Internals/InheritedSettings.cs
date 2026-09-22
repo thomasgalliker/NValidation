@@ -6,14 +6,21 @@ namespace NValidation.Internals
 
         private readonly byte propertyBehavior;
 
-        public InheritedSettings(IValidationMessageProvider? messageProvider, ValidationBehavior? classBehavior, ValidationBehavior? propertyBehavior)
+        public InheritedSettings(
+            IValidationMessageProvider? messageProvider,
+            ValidationBehavior? classBehavior,
+            ValidationBehavior? propertyBehavior,
+            ValidationGroups? groups)
         {
             this.MessageProvider = messageProvider;
             this.classBehavior = Pack(classBehavior);
             this.propertyBehavior = Pack(propertyBehavior);
+            this.Groups = groups;
         }
 
         public IValidationMessageProvider? MessageProvider { get; }
+
+        public ValidationGroups? Groups { get; }
 
         public ValidationBehavior? Class => Unpack(this.classBehavior);
 
@@ -23,12 +30,16 @@ namespace NValidation.Internals
         {
             return options is null
                 ? default
-                : new InheritedSettings(options.MessageProvider, options.ValidationBehaviors.Class, options.ValidationBehaviors.Property);
+                : new InheritedSettings(
+                    options.MessageProvider,
+                    options.ValidationBehaviors.Class,
+                    options.ValidationBehaviors.Property,
+                    options.ValidationGroups);
         }
 
         public NValidationOptions? AsOptions()
         {
-            if (this.MessageProvider is null && this.classBehavior == 0 && this.propertyBehavior == 0)
+            if (this.MessageProvider is null && this.classBehavior == 0 && this.propertyBehavior == 0 && this.Groups is null)
             {
                 return null;
             }
@@ -37,6 +48,7 @@ namespace NValidation.Internals
             {
                 MessageProvider = this.MessageProvider,
                 ValidationBehaviors = new ValidationBehaviors { Class = this.Class, Property = this.Property },
+                ValidationGroups = this.Groups,
             };
         }
 

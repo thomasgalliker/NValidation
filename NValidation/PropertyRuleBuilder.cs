@@ -258,6 +258,30 @@ namespace NValidation
         }
 
         /// <summary>
+        /// Puts this property's chain in one or more rule groups, so it runs only when a validation
+        /// selects one of them:
+        /// <c>this.Property(c => c.TradeInValue).NotNull().WithGroup("Create");</c>
+        /// </summary>
+        /// <remarks>
+        /// Covers the <b>whole chain</b> no matter where it is written, as <see cref="When"/> does, and
+        /// a chain whose group was not selected is not even read. A chain in no group runs in every
+        /// validation, so grouping one chain never switches another off. Calling it again adds further
+        /// groups. What a validation selects is
+        /// <see cref="NValidationOptions.ValidationGroups"/>; a call which names none runs the chains in
+        /// no group alone.
+        /// </remarks>
+        /// <exception cref="ArgumentException">No group is named, or a name is empty or whitespace.</exception>
+        /// <exception cref="InvalidOperationException">This validator has already validated something.</exception>
+        public PropertyRuleBuilder<T, TProperty> WithGroup(params ReadOnlySpan<string> groups)
+        {
+            GroupNames.ThrowIfEmpty(groups, nameof(groups));
+
+            this.rule.AddGroups(groups, nameof(groups));
+
+            return this;
+        }
+
+        /// <summary>
         /// Appends the element rules as an ordinary check on this property. The cast is safe by
         /// construction: the variance conversion that chose this overload is what proves the property
         /// really is a sequence of <typeparamref name="TElement"/>.

@@ -19,11 +19,25 @@ namespace NValidation
         /// </summary>
         private IPropertyRule<T>[]? frozenRules;
 
+        /// <summary>
+        /// The groups of each rule, in the order the rules are walked, or null where no rule is in one —
+        /// which is what lets a validator declaring no group pay nothing for the feature. Read rather
+        /// than asked of each rule per pass: an interface call per chain is what the array replaces.
+        /// </summary>
+        private string[]?[]? frozenRuleGroups;
+
         private NValidationOptions options = NValidationOptions.None;
 
         private NValidationOptions? registeredOptions;
 
         private bool? isSynchronous;
+
+        /// <summary>
+        /// The groups of the <see cref="Group(string, Action)"/> block being declared, which every chain
+        /// started inside it joins. Declaration-time state: rules are declared once, before anything
+        /// validates, so this is never touched while a validation runs.
+        /// </summary>
+        private string[]? declaringGroups;
 
         private IPropertyRule<T>[] Rules => this.frozenRules ??= this.FreezeRules();
 
@@ -122,9 +136,7 @@ namespace NValidation
                 rule.AddCondition(isReachable);
             }
 
-            this.rules.Add(rule);
-
-            return new PropertyRuleBuilder<T, TProperty?>(rule);
+            return this.Declare(rule);
         }
 
         /// <summary>
@@ -148,9 +160,7 @@ namespace NValidation
 
             var rule = new PropertyRule<T, TProperty>(propertyName, accessor);
 
-            this.rules.Add(rule);
-
-            return new PropertyRuleBuilder<T, TProperty>(rule);
+            return this.Declare(rule);
         }
 
         /// <summary>
@@ -172,15 +182,75 @@ namespace NValidation
             return builder.When(isReachable);
         }
 
+        /// <summary>
+        /// Puts every chain declared inside <paramref name="declareRules"/> in <paramref name="group"/>:
+        /// <code>this.Group("Create", () => this.Property(c => c.TradeInValue).NotNull());</code>
+        /// </summary>
+        /// <remarks>
+        /// The blocks nest, and a chain inside a nested one is in the groups of both; <c>WithGroup</c>
+        /// written inside adds further groups to the one chain. A chain declared after the block is in
+        /// none of its groups, even where the block left through an exception.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="declareRules"/> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentException"><paramref name="group"/> is empty or whitespace.</exception>
+        /// <exception cref="InvalidOperationException">This validator has already validated something.</exception>
+        protected void Group(string group, Action declareRules)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(group);
+
+            this.Group([group], declareRules);
+        }
+
+        /// <summary>
+        /// Puts every chain declared inside <paramref name="declareRules"/> in all of
+        /// <paramref name="groups"/>, which is written as a collection expression:
+        /// <code>this.Group(["Create", "Update"], () => this.Property(c => c.Vin).NotEmpty());</code>
+        /// </summary>
+        /// <inheritdoc cref="Group(string, Action)" path="/remarks"/>
+        /// <exception cref="ArgumentNullException"><paramref name="declareRules"/> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentException">No group is named, or a name is empty or whitespace.</exception>
+        /// <inheritdoc cref="Group(string, Action)" path="/exception[@cref='T:System.InvalidOperationException']"/>
+        protected void Group(ReadOnlySpan<string> groups, Action declareRules)
+        {
+            ArgumentNullException.ThrowIfNull(declareRules);
+            GroupNames.ThrowIfEmpty(groups, nameof(groups));
+            this.ThrowIfFrozen();
+
+            var enclosingGroups = this.declaringGroups;
+
+            this.declaringGroups = GroupNames.Union(enclosingGroups, groups, nameof(groups));
+
+            try
+            {
+                declareRules();
+            }
+            finally
+            {
+                this.declaringGroups = enclosingGroups;
+            }
+        }
+
         internal PropertyRuleBuilder<T, T?> RuleForSelf()
         {
             this.ThrowIfFrozen();
 
             var rule = new PropertyRule<T, T?>(PropertyPath.Self, instance => instance);
 
+            return this.Declare(rule);
+        }
+
+        // Every chain is registered here, so one place decides what a chain declared inside a Group block
+        // joins.
+        private PropertyRuleBuilder<T, TProperty> Declare<TProperty>(PropertyRule<T, TProperty> rule)
+        {
+            if (this.declaringGroups is { } groups)
+            {
+                rule.JoinGroups(groups);
+            }
+
             this.rules.Add(rule);
 
-            return new PropertyRuleBuilder<T, T?>(rule);
+            return new PropertyRuleBuilder<T, TProperty>(rule);
         }
 
         /// <inheritdoc/>
@@ -268,7 +338,8 @@ namespace NValidation
 
             var resolvedRun = run with
             {
-                Inherited = new InheritedSettings(settings.MessageProvider, settings.ClassBehavior, settings.PropertyBehavior),
+                Inherited = new InheritedSettings(
+                    settings.MessageProvider, settings.ClassBehavior, settings.PropertyBehavior, settings.Groups),
             };
 
             return new ValidationFrame<T>(instance, errors, resolvedRun);
@@ -302,18 +373,34 @@ namespace NValidation
                     ?? defaults.ValidationBehaviors.Property
                     ?? ValidationBehavior.StopAtFirstError;
 
-            return new PassSettings(messageProvider, classBehavior, propertyBehavior);
+            // No rung for what the validator declared: the same validator serves every operation, so
+            // which of its chains apply is a fact about the call rather than about the validator.
+            var groups = inherited.Groups
+                ?? registered?.ValidationGroups
+                ?? defaults.ValidationGroups
+                ?? ValidationGroups.None;
+
+            return new PassSettings(messageProvider, classBehavior, propertyBehavior, groups);
         }
 
         private void ValidateFrame(ValidationFrame<T> frame, PassSettings settings)
         {
+            var rules = this.Rules;
+
+            // A validator which put none of its chains in a group is walked by the loop it was walked by
+            // before groups existed: the gate is asked once here rather than once per chain.
+            if (this.frozenRuleGroups is { } ruleGroups)
+            {
+                ValidateGroupedFrame(frame, settings, rules, ruleGroups);
+
+                return;
+            }
+
             var cancellationToken = frame.Run.CancellationToken;
 
             // What this pass found, told apart from what the caller's list already held: an element's
             // inline rules have already reported into it by the time the element's own validator runs.
             var errorCountAtStart = frame.ErrorCount;
-
-            var rules = this.Rules;
 
             for (var i = 0; i < rules.Length; i++)
             {
@@ -328,13 +415,53 @@ namespace NValidation
             }
         }
 
-        private async ValueTask ValidateFrameAsync(ValidationFrame<T> frame, PassSettings settings)
+        /// <summary>
+        /// The same loop for a validator which put chains in groups, asking of each whether this run
+        /// selected it. Kept apart rather than branched inside the loop, so a validator with no group is
+        /// not asked once per chain about a feature it does not use. A change to the cascade rule is made
+        /// to both, and to the awaiting twins below.
+        /// </summary>
+        private static void ValidateGroupedFrame(
+            ValidationFrame<T> frame, PassSettings settings, IPropertyRule<T>[] rules, string[]?[] ruleGroups)
+        {
+            var cancellationToken = frame.Run.CancellationToken;
+            var errorCountAtStart = frame.ErrorCount;
+
+            for (var i = 0; i < rules.Length; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (settings.ClassBehavior == ValidationBehavior.StopAtFirstError && frame.ErrorCount > errorCountAtStart)
+                {
+                    return;
+                }
+
+                // Asked before the chain's condition and before the property is read, so a chain whose
+                // group was not selected reports nothing and has nothing for a stopping run to stop on.
+                if (ruleGroups[i] is { } groups && !settings.Groups.Selects(groups))
+                {
+                    continue;
+                }
+
+                rules[i].Validate(frame, settings.MessageProvider, settings.PropertyBehavior);
+            }
+        }
+
+        private ValueTask ValidateFrameAsync(ValidationFrame<T> frame, PassSettings settings)
+        {
+            var rules = this.Rules;
+
+            return this.frozenRuleGroups is { } ruleGroups
+                ? ValidateGroupedFrameAsync(frame, settings, rules, ruleGroups)
+                : ValidateUngroupedFrameAsync(frame, settings, rules);
+        }
+
+        private static async ValueTask ValidateUngroupedFrameAsync(
+            ValidationFrame<T> frame, PassSettings settings, IPropertyRule<T>[] rules)
         {
             var cancellationToken = frame.Run.CancellationToken;
 
             var errorCountAtStart = frame.ErrorCount;
-
-            var rules = this.Rules;
 
             for (var i = 0; i < rules.Length; i++)
             {
@@ -349,15 +476,52 @@ namespace NValidation
             }
         }
 
+        private static async ValueTask ValidateGroupedFrameAsync(
+            ValidationFrame<T> frame, PassSettings settings, IPropertyRule<T>[] rules, string[]?[] ruleGroups)
+        {
+            var cancellationToken = frame.Run.CancellationToken;
+
+            var errorCountAtStart = frame.ErrorCount;
+
+            for (var i = 0; i < rules.Length; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (settings.ClassBehavior == ValidationBehavior.StopAtFirstError && frame.ErrorCount > errorCountAtStart)
+                {
+                    return;
+                }
+
+                if (ruleGroups[i] is { } groups && !settings.Groups.Selects(groups))
+                {
+                    continue;
+                }
+
+                await rules[i].ValidateAsync(frame, settings.MessageProvider, settings.PropertyBehavior);
+            }
+        }
+
         private IPropertyRule<T>[] FreezeRules()
         {
             var frozen = this.rules.ToArray();
             var displayNames = PropertyDisplayNames.For(frozen);
 
-            foreach (var rule in frozen)
+            string[]?[]? groups = null;
+
+            for (var i = 0; i < frozen.Length; i++)
             {
+                var rule = frozen[i];
+
                 rule.Freeze(displayNames);
+
+                if (rule.Groups is { } ruleGroups)
+                {
+                    groups ??= new string[]?[frozen.Length];
+                    groups[i] = ruleGroups;
+                }
             }
+
+            this.frozenRuleGroups = groups;
 
             return frozen;
         }
@@ -413,6 +577,7 @@ namespace NValidation
         private readonly record struct PassSettings(
             IValidationMessageProvider MessageProvider,
             ValidationBehavior ClassBehavior,
-            ValidationBehavior PropertyBehavior);
+            ValidationBehavior PropertyBehavior,
+            ValidationGroups Groups);
     }
 }

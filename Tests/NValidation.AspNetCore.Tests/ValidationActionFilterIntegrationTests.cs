@@ -249,6 +249,57 @@ namespace NValidation.AspNetCore.Tests
             (await GetErrorsAsync(response)).Should().ContainKey("Vin");
         }
 
+        /// <summary>
+        /// The Create endpoint selects the group the valuation chain is in; the update endpoint selects
+        /// nothing, so the same body is accepted there.
+        /// </summary>
+        [Fact]
+        public async Task Create_WithATradeInAboveThePurchasePrice_ReportsTheChainOfTheCreateGroup()
+        {
+            // Arrange
+            var httpClient = this.fixture.GetHttpClient();
+            var car = CreateValidCar();
+            car["tradeInValue"] = 99_999;
+
+            // Act
+            var response = await httpClient.PostAsJsonAsync("api/cars", car);
+
+            // Assert
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            (await GetErrorsAsync(response)).Should().ContainKey("TradeInValue");
+        }
+
+        [Fact]
+        public async Task Update_WithATradeInAboveThePurchasePrice_RunsTheAction()
+        {
+            // Arrange
+            var httpClient = this.fixture.GetHttpClient();
+            var car = CreateValidCar();
+            car["tradeInValue"] = 99_999;
+
+            // Act
+            var response = await httpClient.PutAsJsonAsync("api/cars/7", car);
+
+            // Assert
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        [Fact]
+        public async Task MinimalApi_WithATradeInAboveThePurchasePrice_ReportsTheChainOfTheCreateGroup()
+        {
+            // Arrange
+            var httpClient = this.fixture.GetHttpClient();
+            var car = CreateValidCar();
+            car["tradeInValue"] = 99_999;
+
+            // Act
+            var response = await httpClient.PostAsJsonAsync("cars", car);
+
+            // Assert
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            (await GetErrorsAsync(response)).Should().ContainKey("TradeInValue");
+        }
+
         private const string ValidVin = "WVWZZZ1JZXW000001";
 
         private static Dictionary<string, object?> CreateValidCar()

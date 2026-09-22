@@ -16,6 +16,8 @@ namespace NValidation.Internals
 
         private ValidationBehavior? validationBehaviorOverride;
 
+        private string[]? groups;
+
         public PropertyRule(string propertyName, Func<T, TProperty> accessor)
         {
             this.PropertyName = propertyName;
@@ -65,6 +67,11 @@ namespace NValidation.Internals
                 this.validationBehaviorOverride = value;
             }
         }
+
+        /// <summary>
+        /// The groups this chain is in, or null where it is in none and therefore runs in every validation.
+        /// </summary>
+        public string[]? Groups => this.groups;
 
         private Func<T, bool>? Condition { get; set; }
 
@@ -154,6 +161,29 @@ namespace NValidation.Internals
             }
 
             this.checks[^1].ErrorCodeOverride = errorCode;
+        }
+
+        /// <summary>
+        /// Puts the chain in the given groups, so it runs only when a validation selects one of them. A
+        /// group it is already in is not added twice.
+        /// </summary>
+        public void AddGroups(ReadOnlySpan<string> groups, string paramName)
+        {
+            this.ThrowIfFrozen();
+
+            this.groups = GroupNames.Union(this.groups, groups, paramName);
+        }
+
+        /// <summary>
+        /// The same for the groups of the block the chain was declared inside, which are already checked
+        /// and are shared with every other chain of that block rather than copied per chain. Nothing
+        /// mutates an array of groups once it is set, which is what makes sharing it safe.
+        /// </summary>
+        public void JoinGroups(string[] groups)
+        {
+            this.ThrowIfFrozen();
+
+            this.groups = this.groups is null ? groups : GroupNames.Union(this.groups, groups, nameof(groups));
         }
 
         /// <summary>

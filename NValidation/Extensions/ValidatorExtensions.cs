@@ -25,5 +25,30 @@ namespace NValidation
 
             result.ThrowIfInvalid();
         }
+
+        /// <summary>
+        /// Validates <paramref name="instance"/> against options supplied for this call — the rule groups
+        /// an endpoint runs, say — and throws a <see cref="ValidationException"/> when it fails.
+        /// </summary>
+        /// <remarks>
+        /// The same as <c>(await validator.ValidateAsync(instance, options, cancellationToken)).ThrowIfInvalid()</c>.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException">
+        /// <paramref name="validator"/> or <paramref name="options"/> is <c>null</c>.
+        /// </exception>
+        /// <exception cref="ValidationException"><paramref name="instance"/> is not valid.</exception>
+        public static async ValueTask ValidateAndThrowAsync<T>(
+            this IValidator<T> validator,
+            T instance,
+            NValidationOptions options,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(validator);
+            ArgumentNullException.ThrowIfNull(options);
+
+            var result = await validator.ValidateAsync(instance, options, cancellationToken);
+
+            result.ThrowIfInvalid();
+        }
     }
 }

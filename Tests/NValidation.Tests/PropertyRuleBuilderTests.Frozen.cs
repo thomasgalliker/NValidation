@@ -23,6 +23,22 @@ namespace NValidation.Tests
         }
 
         [Fact]
+        public async Task WithGroup_AfterTheFirstValidation_Throws()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            var chain = validator.Property(c => c.Vin).NotEmpty();
+
+            await validator.ValidateAsync(Cars.Car());
+
+            // Act
+            var act = () => chain.WithGroup("Create");
+
+            // Assert
+            act.Should().Throw<InvalidOperationException>().WithMessage("*'Vin'*already been used*");
+        }
+
+        [Fact]
         public async Task WithMessage_AfterTheFirstValidation_Throws()
         {
             // Arrange

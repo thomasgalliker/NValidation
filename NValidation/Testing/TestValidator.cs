@@ -44,5 +44,17 @@ namespace NValidation.Testing
         {
             return base.Property(expression);
         }
+
+        /// <inheritdoc cref="Validator{T}.Group(string, Action)"/>
+        public new void Group(string group, Action declareRules)
+        {
+            base.Group(group, declareRules);
+        }
+
+        /// <inheritdoc cref="Validator{T}.Group(ReadOnlySpan{string}, Action)"/>
+        public new void Group(ReadOnlySpan<string> groups, Action declareRules)
+        {
+            base.Group(groups, declareRules);
+        }
     }
 }

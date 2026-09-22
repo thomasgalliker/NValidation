@@ -31,6 +31,21 @@ namespace NValidation.AspNetCore.Tests
             }
         }
 
+        /// <summary>
+        /// Valid but for the chain the validator declares for the Create group, so what a request reports
+        /// says which groups it ran.
+        /// </summary>
+        private static Car CarAppraisedAboveItsPurchasePrice
+        {
+            get
+            {
+                var car = Cars.Car();
+                car.TradeInValue = 20_000m;
+
+                return car;
+            }
+        }
+
         [Fact]
         public async Task OnActionExecutionAsync_WithAValidPayload_RunsTheAction()
         {
@@ -323,6 +338,178 @@ namespace NValidation.AspNetCore.Tests
             actionWasRun.Should().BeTrue();
         }
 
+        [Fact]
+        public async Task OnActionExecutionAsync_WithoutAGroupAttribute_RunsTheChainsInNoGroupAlone()
+        {
+            // Arrange
+            var arguments = new Dictionary<string, object?> { ["car"] = CarAppraisedAboveItsPurchasePrice };
+            var context = CreateContext(nameof(TestActions.Create), arguments);
+            var filter = CreateFilter();
+            var actionWasRun = false;
+
+            // Act
+            await filter.OnActionExecutionAsync(context, () =>
+            {
+                actionWasRun = true;
+                return Task.FromResult(CreateExecutedContext(context));
+            });
+
+            // Assert
+            actionWasRun.Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task OnActionExecutionAsync_WithAGroupOnTheParameter_SelectsIt()
+        {
+            // Arrange
+            var arguments = new Dictionary<string, object?> { ["car"] = CarAppraisedAboveItsPurchasePrice };
+            var context = CreateContext(nameof(TestActions.CreateInTheCreateGroup), arguments);
+            var filter = CreateFilter();
+
+            // Act
+            var act = () => filter.OnActionExecutionAsync(context, () => Task.FromResult(CreateExecutedContext(context)));
+
+            // Assert
+            var validationException = (await act.Should().ThrowAsync<ValidationException>()).Which;
+            validationException.ShouldReport("TradeInValue", "TradeInValue must be less than or equal to PurchasePrice.");
+        }
+
+        [Fact]
+        public async Task OnActionExecutionAsync_WithAGroupOnTheAction_SelectsIt()
+        {
+            // Arrange
+            var arguments = new Dictionary<string, object?> { ["car"] = CarAppraisedAboveItsPurchasePrice };
+            var context = CreateContext(nameof(TestActions.CreateGroupedAction), arguments);
+            var filter = CreateFilter();
+
+            // Act
+            var act = () => filter.OnActionExecutionAsync(context, () => Task.FromResult(CreateExecutedContext(context)));
+
+            // Assert
+            var validationException = (await act.Should().ThrowAsync<ValidationException>()).Which;
+            validationException.ShouldReport("TradeInValue", "TradeInValue must be less than or equal to PurchasePrice.");
+        }
+
+        [Fact]
+        public async Task OnActionExecutionAsync_WithAGroupOnTheController_SelectsIt()
+        {
+            // Arrange
+            var arguments = new Dictionary<string, object?> { ["car"] = CarAppraisedAboveItsPurchasePrice };
+            var context = CreateContext(
+                nameof(GroupedTestActions.Create), arguments, controllerType: typeof(GroupedTestActions));
+            var filter = CreateFilter();
+
+            // Act
+            var act = () => filter.OnActionExecutionAsync(context, () => Task.FromResult(CreateExecutedContext(context)));
+
+            // Assert
+            var validationException = (await act.Should().ThrowAsync<ValidationException>()).Which;
+            validationException.ShouldReport("TradeInValue", "TradeInValue must be less than or equal to PurchasePrice.");
+        }
+
+        /// <summary>
+        /// The nearer decision is the one that holds, so an action naming another group is not overruled
+        /// by the controller it sits on.
+        /// </summary>
+        [Fact]
+        public async Task OnActionExecutionAsync_WithAGroupOnTheActionAndTheController_TheActionsWins()
+        {
+            // Arrange
+            var arguments = new Dictionary<string, object?> { ["car"] = CarAppraisedAboveItsPurchasePrice };
+            var context = CreateContext(
+                nameof(GroupedTestActions.Update), arguments, controllerType: typeof(GroupedTestActions));
+            var filter = CreateFilter();
+            var actionWasRun = false;
+
+            // Act
+            await filter.OnActionExecutionAsync(context, () =>
+            {
+                actionWasRun = true;
+                return Task.FromResult(CreateExecutedContext(context));
+            });
+
+            // Assert
+            actionWasRun.Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task OnActionExecutionAsync_WithAGroupOnTheParameterAndTheController_TheParametersWins()
+        {
+            // Arrange
+            var arguments = new Dictionary<string, object?> { ["car"] = CarAppraisedAboveItsPurchasePrice };
+            var context = CreateContext(
+                nameof(GroupedTestActions.UpdateByParameter), arguments, controllerType: typeof(GroupedTestActions));
+            var filter = CreateFilter();
+            var actionWasRun = false;
+
+            // Act
+            await filter.OnActionExecutionAsync(context, () =>
+            {
+                actionWasRun = true;
+                return Task.FromResult(CreateExecutedContext(context));
+            });
+
+            // Assert
+            actionWasRun.Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task OnActionExecutionAsync_WithAnotherGroup_LeavesTheCreateChainAlone()
+        {
+            // Arrange
+            var arguments = new Dictionary<string, object?> { ["car"] = CarAppraisedAboveItsPurchasePrice };
+            var context = CreateContext(nameof(TestActions.CreateInAnotherGroup), arguments);
+            var filter = CreateFilter();
+            var actionWasRun = false;
+
+            // Act
+            await filter.OnActionExecutionAsync(context, () =>
+            {
+                actionWasRun = true;
+                return Task.FromResult(CreateExecutedContext(context));
+            });
+
+            // Assert
+            actionWasRun.Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task OnActionExecutionAsync_WithEveryGroup_RunsTheGroupedChains()
+        {
+            // Arrange
+            var arguments = new Dictionary<string, object?> { ["car"] = CarAppraisedAboveItsPurchasePrice };
+            var context = CreateContext(nameof(TestActions.CreateInEveryGroup), arguments);
+            var filter = CreateFilter();
+
+            // Act
+            var act = () => filter.OnActionExecutionAsync(context, () => Task.FromResult(CreateExecutedContext(context)));
+
+            // Assert
+            var validationException = (await act.Should().ThrowAsync<ValidationException>()).Which;
+            validationException.ShouldReport("TradeInValue", "TradeInValue must be less than or equal to PurchasePrice.");
+        }
+
+        [Fact]
+        public async Task OnActionExecutionAsync_WithAGroupAttribute_StillReportsTheChainsInNoGroup()
+        {
+            // Arrange
+            var car = CarAppraisedAboveItsPurchasePrice;
+            car.Vin = "TOO-SHORT";
+
+            var arguments = new Dictionary<string, object?> { ["car"] = car };
+            var context = CreateContext(nameof(TestActions.CreateInTheCreateGroup), arguments);
+            var filter = CreateFilter();
+
+            // Act
+            var act = () => filter.OnActionExecutionAsync(context, () => Task.FromResult(CreateExecutedContext(context)));
+
+            // Assert
+            var validationException = (await act.Should().ThrowAsync<ValidationException>()).Which;
+            validationException.ShouldReport([
+                new("Vin", "The VIN must be exactly 17 characters long."),
+                new("TradeInValue", "TradeInValue must be less than or equal to PurchasePrice.")]);
+        }
+
         private static ValidationActionFilter CreateFilter(
             MissingValidatorBehavior missingValidatorBehavior = MissingValidatorBehavior.Ignore,
             ILogger<ValidationActionFilter>? logger = null)
@@ -367,10 +554,12 @@ namespace NValidation.AspNetCore.Tests
                         },
                     })
                     .ToList(),
+                // In the order MVC builds them: the controller's attributes first, the action's after,
+                // so the last one found is the most specific.
                 EndpointMetadata =
                 [
-                    .. actionMethod.GetCustomAttributes(inherit: true),
                     .. controllerType.GetCustomAttributes(inherit: true),
+                    .. actionMethod.GetCustomAttributes(inherit: true),
                 ],
             };
 

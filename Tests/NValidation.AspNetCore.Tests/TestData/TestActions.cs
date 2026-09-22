@@ -38,5 +38,24 @@ namespace NValidation.AspNetCore.Tests.TestData
         public void ImportSkippedParameter([SkipNValidation("Reports failures per row, not as a 400.")] CarImport carImport)
         {
         }
+
+        public void CreateInTheCreateGroup([ValidationGroups("Create")] Car car)
+        {
+        }
+
+        [ValidationGroups("Create")]
+        public void CreateGroupedAction(Car car)
+        {
+        }
+
+        [ValidationGroups("Update")]
+        public void CreateInAnotherGroup(Car car)
+        {
+        }
+
+        [ValidationGroups(All = true)]
+        public void CreateInEveryGroup(Car car)
+        {
+        }
     }
 }

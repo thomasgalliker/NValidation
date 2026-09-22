@@ -6,8 +6,9 @@ namespace NValidation
     /// <summary>
     /// Declares the rules that every element of a collection has to satisfy. Obtained from
     /// <see cref="PropertyRuleBuilderExtensions.ForEach{TElement}(IPropertyRuleTarget{IEnumerable{TElement}}, Action{ElementRuleBuilder{TElement}})"/>.
-    /// The rules are declared with <see cref="Property{TProperty}"/> and extended by exactly the same
-    /// rule methods as anywhere else, so nothing has to be written twice for elements.
+    /// The rules are declared with <see cref="Property{TProperty}"/>, grouped with
+    /// <see cref="Group(string, Action)"/>, and extended by exactly the same rule methods as anywhere
+    /// else, so nothing has to be written twice for elements.
     /// </summary>
     public sealed class ElementRuleBuilder<TElement>
     {
@@ -52,6 +53,25 @@ namespace NValidation
         public PropertyRuleBuilder<TElement, TElement?> Element()
         {
             return this.rules.DeclareSelf();
+        }
+
+        /// <summary>
+        /// Puts every element chain declared inside <paramref name="declareRules"/> in
+        /// <paramref name="group"/>, as <see cref="Validator{T}.Group(string, Action)"/> does for a
+        /// validator's own chains.
+        /// </summary>
+        public void Group(string group, Action declareRules)
+        {
+            this.rules.DeclareGroup(group, declareRules);
+        }
+
+        /// <summary>
+        /// Puts every element chain declared inside <paramref name="declareRules"/> in all of
+        /// <paramref name="groups"/>, which is written as a collection expression.
+        /// </summary>
+        public void Group(ReadOnlySpan<string> groups, Action declareRules)
+        {
+            this.rules.DeclareGroup(groups, declareRules);
         }
 
         /// <summary>
@@ -220,6 +240,16 @@ namespace NValidation
             public PropertyRuleBuilder<TElement, TElement?> DeclareSelf()
             {
                 return this.RuleForSelf();
+            }
+
+            public void DeclareGroup(string group, Action declareRules)
+            {
+                this.Group(group, declareRules);
+            }
+
+            public void DeclareGroup(ReadOnlySpan<string> groups, Action declareRules)
+            {
+                this.Group(groups, declareRules);
             }
         }
     }

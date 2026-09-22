@@ -116,6 +116,89 @@ namespace NValidation.Tests
         }
 
         [Fact]
+        public async Task ValidateAsync_WithSelectedGroups_ReachANestedValidator()
+        {
+            // Arrange
+            var options = new NValidationOptions { ValidationGroups = "Create" };
+
+            var nested = new TestValidator<Manufacturer>();
+            nested.Property(m => m.Name).NotEmpty().WithGroup("Create");
+
+            var validator = new ComposingValidator(nested);
+
+            // Act
+            var result = await validator.ValidateAsync(new CarModel { Manufacturer = new Manufacturer() }, options);
+
+            // Assert
+            result.ShouldReport("Manufacturer.Name", "Name is required.");
+        }
+
+        [Fact]
+        public async Task ValidateAsync_WithSelectedGroups_ReachAnElementChain()
+        {
+            // Arrange
+            var options = new NValidationOptions { ValidationGroups = "Create" };
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record.Property(r => r.Workshop).NotEmpty().WithGroup("Create"));
+
+            var car = Cars.Car();
+            car.ServiceHistory = [new ServiceRecord { Workshop = null }];
+
+            // Act
+            var result = await validator.ValidateAsync(car, options);
+
+            // Assert
+            result.ShouldReport("ServiceHistory[0].Workshop", "Workshop is required.");
+        }
+
+        /// <summary>
+        /// A validator written by hand can only be told through options, so what the run resolved is
+        /// turned back into options for it — which is the only way the selection reaches one at all.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_WithSelectedGroups_ReachAValidatorWrittenByHand()
+        {
+            // Arrange
+            var options = new NValidationOptions { ValidationGroups = "Create" };
+
+            var validator = new ComposingValidator(new GroupReportingValidator());
+
+            // Act
+            var result = await validator.ValidateAsync(new CarModel { Manufacturer = new Manufacturer() }, options);
+
+            // Assert
+            result.ShouldReport("Manufacturer.Selection", "Create");
+        }
+
+        [Fact]
+        public void ValidationGroups_LeftUnset_IsNull()
+        {
+            // Arrange
+            var options = new NValidationOptions();
+
+            // Assert
+            options.ValidationGroups.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task ValidateAsync_WithOptionsNamingOnlyGroups_KeepTheMessagesOfTheLevelBelow()
+        {
+            // Arrange
+            var options = new NValidationOptions { ValidationGroups = "Create" };
+
+            var validator = new TestValidator<Manufacturer>(ErrorCodeProvider.Instance);
+            validator.Property(m => m.Name).NotEmpty().WithGroup("Create");
+
+            // Act
+            var result = await validator.ValidateAsync(new Manufacturer(), options);
+
+            // Assert
+            result.ShouldReport("Name", "NotEmpty");
+        }
+
+        [Fact]
         public async Task ValidateAsync_WithNullOptions_Throws()
         {
             // Arrange
@@ -188,6 +271,26 @@ namespace NValidation.Tests
                 this.Property(m => m.Name)
                     .Must(name => name == "Aurora").WithMessage("Name must be Aurora.")
                     .Must(name => name == "Northgate").WithMessage("Name must be spelled out.");
+            }
+        }
+
+        /// <summary>
+        /// Written by hand rather than derived, so it is reached through the options a run is turned back
+        /// into; it reports what it was asked to select, which is what the test is about.
+        /// </summary>
+        private sealed class GroupReportingValidator : IValidator<Manufacturer>
+        {
+            public ValueTask<ValidationResult> ValidateAsync(Manufacturer instance, CancellationToken cancellationToken = default)
+            {
+                return new ValueTask<ValidationResult>(
+                    ValidationResult.FromValidationErrors(new ValidationError("Selection", "None")));
+            }
+
+            public ValueTask<ValidationResult> ValidateAsync(
+                Manufacturer instance, NValidationOptions options, CancellationToken cancellationToken = default)
+            {
+                return new ValueTask<ValidationResult>(ValidationResult.FromValidationErrors(
+                    new ValidationError("Selection", options.ValidationGroups?.ToString() ?? "None")));
             }
         }
 

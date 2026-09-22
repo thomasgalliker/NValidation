@@ -53,8 +53,9 @@ localize exactly like a shipped one. `WithMessage` is a template substituted aga
 
 ## The settings ladder
 
-Two settings can be given at several levels: the message provider and the two behavior axes. Both travel
-one ladder, resolved once per pass from the most specific level that names the setting:
+Three settings can be given at several levels: the message provider, the two behavior axes and the rule
+groups a run selects. All travel one ladder, resolved once per pass from the most specific level that
+names the setting:
 
 1. what the validator declared for itself (`ValidationMessageProvider`, `ValidationBehaviors`);
 2. what the pass inherits — the options passed to `ValidateAsync`, or, for a validator composed into
@@ -72,9 +73,44 @@ themselves. This is what makes one setting on the outermost validator, on the op
 nullable axes; `null` means "the level below answers". There is nothing to freeze: `Default` is a
 reference swapped atomically, and a run already holding the old options keeps them.
 
+The group selection is the one exception on rung 1: a validator cannot select groups for itself. The
+same validator serves every operation, so which of its rules apply is a fact about the call, and a
+validator that could overrule the caller on it would be a validator nobody could reuse.
+
 The registration hands its settings only to the validators it constructs. It registers no message
 provider on the host's behalf, because a provider handed over would outrank the options of a call, and a
 default captured at resolution would hide a `Default` assigned afterwards.
+
+## Rule groups
+
+A chain carries zero or more names; a run carries a selection. A chain in no group runs in every
+validation, and a grouped chain runs where the selection names one of its groups or is
+`ValidationGroups.All`. A call that selects nothing therefore validates exactly as it did before any
+group was declared, which is what lets a group be added to one chain of a shipped validator without
+every existing caller having to say so. What it gives up is "everything except": there is no selection
+that means *all but Create*, because the case for it is a rule about the object, and `When` already
+answers that.
+
+The gate is asked in the validator's rule loop, before the chain's condition and before the property is
+read. A chain the run did not select has therefore reported nothing and read nothing, so it cannot trip
+a `StopAtFirstError` run and cannot dereference an object the payload omitted. It is the same answer
+`When` gets, one level earlier.
+
+`IsSynchronous` is still settled over every rule, groups included: it is decided when the rules are
+declared and the selection is not known until a run asks. A validator whose only awaiting chain is
+grouped runs through the awaiting loop even where that group was not selected. Deciding it per run would
+mean re-deciding it per run, which is the cost the flag exists to avoid.
+
+The groups of the rules are frozen into an array beside the rules, and that array is null where no chain
+is in a group. The loop is then chosen once per pass rather than branched per chain: a validator
+declaring no group is walked by the loop it was walked by before the feature existed. What it still
+costs is 8 bytes on the frame, which is what took the frame past a cache line — the one price the
+feature charges a validator that does not use it, and the reason the selection is not also copied into
+anything the rules touch per chain.
+
+Names are compared ordinally. A group name is a token the application chose and the caller repeats, like
+an error code, and a case-insensitive match would make `Create` and `create` the same group in the
+library while they stay two constants in the application.
 
 ## One object per pass
 

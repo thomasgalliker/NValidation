@@ -21,17 +21,22 @@ move the timings.
 
 | | Mean | Allocated |
 | --- | ---: | ---: |
-| `SingleObject` (4 rules, one flat object) | 56 ns | 64 B |
-| `WholePayload` (`CarValidator`, valid) | 236 ns | 504 B |
-| `WholePayloadWithFailures` | 494 ns | 2 336 B |
-| `WithAnAwaitingRule` (one rule that truly suspends) | 1 180 ns | 815 B |
+| `SingleObject` (4 rules, one flat object) | 55 ns | 72 B |
+| `WholePayload` (`CarValidator`, valid) | 251 ns | 528 B |
+| `WholePayloadWithFailures` | 517 ns | 2 360 B |
+| `WithAnAwaitingRule` (one rule that truly suspends) | 1 329 ns | 831 B |
 
-A validation which reports nothing allocates **64 bytes whatever the validator's width** — one
+A validation which reports nothing allocates **72 bytes whatever the validator's width** — one
 `ValidationFrame` for the pass, and nothing per property. The rule chains cost no allocation at all:
 `RuleContext` is a struct over that frame, and the error list is not built until something fails. The
 frame carries the run's inherited settings, the collection entry under judgement and the cancellation
-token, which is the 8 bytes it grew by when composed validators started inheriting their composer's
-settings.
+token: 8 bytes of it are what composed validators inheriting their composer's settings cost, and 8 more
+are the rule groups a run selects. The second 8 are what took the frame past a cache line, which is
+most of what the groups cost a validator that declares none — see
+[Rule groups](#rule-groups--groupbenchmark).
+
+`WholePayload` is measured through `CarValidator`, which declares one chain in a rule group, so the
+figure now includes a chain being skipped.
 
 Validation is asynchronous only, but a validator whose every rule judges rather than awaits runs with no
 async state machine anywhere in it — and so does a validator it composes through `SetValidator` or
@@ -54,10 +59,10 @@ The same rule declared a varying number of times over one payload, so the slope 
 
 | Chains | Mean | Allocated |
 | ---: | ---: | ---: |
-| 0 | 9.0 ns | 64 B |
-| 1 | 16.1 ns | 64 B |
-| 4 | 23.7 ns | 64 B |
-| 16 | 55.5 ns | 64 B |
+| 0 | 10.3 ns | 72 B |
+| 1 | 18.4 ns | 72 B |
+| 4 | 27.0 ns | 72 B |
+| 16 | 64.5 ns | 72 B |
 
 **Flat in allocation, ~2.7 ns per chain in time.** This is the benchmark to watch: the per-chain term is
 what grows with a real payload, and it is the one that used to dominate — it was 112 B and ~24 ns a
@@ -92,12 +97,12 @@ on that path changed, and they allocate what they did.
 
 | Entries | Mean | Allocated | Before |
 | ---: | ---: | ---: | ---: |
-| 0 | 17 ns | 64 B | 208 B |
-| 10 | 490 ns | 1 472 B | 4 280 B |
-| 100 | 4 994 ns | 12 992 B | 40 280 B |
-| 1 000 | 44 365 ns | 128 192 B | 400 280 B |
+| 0 | 25 ns | 72 B | 208 B |
+| 10 | 552 ns | 1 640 B | 4 280 B |
+| 100 | 5 030 ns | 14 600 B | 40 280 B |
+| 1 000 | 47 276 ns | 144 200 B | 400 280 B |
 
-**~128 B per entry, down from ~400 B, and nothing for the `ForEach` itself.** One error list and one
+**~144 B per entry, down from ~400 B, and nothing for the `ForEach` itself.** One error list and one
 `ElementScope` — the entry's position and the name it is reported under — are reused for the whole
 collection rather than allocated per entry, and an entry's name (`ServiceHistory[7]`, two strings) is
 built only when the entry actually has something to report. The empty collection used to cost 192 B
@@ -105,9 +110,10 @@ because the composed rule passed a method group of the struct context as a deleg
 context and allocated the delegate on every validation; it now hands the frame over.
 
 What remains is exactly two `ValidationFrame`s per entry: one for the entry's inline rules and one for
-the validator its entries have of their own. The argument that makes reusing the scope safe — entries
+the validator its entries have of their own — 144 B rather than the 128 B of the run before rule
+groups, because each of the two frames grew by the 8 bytes the selection costs. The argument that makes reusing the scope safe — entries
 are judged one after another, and nothing an entry reported keeps a reference to it — would apply to the
-frames too, but a frame is what every rule context points at, and 128 B an entry is not worth a mutable
+frames too, but a frame is what every rule context points at, and 144 B an entry is not worth a mutable
 instance.
 
 Measured through a validator that declares element rules and nothing else. `CarValidator` caps its
@@ -119,6 +125,36 @@ cap as *cheap* — it never reaches the entries at all.
 Conditions fold into one another as they are declared, so three of them ask three nested delegates before
 the property is read. Measured at 16 ns for none, 16 ns for one and 18 ns for three: the folding is not
 worth avoiding.
+
+### Rule groups — `GroupBenchmark`
+
+The same chains over the same payload, declared in no group and then all in one, so what a group costs
+is the difference between the rows rather than a number on its own.
+
+| | 4 chains | 16 chains |
+| --- | ---: | ---: |
+| `Ungrouped` — no chain is in a group | 27.5 ns | 64.6 ns |
+| `GroupedAndSelected` — every chain is in the selected group | 34.5 ns | 98.3 ns |
+| `GroupedAndSkipped` — no group is selected, so every chain is skipped | 13.9 ns | 20.1 ns |
+| `GroupedUnderAll` — `ValidationGroups.All` | 40.2 ns | 119.2 ns |
+
+**A chain the run skipped costs about 0.4 ns**, which is what the 16-chain skipping row says: 20 ns for
+a pass whose every chain was passed over, against 10 ns for a pass with no chain at all. The property is
+not read and the chain's condition is not asked, so a grouped chain a request does not want is close to
+not being declared.
+
+**A validator which declares no group is walked by the loop it was walked by before groups existed.**
+The gate is asked once per pass rather than once per chain: the groups of the rules are frozen into an
+array beside them, that array is null when nothing is grouped, and the two loops are separate methods.
+Measured the other way — one branch inside the shared loop — the same 16 chains cost 70 ns rather than
+64.5.
+
+What the feature costs a validator with no group at all is therefore the frame's 8 bytes, and the cache
+line they push it over: 55.5 ns before rule groups existed, 59.2 ns with the frame grown and no gate in
+the loop at all, 64.5 ns as it ships.
+
+`GroupedUnderAll` asks one bool and answers yes, so it should be the cheapest of the selecting rows and
+is not. The difference is code layout rather than work done; it is reported here as measured.
 
 ### Reading a mail address — `EmailAddressBenchmark`
 
@@ -144,7 +180,8 @@ the two paths cost very different amounts.
 The 64 B on every accepting row is the validation frame, so the scanner allocates nothing to accept an
 ASCII address, and nothing to refuse one: a refusal's ~800 B is the error being reported, and the
 scanner's rows carry 64 B more than the floor because "is not a valid email address" is a longer
-message than "is not valid".
+message than "is not valid". This table was taken before the frame grew to 72 B for rule groups, so
+every row of it allocates 8 B more today; what the scanner itself allocates is unchanged.
 
 **Where the scanner is slower, and why.** The everyday address costs it about 6 ns more than the
 check it replaced, which took a shortcut for exactly that shape and left everything else to the

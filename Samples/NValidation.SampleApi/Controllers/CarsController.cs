@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using NValidation.AspNetCore;
 using NValidation.TestData;
+using NValidation.TestData.Validators;
 
 namespace NValidation.SampleApi.Controllers
 {
@@ -26,9 +27,12 @@ namespace NValidation.SampleApi.Controllers
         /// </summary>
         /// <remarks>
         /// The payload nests a model and a manufacturer, so a failure further down is reported under
-        /// <c>Model.Manufacturer.Name</c> — the propertyName a form binds its message to.
+        /// <c>Model.Manufacturer.Name</c> — the propertyName a form binds its message to. The attribute
+        /// selects the Create group, so the chain the validator declares for a car being taken in runs
+        /// here and on no other endpoint.
         /// </remarks>
         [HttpPost("")]
+        [ValidationGroups(CarValidator.CreateGroup)]
         public ActionResult<string> Create(Car car)
         {
             return this.Ok(car.Vin);

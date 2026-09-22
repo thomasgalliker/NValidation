@@ -32,5 +32,11 @@ internal static class Program
 
         // Print the ValidationResult with its list of ValidationError to the console.
         Console.WriteLine(ObjectDumper.Dump(result));
+
+        // The same car judged as one being taken in: the chains in no group run again, and the chain
+        // CarValidator declares for the Create group runs as well.
+        var createResult = await carValidator.ValidateAsync(car, new NValidationOptions { ValidationGroups = CarValidator.CreateGroup });
+
+        Console.WriteLine(ObjectDumper.Dump(createResult));
     }
 }

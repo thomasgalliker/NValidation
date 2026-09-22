@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -14,7 +15,9 @@ namespace NValidation.AspNetCore
     /// body or form, the validator registered for that parameter's declared type is resolved and run. A
     /// parameter whose type has no registered validator is left alone — see
     /// <see cref="ValidationFilterOptions.MissingValidatorBehavior"/> — and one marked with
-    /// <see cref="SkipNValidationAttribute"/> is skipped outright.
+    /// <see cref="SkipNValidationAttribute"/> is skipped outright. A payload whose parameter, action or
+    /// controller carries <see cref="ValidationGroupsAttribute"/> is validated with those rule groups
+    /// selected.
     /// </summary>
     /// <remarks>
     /// Failures of every parameter are collected into one <see cref="ValidationResult"/> and thrown as a
@@ -115,7 +118,48 @@ namespace NValidation.AspNetCore
                 return null;
             }
 
-            return await validator.ValidateAsync(argument, context.HttpContext.RequestAborted);
+            var cancellationToken = context.HttpContext.RequestAborted;
+
+            return ResolveOptions(context, parameter) is { } options
+                ? await validator.ValidateAsync(argument, options, cancellationToken)
+                : await validator.ValidateAsync(argument, cancellationToken);
+        }
+
+        /// <summary>
+        /// The options this payload is validated with, or null where nothing selected rule groups for it.
+        /// Decided per action parameter rather than per request: which groups a payload is validated with
+        /// is a property of the action.
+        /// </summary>
+        private static NValidationOptions? ResolveOptions(ActionExecutingContext context, ParameterDescriptor parameter)
+        {
+            return Actions.GetOrCreateValue(context.ActionDescriptor).GroupOptions.GetOrAdd(
+                parameter.Name,
+                static (_, state) => ResolveOptionsCore(state.Context, state.Parameter),
+                (Context: context, Parameter: parameter));
+        }
+
+        private static NValidationOptions? ResolveOptionsCore(ActionExecutingContext context, ParameterDescriptor parameter)
+        {
+            // inherit is ignored for a ParameterInfo — the CLR does not walk base-method parameters —
+            // so saying false is the honest form of what actually happens.
+            var attribute = parameter is ControllerParameterDescriptor controllerParameter
+                ? controllerParameter.ParameterInfo.GetCustomAttribute<ValidationGroupsAttribute>(inherit: false)
+                : null;
+
+            if (attribute is null)
+            {
+                // Carries the controller's attributes and the action's after them, so the last one found
+                // is the most specific.
+                foreach (var metadata in context.ActionDescriptor.EndpointMetadata)
+                {
+                    if (metadata is ValidationGroupsAttribute candidate)
+                    {
+                        attribute = candidate;
+                    }
+                }
+            }
+
+            return attribute is null ? null : new NValidationOptions { ValidationGroups = attribute.Groups };
         }
 
         /// <summary>
@@ -208,6 +252,12 @@ namespace NValidation.AspNetCore
             public ConcurrentDictionary<string, byte> ReportedMissingValidators { get; } = new(StringComparer.Ordinal);
 
             public ConcurrentDictionary<string, Type> ValidatorServiceTypes { get; } = new(StringComparer.Ordinal);
+
+            /// <summary>
+            /// The options each payload is validated with, null where nothing selected rule groups for it.
+            /// The null is cached too: a parameter carrying no attribute must not be looked at again.
+            /// </summary>
+            public ConcurrentDictionary<string, NValidationOptions?> GroupOptions { get; } = new(StringComparer.Ordinal);
         }
     }
 }

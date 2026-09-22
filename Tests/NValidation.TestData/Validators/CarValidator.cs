@@ -4,13 +4,20 @@ namespace NValidation.TestData.Validators
     /// What a whole car has to satisfy, and the one validator the sample API exposes. Deliberately not a
     /// list of one-rule properties: it declares a plain rule, a rule of its own, a nested validator, a
     /// comparison against a sibling property, and a collection whose entries have a validator of their
-    /// own — so a scenario test can exercise all of those at once, the way a real payload does.
+    /// own, and a chain which runs only in the <see cref="CreateGroup"/> group — so a scenario test can
+    /// exercise all of those at once, the way a real payload does.
     /// </summary>
     public sealed class CarValidator : Validator<Car>
     {
         public const int VinLength = 17;
 
         public const int MaximumServiceRecords = 20;
+
+        /// <summary>
+        /// The group of the chains which only apply when a car is taken in, not when one already on the
+        /// books is corrected.
+        /// </summary>
+        public const string CreateGroup = "Create";
 
         public CarValidator(IValidator<CarModel> carModelValidator, IValidator<ServiceRecord> serviceRecordValidator)
         {
@@ -30,6 +37,13 @@ namespace NValidation.TestData.Validators
 
             this.Property(c => c.PurchasePrice)
                 .GreaterThan(0m);
+
+            // Appraised when the car is taken in: a trade-in cannot be worth more than the car is bought
+            // for. A later correction carries prices settled after the fact, so this chain runs only where
+            // the Create group is selected.
+            this.Property(c => c.TradeInValue)
+                .LessThanOrEqualTo(c => c.PurchasePrice)
+                .WithGroup(CreateGroup);
 
             this.Property(c => c.FirstRegistration)
                 .WithDisplayName("Registration date")

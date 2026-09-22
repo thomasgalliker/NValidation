@@ -261,7 +261,8 @@ namespace NValidation.Tests
         private static async Task<IReadOnlyList<string>> RunConcurrently<T>(
             IValidator<T> validator,
             Func<int, (T Payload, string Expected)> arrange,
-            Func<ValidationResult, string, string?> verify)
+            Func<ValidationResult, string, string?> verify,
+            Func<int, NValidationOptions?>? options = null)
         {
             var failures = new ConcurrentBag<string>();
 
@@ -273,7 +274,9 @@ namespace NValidation.Tests
                     {
                         var (payload, expected) = arrange(worker);
 
-                        var result = await validator.ValidateAsync(payload, cancellationToken);
+                        var result = options?.Invoke(worker) is { } workerOptions
+                            ? await validator.ValidateAsync(payload, workerOptions, cancellationToken)
+                            : await validator.ValidateAsync(payload, cancellationToken);
 
                         if (verify(result, expected) is { } failure)
                         {
@@ -283,6 +286,64 @@ namespace NValidation.Tests
                 });
 
             return [.. failures];
+        }
+
+        /// <summary>
+        /// The selection belongs to the run rather than to the validator, so two runs of one validator
+        /// asking for different groups must not see each other's answer.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_OnASharedValidator_KeepsEachRunsGroupSelectionToItself()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).Must(vin => false).WithMessage((car, _) => $"rejected {car.Vin}");
+            validator.Property(c => c.RegistrationPlate)
+                .Must(plate => false)
+                .WithMessage((car, _) => $"plate rejected {car.Vin}")
+                .WithGroup("Create");
+
+            // Act
+            var failures = await RunConcurrently(
+                validator,
+                worker =>
+                {
+                    var car = Cars.Car();
+                    car.Vin = $"VIN-{worker}";
+
+                    // An even worker selects the group and hears about both properties; an odd one
+                    // selects nothing and hears about the ungrouped property alone.
+                    return (car, Expected: $"{(SelectsTheGroup(worker) ? 2 : 1)} rejected VIN-{worker}");
+                },
+                (result, expected) =>
+                {
+                    var expectedCount = int.Parse(expected[..expected.IndexOf(' ', StringComparison.Ordinal)]);
+                    var expectedVin = expected[(expected.LastIndexOf(' ') + 1)..];
+
+                    if (result.Errors.Count != expectedCount)
+                    {
+                        return $"expected {expectedCount} failures for {expectedVin}, saw {result.Errors.Count}";
+                    }
+
+                    foreach (var error in result.Errors)
+                    {
+                        if (!error.Message.EndsWith(expectedVin, StringComparison.Ordinal))
+                        {
+                            return $"expected every message to name {expectedVin}, saw '{error.Message}'";
+                        }
+                    }
+
+                    return null;
+                },
+                worker => SelectsTheGroup(worker) ? new NValidationOptions { ValidationGroups = "Create" } : null);
+
+            // Assert
+            failures.Should().BeEmpty();
+        }
+
+        private static bool SelectsTheGroup(int worker)
+        {
+            return worker % 2 == 0;
         }
 
         /// <summary>

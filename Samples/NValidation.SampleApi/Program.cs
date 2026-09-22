@@ -39,10 +39,13 @@ app.MapControllers();
 // A minimal API endpoint validates by calling its validator: the filter above is an MVC filter, and
 // there is no action for it to run in front of here.
 //
-// The throwing path: validate, and let the handler turn a failure into the response.
+// The throwing path: validate, and let the handler turn a failure into the response. The options select
+// the Create group, which is what [ValidationGroups] does for the controller action.
 app.MapPost("/cars", async (Car car, IValidator<Car> validator, CancellationToken cancellationToken) =>
 {
-    await validator.ValidateAndThrowAsync(car, cancellationToken);
+    var options = new NValidationOptions { ValidationGroups = CarValidator.CreateGroup };
+
+    await validator.ValidateAndThrowAsync(car, options, cancellationToken);
 
     return Results.Ok(new { car.Vin });
 });

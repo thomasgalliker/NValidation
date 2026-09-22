@@ -740,6 +740,84 @@ namespace NValidation.Tests
                 new("ServiceHistory[1].Workshop", "Workshop is required.")]);
         }
 
+        [Fact]
+        public async Task ForEach_WithAGroupedElementChain_RunsItOnlyWhereTheGroupIsSelected()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record.Property(r => r.Workshop).NotEmpty().WithGroup("Create"));
+
+            var car = Cars.Car();
+            car.ServiceHistory = [new ServiceRecord { Workshop = null, Mileage = 1, Cost = 10m }];
+
+            var options = new NValidationOptions { ValidationGroups = "Create" };
+
+            // Act
+            var withoutTheGroup = await validator.ValidateAsync(car);
+            var withTheGroup = await validator.ValidateAsync(car, options);
+
+            // Assert
+            withoutTheGroup.Errors.Should().BeEmpty();
+            withTheGroup.ShouldReport("ServiceHistory[0].Workshop", "Workshop is required.");
+        }
+
+        [Fact]
+        public async Task ForEach_WithAGroupBlockOnTheElementBuilder_PutsEveryChainInsideInTheGroup()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .ForEach(record => record.Group("Create", () =>
+                {
+                    record.Property(r => r.Workshop).NotEmpty();
+                    record.Property(r => r.Cost).GreaterThan(0m);
+                }));
+
+            var car = Cars.Car();
+            car.ServiceHistory = [new ServiceRecord { Workshop = null, Mileage = 1, Cost = 0m }];
+
+            var options = new NValidationOptions { ValidationGroups = "Create" };
+
+            // Act
+            var withoutTheGroup = await validator.ValidateAsync(car);
+            var withTheGroup = await validator.ValidateAsync(car, options);
+
+            // Assert
+            withoutTheGroup.Errors.Should().BeEmpty();
+            withTheGroup.ShouldReport([
+                ExpectedError.Any("ServiceHistory[0].Workshop"),
+                ExpectedError.Any("ServiceHistory[0].Cost")]);
+        }
+
+        /// <summary>
+        /// The entries are judged by a validator of their own, so the selection has to reach it the same
+        /// way it reaches a nested validator.
+        /// </summary>
+        [Fact]
+        public async Task ForEach_WithAnElementValidatorWhoseChainIsGrouped_SelectsItThroughTheRun()
+        {
+            // Arrange
+            var elementValidator = new TestValidator<ServiceRecord>();
+            elementValidator.Property(r => r.Workshop).NotEmpty().WithGroup("Create");
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory).ForEach(elementValidator);
+
+            var car = Cars.Car();
+            car.ServiceHistory = [new ServiceRecord { Workshop = null, Mileage = 1, Cost = 10m }];
+
+            var options = new NValidationOptions { ValidationGroups = "Create" };
+
+            // Act
+            var withoutTheGroup = await validator.ValidateAsync(car);
+            var withTheGroup = await validator.ValidateAsync(car, options);
+
+            // Assert
+            withoutTheGroup.Errors.Should().BeEmpty();
+            withTheGroup.ShouldReport("ServiceHistory[0].Workshop", "Workshop is required.");
+        }
+
         /// <summary>
         /// A string satisfies the sequence conversion that selects ForEach, so the mistake has to be
         /// caught when the rule is declared rather than becoming one failure per character.

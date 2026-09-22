@@ -5,7 +5,7 @@ namespace NValidation.Tests
     /// runs, and how a nested validator is merged — independently of any concrete rule.
     /// </summary>
     [Trait(Traits.Category, Traits.UnitTests)]
-    public class ValidatorTests
+    public partial class ValidatorTests
     {
         /// <summary>
         /// The message of a probe rule which always passes, so it never reaches a result: what the probe
