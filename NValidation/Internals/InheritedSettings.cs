@@ -10,46 +10,55 @@ namespace NValidation.Internals
             IValidationMessageProvider? messageProvider,
             ValidationBehavior? classBehavior,
             ValidationBehavior? propertyBehavior,
-            ValidationGroups? groups)
+            RunInputs inputs)
         {
             this.MessageProvider = messageProvider;
             this.classBehavior = Pack(classBehavior);
             this.propertyBehavior = Pack(propertyBehavior);
-            this.Groups = groups;
+            this.Inputs = inputs;
         }
 
         public IValidationMessageProvider? MessageProvider { get; }
 
-        public ValidationGroups? Groups { get; }
+        public RunInputs Inputs { get; }
+
+        public ValidationGroups Groups => this.Inputs.Groups;
 
         public ValidationBehavior? Class => Unpack(this.classBehavior);
 
         public ValidationBehavior? Property => Unpack(this.propertyBehavior);
 
-        public static InheritedSettings From(NValidationOptions? options)
+        /// <summary>
+        /// The run as options, for a validator written by hand. It declares nothing the library can see, so
+        /// it is handed the additive form of the selection: it cannot take part in an exclusive one.
+        /// </summary>
+        public NValidationOptions AsOptions()
         {
-            return options is null
-                ? default
-                : new InheritedSettings(
-                    options.MessageProvider,
-                    options.ValidationBehaviors.Class,
-                    options.ValidationBehaviors.Property,
-                    options.ValidationGroups);
-        }
-
-        public NValidationOptions? AsOptions()
-        {
-            if (this.MessageProvider is null && this.classBehavior == 0 && this.propertyBehavior == 0 && this.Groups is null)
-            {
-                return null;
-            }
-
             return new NValidationOptions
             {
                 MessageProvider = this.MessageProvider,
                 ValidationBehaviors = new ValidationBehaviors { Class = this.Class, Property = this.Property },
-                ValidationGroups = this.Groups,
+                ValidationGroups = this.Inputs.Groups.Additive,
+                ValidationData = this.Inputs.Data,
+                ValidationProperties = this.Inputs.Properties,
             };
+        }
+
+        /// <summary>
+        /// Whether these are the settings <paramref name="other"/> holds, instance for instance, which is what
+        /// lets a pass reuse a resolution kept for them.
+        /// </summary>
+        public bool IsSameAs(in InheritedSettings other)
+        {
+            return ReferenceEquals(this.MessageProvider, other.MessageProvider)
+                && this.classBehavior == other.classBehavior
+                && this.propertyBehavior == other.propertyBehavior
+                && this.Inputs.IsSameAs(other.Inputs);
+        }
+
+        public InheritedSettings WithInputs(RunInputs inputs)
+        {
+            return new InheritedSettings(this.MessageProvider, this.Class, this.Property, inputs);
         }
 
         private static byte Pack(ValidationBehavior? behavior)

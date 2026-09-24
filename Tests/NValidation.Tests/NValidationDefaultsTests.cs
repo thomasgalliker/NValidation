@@ -77,6 +77,65 @@ namespace NValidation.Tests
         }
 
         [Fact]
+        public async Task ValidationData_ReachAValidatorConstructedWithNew()
+        {
+            // Arrange
+            NValidationOptions.Default = new() { ValidationData = [new ListingPolicy(200_000, RequiresServiceHistory: true)] };
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .NotEmpty()
+                .When<ListingPolicy>((_, policy) => policy.RequiresServiceHistory);
+
+            // Act
+            var result = await validator.ValidateAsync(new Car());
+
+            // Assert
+            result.ShouldReport("ServiceHistory", "ServiceHistory is required.");
+        }
+
+        /// <summary>
+        /// The data of the call replaces the data of the defaults rather than being added to it: a value
+        /// the call did not hand over is not there.
+        /// </summary>
+        [Fact]
+        public async Task ValidationData_AreReplacedByTheDataOfTheCall()
+        {
+            // Arrange
+            NValidationOptions.Default = new() { ValidationData = [new ListingPolicy(200_000, RequiresServiceHistory: true)] };
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory)
+                .NotEmpty()
+                .When<ListingPolicy>((_, policy) => policy.RequiresServiceHistory);
+
+            var options = new NValidationOptions { ValidationData = ["something else"] };
+
+            // Act
+            var result = await validator.ValidateAsync(new Car(), options);
+
+            // Assert
+            result.Errors.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task ValidationGroups_WithOnly_RunThatGroupAlone()
+        {
+            // Arrange
+            NValidationOptions.Default = new() { ValidationGroups = ValidationGroups.Only("Create") };
+
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).NotEmpty().WithGroup("Create");
+            validator.Property(m => m.CountryCode).NotEmpty();
+
+            // Act
+            var result = await validator.ValidateAsync(new Manufacturer());
+
+            // Assert
+            result.ShouldReport("Name", "Name is required.");
+        }
+
+        [Fact]
         public async Task ValidationGroups_ReachANestedValidator()
         {
             // Arrange
@@ -228,6 +287,71 @@ namespace NValidation.Tests
             // Act
             NValidationOptions.Default = new NValidationOptions { MessageProvider = new StubMessageProvider() };
 
+            var result = await validator.ValidateAsync(new Manufacturer());
+
+            // Assert
+            result.ShouldReport("Name", "message from the default provider");
+        }
+
+        /// <summary>
+        /// A validator keeps what a call without options resolved to, for the next such call; assigning
+        /// the defaults in between has to reach the next call all the same.
+        /// </summary>
+        [Fact]
+        public async Task Default_AssignedBetweenTwoValidations_ReachesTheSecond()
+        {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).NotEmpty();
+
+            await validator.ValidateAsync(new Manufacturer());
+
+            NValidationOptions.Default = new() { MessageProvider = new StubMessageProvider() };
+
+            // Act
+            var result = await validator.ValidateAsync(new Manufacturer());
+
+            // Assert
+            result.ShouldReport("Name", "message from the default provider");
+        }
+
+        /// <summary>
+        /// Options handed over twice are resolved once and kept, which must not keep what the defaults
+        /// answered for them once the defaults change.
+        /// </summary>
+        [Fact]
+        public async Task Default_AssignedAfterTheSameOptionsWereKept_ReachesTheNextCallWithThem()
+        {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).NotEmpty();
+
+            var options = new NValidationOptions { ValidationGroups = "Create" };
+
+            await validator.ValidateAsync(new Manufacturer(), options);
+            await validator.ValidateAsync(new Manufacturer(), options);
+
+            NValidationOptions.Default = new() { MessageProvider = new StubMessageProvider() };
+
+            // Act
+            var result = await validator.ValidateAsync(new Manufacturer(), options);
+
+            // Assert
+            result.ShouldReport("Name", "message from the default provider");
+        }
+
+        [Fact]
+        public async Task ValidationMessageProvider_AssignedToAValidatorBetweenTwoValidations_ReachesTheSecond()
+        {
+            // Arrange
+            var validator = new TestValidator<Manufacturer>();
+            validator.Property(m => m.Name).NotEmpty();
+
+            await validator.ValidateAsync(new Manufacturer());
+
+            validator.ValidationMessageProvider = new StubMessageProvider();
+
+            // Act
             var result = await validator.ValidateAsync(new Manufacturer());
 
             // Assert

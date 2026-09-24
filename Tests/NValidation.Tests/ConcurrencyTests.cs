@@ -160,6 +160,47 @@ namespace NValidation.Tests
         }
 
         /// <summary>
+        /// A validator composed into another keeps what its passes resolve to while its composer hands it the
+        /// same, and every run here hands it data of its own: each run's entries must still be judged against
+        /// that run's data, whichever run's resolution happens to be kept.
+        /// </summary>
+        [Fact]
+        public async Task ForEach_OnASharedElementValidator_JudgesEachRunsEntriesAgainstItsOwnData()
+        {
+            // Arrange
+            var recordValidator = new TestValidator<ServiceRecord>();
+            recordValidator.Property(r => r.Mileage).Must<ListingPolicy>((_, mileage, policy) => mileage <= policy.MaximumMileage);
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory).ForEach(recordValidator);
+
+            // Act
+            var failures = await RunConcurrently(
+                validator,
+                worker =>
+                {
+                    // Every entry of an even worker is at its limit and passes; every entry of an odd worker is
+                    // one above it.
+                    var car = Cars.Car();
+                    car.ServiceHistory = Enumerable.Range(0, 3)
+                        .Select(_ => new ServiceRecord { Workshop = "Garage", Mileage = (worker * 10) + (worker % 2) })
+                        .ToList();
+
+                    return (car, Expected: worker % 2 == 0 ? "0" : "3");
+                },
+                (result, expected) =>
+                {
+                    var count = result.Errors.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+                    return count == expected ? null : $"expected {expected} failures, saw {count}";
+                },
+                worker => new NValidationOptions { ValidationData = [new ListingPolicy(worker * 10, false)] });
+
+            // Assert
+            failures.Should().BeEmpty();
+        }
+
+        /// <summary>
         /// The same for an identity of the element's own, which is resolved lazily against the entry the
         /// provider was built for.
         /// </summary>
@@ -344,6 +385,148 @@ namespace NValidation.Tests
         private static bool SelectsTheGroup(int worker)
         {
             return worker % 2 == 0;
+        }
+
+        /// <summary>
+        /// The same for a selection that leaves the default group out: an even worker hears about the
+        /// grouped property alone, an odd one about the ungrouped property alone, and neither may be told
+        /// what the other asked for.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_OnASharedValidator_KeepsEachRunsExclusiveSelectionToItself()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).Must(vin => false).WithMessage((car, _) => $"vin rejected {car.Vin}");
+            validator.Property(c => c.RegistrationPlate)
+                .Must(plate => false)
+                .WithMessage((car, _) => $"plate rejected {car.Vin}")
+                .WithGroup("Create");
+
+            var onlyCreate = new NValidationOptions { ValidationGroups = ValidationGroups.Only("Create") };
+
+            // Act
+            var failures = await RunConcurrently(
+                validator,
+                worker =>
+                {
+                    var car = Cars.Car();
+                    car.Vin = $"VIN-{worker}";
+
+                    return (car, Expected: $"{(SelectsTheGroup(worker) ? "plate" : "vin")} rejected VIN-{worker}");
+                },
+                (result, expected) =>
+                {
+                    var message = result.Errors.Single().Message;
+
+                    return message == expected ? null : $"expected \"{expected}\" but got \"{message}\"";
+                },
+                worker => SelectsTheGroup(worker) ? onlyCreate : null);
+
+            // Assert
+            failures.Should().BeEmpty();
+        }
+
+        /// <summary>
+        /// Data belongs to the call that handed it over: each worker's limit sits just below or at its
+        /// own mileage, so a worker judged against anybody else's limit would get the wrong answer.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_OnASharedValidator_KeepsEachRunsDataToItself()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).Must<ListingPolicy>((_, mileage, policy) => mileage <= policy.MaximumMileage);
+
+            // Act
+            var failures = await RunConcurrently(
+                validator,
+                worker =>
+                {
+                    // An even worker's mileage is at its limit and passes; an odd worker's is one above it.
+                    var car = Cars.Car();
+                    car.Mileage = (worker * 10) + (worker % 2);
+
+                    return (car, Expected: worker % 2 == 0 ? "0" : "1");
+                },
+                (result, expected) =>
+                {
+                    var count = result.Errors.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+                    return count == expected ? null : $"expected {expected} failures, saw {count}";
+                },
+                worker => new NValidationOptions { ValidationData = [new ListingPolicy(worker * 10, false)] });
+
+            // Assert
+            failures.Should().BeEmpty();
+        }
+
+        /// <summary>
+        /// One data instance kept for every call pairs itself with whichever selection the call made, and
+        /// keeps only the last pairing; runs alternating between two selections must still each get their
+        /// own.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_WithOneDataInstanceSharedBetweenSelections_GivesEachRunItsOwnSelection()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).Must(vin => false).WithMessage("vin");
+            validator.Property(c => c.Mileage)
+                .Must<ListingPolicy>((_, mileage, policy) => mileage <= policy.MaximumMileage)
+                .WithMessage("mileage")
+                .WithGroup("Listing");
+
+            ValidationData data = [new ListingPolicy(100, false)];
+            var listingAlone = new NValidationOptions { ValidationGroups = ValidationGroups.Only("Listing"), ValidationData = data };
+            var plain = new NValidationOptions { ValidationData = data };
+
+            // Act
+            var failures = await RunConcurrently(
+                validator,
+                worker =>
+                {
+                    var car = Cars.Car();
+                    car.Mileage = 200;
+
+                    return (car, Expected: SelectsTheGroup(worker) ? "mileage" : "vin");
+                },
+                (result, expected) =>
+                {
+                    var message = result.Errors.Single().Message;
+
+                    return message == expected ? null : $"expected \"{expected}\" but got \"{message}\"";
+                },
+                worker => SelectsTheGroup(worker) ? listingAlone : plain);
+
+            // Assert
+            failures.Should().BeEmpty();
+        }
+
+        /// <summary>
+        /// The first validations of a shared validator freeze it while others are already reading. What
+        /// they read has to come from one freeze: rules without the gates of their groups would run a
+        /// grouped chain nobody selected.
+        /// </summary>
+        [Fact]
+        public void ValidateAsync_OnAValidatorFreezingUnderConcurrentRuns_StillGatesItsGroupedChains()
+        {
+            // Arrange
+            var counts = new ConcurrentBag<int>();
+
+            // Act
+            for (var round = 0; round < 20; round++)
+            {
+                var validator = new TestValidator<Car>();
+                validator.Property(c => c.Vin).NotEmpty();
+                validator.Property(c => c.RegistrationPlate).NotEmpty().WithGroup("Create");
+
+                RaceOnDedicatedThreads(Environment.ProcessorCount, () =>
+                    counts.Add(validator.ValidateAsync(new Car()).GetAwaiter().GetResult().Errors.Count));
+            }
+
+            // Assert
+            counts.Should().OnlyContain(count => count == 1);
         }
 
         /// <summary>

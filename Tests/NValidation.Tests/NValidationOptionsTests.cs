@@ -172,6 +172,69 @@ namespace NValidation.Tests
             result.ShouldReport("Manufacturer.Selection", "Create");
         }
 
+        /// <summary>
+        /// A validator written by hand declares nothing the library can see, so it cannot take part in a
+        /// selection that leaves the default group out; it is handed the additive form instead.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_WithOnly_HandsAValidatorWrittenByHandTheAdditiveSelection()
+        {
+            // Arrange
+            var options = new NValidationOptions { ValidationGroups = ValidationGroups.Only("Create") };
+
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.Manufacturer).SetValidator(new GroupReportingValidator()).WithGroup("Create");
+
+            // Act
+            var result = await validator.ValidateAsync(new CarModel { Manufacturer = new Manufacturer() }, options);
+
+            // Assert
+            result.ShouldReport("Manufacturer.Selection", "Create");
+        }
+
+        [Fact]
+        public async Task ValidateAsync_WithData_ReachANestedValidator()
+        {
+            // Arrange
+            var options = new NValidationOptions { ValidationData = [new ListingPolicy(200_000, RequiresServiceHistory: true)] };
+
+            var nested = new TestValidator<Manufacturer>();
+            nested.Property(m => m.Website).NotEmpty().When<ListingPolicy>((_, policy) => policy.RequiresServiceHistory);
+
+            var validator = new ComposingValidator(nested);
+
+            // Act
+            var result = await validator.ValidateAsync(new CarModel { Manufacturer = new Manufacturer() }, options);
+
+            // Assert
+            result.ShouldReport("Manufacturer.Website", "Website is required.");
+        }
+
+        [Fact]
+        public async Task ValidateAsync_WithData_ReachAValidatorWrittenByHand()
+        {
+            // Arrange
+            var options = new NValidationOptions { ValidationData = [new ListingPolicy(200_000, false)] };
+
+            var validator = new ComposingValidator(new DataReportingValidator());
+
+            // Act
+            var result = await validator.ValidateAsync(new CarModel { Manufacturer = new Manufacturer() }, options);
+
+            // Assert
+            result.ShouldReport("Manufacturer.Data", "ListingPolicy");
+        }
+
+        [Fact]
+        public void ValidationData_LeftUnset_IsNull()
+        {
+            // Arrange
+            var options = new NValidationOptions();
+
+            // Assert
+            options.ValidationData.Should().BeNull();
+        }
+
         [Fact]
         public void ValidationGroups_LeftUnset_IsNull()
         {
@@ -291,6 +354,26 @@ namespace NValidation.Tests
             {
                 return new ValueTask<ValidationResult>(ValidationResult.FromValidationErrors(
                     new ValidationError("Selection", options.ValidationGroups?.ToString() ?? "None")));
+            }
+        }
+
+        /// <summary>
+        /// Written by hand, so the data reaches it through the options a run is turned back into; it
+        /// reports what it was handed.
+        /// </summary>
+        private sealed class DataReportingValidator : IValidator<Manufacturer>
+        {
+            public ValueTask<ValidationResult> ValidateAsync(Manufacturer instance, CancellationToken cancellationToken = default)
+            {
+                return new ValueTask<ValidationResult>(
+                    ValidationResult.FromValidationErrors(new ValidationError("Data", "None")));
+            }
+
+            public ValueTask<ValidationResult> ValidateAsync(
+                Manufacturer instance, NValidationOptions options, CancellationToken cancellationToken = default)
+            {
+                return new ValueTask<ValidationResult>(ValidationResult.FromValidationErrors(
+                    new ValidationError("Data", options.ValidationData?.ToString() ?? "None")));
             }
         }
 

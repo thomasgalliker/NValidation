@@ -51,20 +51,21 @@ namespace NValidation
             return this;
         }
 
-        internal PropertyRuleBuilder<T, TProperty> AddComposed(Func<RuleContext<T, TProperty>, CancellationToken, ValueTask> check)
+        internal PropertyRuleBuilder<T, TProperty> AddComposed(
+            Func<RuleContext<T, TProperty>, CancellationToken, ValueTask> check, string[]? composedGroups)
         {
             ArgumentNullException.ThrowIfNull(check);
 
-            this.rule.AddComposed(check);
+            this.rule.AddComposed(check, composedGroups);
 
             return this;
         }
 
-        internal PropertyRuleBuilder<T, TProperty> AddComposed(Action<RuleContext<T, TProperty>> check)
+        internal PropertyRuleBuilder<T, TProperty> AddComposed(Action<RuleContext<T, TProperty>> check, string[]? composedGroups)
         {
             ArgumentNullException.ThrowIfNull(check);
 
-            this.rule.AddComposed(check);
+            this.rule.AddComposed(check, composedGroups);
 
             return this;
         }
@@ -247,7 +248,7 @@ namespace NValidation
         }
 
         /// <summary>
-        /// The inverse of <see cref="When"/>: applies this property's rules unless
+        /// The inverse of <see cref="When(Func{T, bool})"/>: applies this property's rules unless
         /// <paramref name="condition"/> holds.
         /// </summary>
         public PropertyRuleBuilder<T, TProperty> Unless(Func<T, bool> condition)
@@ -258,17 +259,64 @@ namespace NValidation
         }
 
         /// <summary>
-        /// Puts this property's chain in one or more rule groups, so it runs only when a validation
-        /// selects one of them:
+        /// Applies this property's rules only when the validation was handed a
+        /// <typeparamref name="TData"/> and <paramref name="condition"/> holds for it:
+        /// <c>this.Property(c => c.ServiceHistory).NotEmpty().When&lt;ListingPolicy&gt;((_, policy) => policy.RequiresServiceHistory);</c>
+        /// </summary>
+        /// <remarks>
+        /// Covers the <b>whole chain</b>, as <see cref="When(Func{T, bool})"/> does, and combines with the
+        /// other conditions in the order they were written. A validation that hands over no
+        /// <typeparamref name="TData"/> skips the chain without reading the property: the caller did not ask
+        /// for what the data would decide. What is handed over is
+        /// <see cref="NValidationOptions.ValidationData"/>.
+        /// </remarks>
+        /// <exception cref="InvalidOperationException">This validator has already validated something.</exception>
+        public PropertyRuleBuilder<T, TProperty> When<TData>(Func<T, TData, bool> condition)
+        {
+            ArgumentNullException.ThrowIfNull(condition);
+
+            this.rule.AddCondition((instance, data) =>
+                data is not null && data.TryGet<TData>(out var value) && condition(instance, value));
+
+            return this;
+        }
+
+        /// <summary>
+        /// A one-off rule which needs something only the caller knows to decide, such as a limit that
+        /// depends on the market:
+        /// <c>this.Property(c => c.Mileage).Must&lt;ListingPolicy&gt;((_, mileage, policy) => mileage &lt;= policy.MaximumMileage);</c>
+        /// </summary>
+        /// <remarks>
+        /// Reports <see cref="ValidationErrorCodes.Must"/> unless the chain names the rule with
+        /// <c>WithErrorCode</c>, and passes where the validation was handed no
+        /// <typeparamref name="TData"/>. A member of the builder rather than an extension, so the one type
+        /// argument is all a call site spells out.
+        /// </remarks>
+        public PropertyRuleBuilder<T, TProperty> Must<TData>(Func<T, TProperty, TData, bool> predicate)
+        {
+            ArgumentNullException.ThrowIfNull(predicate);
+
+            return this.Add(context =>
+            {
+                if (context.TryGetData<TData>(out var data) && !predicate(context.Instance, context.Value, data))
+                {
+                    context.AddError(ValidationErrorCodes.Must);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Puts this property's chain in one or more rule groups instead of the default group, so it runs
+        /// only when a validation selects one of them:
         /// <c>this.Property(c => c.TradeInValue).NotNull().WithGroup("Create");</c>
         /// </summary>
         /// <remarks>
-        /// Covers the <b>whole chain</b> no matter where it is written, as <see cref="When"/> does, and
-        /// a chain whose group was not selected is not even read. A chain in no group runs in every
-        /// validation, so grouping one chain never switches another off. Calling it again adds further
-        /// groups. What a validation selects is
-        /// <see cref="NValidationOptions.ValidationGroups"/>; a call which names none runs the chains in
-        /// no group alone.
+        /// Covers the <b>whole chain</b> no matter where it is written, as <see cref="When(Func{T, bool})"/> does, and
+        /// a chain whose group was not selected is not even read. Naming
+        /// <see cref="ValidationGroups.DefaultGroup"/> among the groups keeps the chain in the default group
+        /// too, which every validation runs unless it selects with <see cref="ValidationGroups.Only"/>.
+        /// Calling it again adds further groups. What a validation selects is
+        /// <see cref="NValidationOptions.ValidationGroups"/>.
         /// </remarks>
         /// <exception cref="ArgumentException">No group is named, or a name is empty or whitespace.</exception>
         /// <exception cref="InvalidOperationException">This validator has already validated something.</exception>
@@ -299,26 +347,33 @@ namespace NValidation
 
             var rule = this.rule;
 
+            // Nothing about the entries can change from here on, so what they declare is settled once.
+            elements.Freeze();
+
             if (elements.IsSynchronous)
             {
-                rule.AddComposed(context =>
-                {
-                    if (context.Value is IEnumerable<TElement> sequence)
+                rule.AddComposed(
+                    context =>
                     {
-                        elements.ValidateElements(sequence, context.PropertyName, context.Frame);
-                    }
-                });
+                        if (context.Value is IEnumerable<TElement> sequence)
+                        {
+                            elements.ValidateElements(sequence, context.PropertyName, context.Frame);
+                        }
+                    },
+                    elements.DeclaredGroups);
 
                 return;
             }
 
-            rule.AddComposed(async (context, _) =>
-            {
-                if (context.Value is IEnumerable<TElement> sequence)
+            rule.AddComposed(
+                async (context, _) =>
                 {
-                    await elements.ValidateElementsAsync(sequence, context.PropertyName, context.Frame);
-                }
-            });
+                    if (context.Value is IEnumerable<TElement> sequence)
+                    {
+                        await elements.ValidateElementsAsync(sequence, context.PropertyName, context.Frame);
+                    }
+                },
+                elements.DeclaredGroups);
         }
 
         // For a derived builder's own refinements, which change the rule after it was declared exactly as

@@ -56,5 +56,23 @@ namespace NValidation.Testing
         {
             base.Group(groups, declareRules);
         }
+
+        /// <inheritdoc cref="Validator{T}.When(Func{T, bool}, Action)"/>
+        public new ConditionBlock<T> When(Func<T, bool> condition, Action declareRules)
+        {
+            return base.When(condition, declareRules);
+        }
+
+        /// <inheritdoc cref="Validator{T}.Unless(Func{T, bool}, Action)"/>
+        public new ConditionBlock<T> Unless(Func<T, bool> condition, Action declareRules)
+        {
+            return base.Unless(condition, declareRules);
+        }
+
+        /// <inheritdoc cref="Validator{T}.When{TData}(Func{T, TData, bool}, Action)"/>
+        public new void When<TData>(Func<T, TData, bool> condition, Action declareRules)
+        {
+            base.When(condition, declareRules);
+        }
     }
 }

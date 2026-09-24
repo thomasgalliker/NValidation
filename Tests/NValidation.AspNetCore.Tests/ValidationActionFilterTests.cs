@@ -490,6 +490,45 @@ namespace NValidation.AspNetCore.Tests
         }
 
         [Fact]
+        public async Task OnActionExecutionAsync_WithAnExclusiveGroup_RunsThatGroupAlone()
+        {
+            // Arrange
+            var car = CarAppraisedAboveItsPurchasePrice;
+            car.Vin = "TOO-SHORT";
+            car.RegistrationPlate = null;
+
+            var arguments = new Dictionary<string, object?> { ["car"] = car };
+            var context = CreateContext(nameof(TestActions.CheckListingAlone), arguments);
+            var filter = CreateFilter();
+
+            // Act
+            var act = () => filter.OnActionExecutionAsync(context, () => Task.FromResult(CreateExecutedContext(context)));
+
+            // Assert
+            var validationException = (await act.Should().ThrowAsync<ValidationException>()).Which;
+            validationException.ShouldReport("RegistrationPlate", "RegistrationPlate is required.");
+        }
+
+        /// <summary>
+        /// An endpoint asking for a group its payload's validator never declares would otherwise accept
+        /// every request unchecked, so the request fails instead.
+        /// </summary>
+        [Fact]
+        public async Task OnActionExecutionAsync_WithAnExclusiveGroupTheValidatorDoesNotDeclare_Throws()
+        {
+            // Arrange
+            var arguments = new Dictionary<string, object?> { ["car"] = ValidCar };
+            var context = CreateContext(nameof(TestActions.CheckAMistypedGroupAlone), arguments);
+            var filter = CreateFilter();
+
+            // Act
+            var act = () => filter.OnActionExecutionAsync(context, () => Task.FromResult(CreateExecutedContext(context)));
+
+            // Assert
+            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Only: Listng*");
+        }
+
+        [Fact]
         public async Task OnActionExecutionAsync_WithAGroupAttribute_StillReportsTheChainsInNoGroup()
         {
             // Arrange

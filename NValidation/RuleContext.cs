@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using NValidation.Internals;
 
 namespace NValidation
@@ -37,8 +38,6 @@ namespace NValidation
             this.errorCountAtStart = errorCountAtStart;
         }
 
-        internal ValidationRun Run => this.frame.Run;
-
         internal ValidationFrame Frame => this.frame;
 
         /// <summary>
@@ -69,6 +68,24 @@ namespace NValidation
         /// The token the validation was started with, for a rule which does something cancellable.
         /// </summary>
         public CancellationToken CancellationToken => this.frame.Run.CancellationToken;
+
+        /// <summary>
+        /// Reads the <typeparamref name="TData"/> the validation was handed through
+        /// <see cref="NValidationOptions.ValidationData"/>, for a rule whose verdict depends on something only
+        /// the caller knows; <c>false</c> where it was handed none.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Two of the values handed over are a <typeparamref name="TData"/>.</exception>
+        public bool TryGetData<TData>([MaybeNullWhen(false)] out TData data)
+        {
+            if (this.frame.Run.Inherited.Inputs.Data is { } values)
+            {
+                return values.TryGet(out data);
+            }
+
+            data = default;
+
+            return false;
+        }
 
         /// <summary>
         /// What a message calls this property: the display name it opted into with

@@ -57,5 +57,15 @@ namespace NValidation.AspNetCore.Tests.TestData
         public void CreateInEveryGroup(Car car)
         {
         }
+
+        [ValidationGroups("Listing", Only = true)]
+        public void CheckListingAlone(Car car)
+        {
+        }
+
+        [ValidationGroups("Listng", Only = true)]
+        public void CheckAMistypedGroupAlone(Car car)
+        {
+        }
     }
 }

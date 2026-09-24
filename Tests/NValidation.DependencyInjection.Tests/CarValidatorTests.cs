@@ -195,6 +195,127 @@ namespace NValidation.DependencyInjection.Tests
         }
 
         /// <summary>
+        /// A listing check hears about what a listing needs and nothing else: a broken VIN is a matter for
+        /// the car's own record, not for whether it can be offered. The price is both, so it is reported
+        /// either way.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_WithOnlyTheListingGroup_ReportsWhatAListingNeedsAlone()
+        {
+            // Arrange
+            var car = Cars.Car();
+            car.Vin = "TOO-SHORT";
+            car.PurchasePrice = 0m;
+            car.RegistrationPlate = null;
+
+            var options = new NValidationOptions { ValidationGroups = ValidationGroups.Only(CarValidator.ListingGroup) };
+
+            // Act
+            var result = await this.validator.ValidateAsync(car, options);
+
+            // Assert
+            result.ShouldReport([
+                new("PurchasePrice", "PurchasePrice must be greater than 0."),
+                new("RegistrationPlate", "RegistrationPlate is required.")]);
+        }
+
+        /// <summary>
+        /// What a market asks of a listed car is handed over by the caller: a car driven further than the
+        /// market lists, and without the history it requires, is told about both.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_WithOnlyTheListingGroupAndAPolicy_ReportsWhatTheMarketAsksFor()
+        {
+            // Arrange
+            var car = Cars.Car();
+            car.Mileage = 250_000;
+            car.ServiceHistory = null;
+
+            var options = new NValidationOptions
+            {
+                ValidationGroups = ValidationGroups.Only(CarValidator.ListingGroup),
+                ValidationData = [new ListingPolicy(MaximumMileage: 200_000, RequiresServiceHistory: true)],
+            };
+
+            // Act
+            var result = await this.validator.ValidateAsync(car, options);
+
+            // Assert
+            result.ShouldReport([
+                new("Mileage", "The mileage is above what this market lists."),
+                new("ServiceHistory", "ServiceHistory is required.")]);
+        }
+
+        [Fact]
+        public async Task ValidateAsync_WithOnlyTheListingGroupButNoPolicy_LeavesWhatAMarketWouldDecideAlone()
+        {
+            // Arrange
+            var car = Cars.Car();
+            car.Mileage = 250_000;
+            car.ServiceHistory = null;
+
+            var options = new NValidationOptions { ValidationGroups = ValidationGroups.Only(CarValidator.ListingGroup) };
+
+            // Act
+            var result = await this.validator.ValidateAsync(car, options);
+
+            // Assert
+            result.Errors.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task ValidateAsync_WithOnlyTheListingGroup_AsksAUsedCarWhatItArrivedInAndItsServiceInterval()
+        {
+            // Arrange
+            var car = Cars.Car();
+            car.Condition = CarCondition.Used;
+            car.IntakeCondition = null;
+            car.ServiceIntervalKm = null;
+
+            var options = new NValidationOptions { ValidationGroups = ValidationGroups.Only(CarValidator.ListingGroup) };
+
+            // Act
+            var result = await this.validator.ValidateAsync(car, options);
+
+            // Assert
+            result.ShouldReport([
+                new("IntakeCondition", "IntakeCondition is required."),
+                new("ServiceIntervalKm", "ServiceIntervalKm is required.")]);
+        }
+
+        [Fact]
+        public async Task ValidateAsync_WithOnlyTheListingGroup_LeavesANewCarWithoutAnIntakeConditionAlone()
+        {
+            // Arrange
+            var car = Cars.Car();
+            car.Condition = CarCondition.New;
+            car.IntakeCondition = null;
+            car.ServiceIntervalKm = null;
+
+            var options = new NValidationOptions { ValidationGroups = ValidationGroups.Only(CarValidator.ListingGroup) };
+
+            // Act
+            var result = await this.validator.ValidateAsync(car, options);
+
+            // Assert
+            result.Errors.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task ValidateAsync_WithoutASelection_LeavesTheListingChecksAlone()
+        {
+            // Arrange
+            var car = Cars.Car();
+            car.RegistrationPlate = null;
+
+            // Act
+            var result = await this.validator.ValidateAsync(car);
+
+            // Assert
+            result.Errors.Should().BeEmpty();
+        }
+
+        /// <summary>
         /// A history which is entirely in order is silent — the new rules do not report on a car that
         /// has nothing wrong with it.
         /// </summary>

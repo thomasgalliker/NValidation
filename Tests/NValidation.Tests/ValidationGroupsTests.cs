@@ -204,5 +204,130 @@ namespace NValidation.Tests
             // Assert
             ValidationGroups.All.ToString().Should().Be("All");
         }
+
+        [Fact]
+        public void ToString_ForOnly_SaysOnly()
+        {
+            // Act
+            var text = ValidationGroups.Only("Listing", "Pricing").ToString();
+
+            // Assert
+            text.Should().Be("Only: Listing, Pricing");
+        }
+
+        [Fact]
+        public void Only_WithNames_LeavesTheDefaultGroupOut()
+        {
+            // Act
+            var groups = ValidationGroups.Only("Listing");
+
+            // Assert
+            groups.Names.Should().Equal("Listing");
+            groups.IncludesDefault.Should().BeFalse();
+            groups.IncludesAll.Should().BeFalse();
+            groups.Selects(["Listing"]).Should().BeTrue();
+        }
+
+        [Fact]
+        public void Only_NamingTheDefaultGroupBesideAnother_IsTheAdditiveSelection()
+        {
+            // Act
+            var groups = ValidationGroups.Only(ValidationGroups.DefaultGroup, "Listing");
+
+            // Assert
+            groups.Names.Should().Equal("Listing");
+            groups.IncludesDefault.Should().BeTrue();
+        }
+
+        [Fact]
+        public void Only_NamingTheDefaultGroupAlone_IsNone()
+        {
+            // Act
+            var groups = ValidationGroups.Only(ValidationGroups.DefaultGroup);
+
+            // Assert
+            groups.Should().BeSameAs(ValidationGroups.None);
+        }
+
+        [Fact]
+        public void Only_WithoutAName_Throws()
+        {
+            // Act
+            var act = () => ValidationGroups.Only();
+
+            // Assert
+            act.Should().Throw<ArgumentException>().WithParameterName("groups");
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData(" ")]
+        public void Only_WithABlankName_Throws(string? group)
+        {
+            // Act
+            var act = () => ValidationGroups.Only("Listing", group!);
+
+            // Assert
+            act.Should().Throw<ArgumentException>().WithParameterName("groups");
+        }
+
+        [Fact]
+        public void Constructor_NamingTheDefaultGroup_LeavesItOutOfTheNames()
+        {
+            // Act
+            var groups = new ValidationGroups(ValidationGroups.DefaultGroup, "Create");
+
+            // Assert
+            groups.Names.Should().Equal("Create");
+            groups.IncludesDefault.Should().BeTrue();
+        }
+
+        [Fact]
+        public void IncludesDefault_ForEveryAdditiveSelection_IsTrue()
+        {
+            // Assert
+            ValidationGroups.None.IncludesDefault.Should().BeTrue();
+            ValidationGroups.All.IncludesDefault.Should().BeTrue();
+            new ValidationGroups("Create").IncludesDefault.Should().BeTrue();
+        }
+
+        [Fact]
+        public void Additive_ForOnly_KeepsTheNamesAndAddsTheDefaultGroup()
+        {
+            // Arrange
+            var groups = ValidationGroups.Only("Listing");
+
+            // Act
+            var additive = groups.Additive;
+
+            // Assert
+            additive.Names.Should().Equal("Listing");
+            additive.IncludesDefault.Should().BeTrue();
+            groups.Additive.Should().BeSameAs(additive);
+        }
+
+        [Fact]
+        public void Additive_ForAnAdditiveSelection_IsTheSelectionItself()
+        {
+            // Arrange
+            var groups = new ValidationGroups("Create");
+
+            // Act
+            var additive = groups.Additive;
+
+            // Assert
+            additive.Should().BeSameAs(groups);
+        }
+
+        [Fact]
+        public void Selects_WithoutGroups_ReturnsFalse()
+        {
+            // Act
+            var selects = ValidationGroups.All.Selects(null);
+
+            // Assert
+            selects.Should().BeFalse();
+        }
     }
 }

@@ -102,6 +102,56 @@ namespace NValidation.Tests
             result.ShouldReport("RegistrationPlate", "RegistrationPlate is required.");
         }
 
+        [Fact]
+        public async Task WithGroup_NamingTheDefaultGroupBesideAnother_RunsTheChainWithoutASelection()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty().WithGroup(ValidationGroups.DefaultGroup, "Listing");
+
+            // Act
+            var result = await validator.ValidateAsync(new Car());
+
+            // Assert
+            result.ShouldReport("Vin", "Vin is required.");
+        }
+
+        [Fact]
+        public async Task WithGroup_NamingTheDefaultGroupBesideAnother_RunsTheChainUnderOnlyThatGroup()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty().WithGroup(ValidationGroups.DefaultGroup, "Listing");
+            validator.Property(c => c.RegistrationPlate).NotEmpty();
+
+            var options = new NValidationOptions { ValidationGroups = ValidationGroups.Only("Listing") };
+
+            // Act
+            var result = await validator.ValidateAsync(new Car(), options);
+
+            // Assert
+            result.ShouldReport("Vin", "Vin is required.");
+        }
+
+        [Fact]
+        public async Task WithGroup_NamingTheDefaultGroupAlone_LeavesTheChainWhereItWas()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).NotEmpty().WithGroup(ValidationGroups.DefaultGroup);
+            validator.Property(c => c.RegistrationPlate).NotEmpty().WithGroup("Listing");
+
+            var options = new NValidationOptions { ValidationGroups = ValidationGroups.Only("Listing") };
+
+            // Act
+            var withoutASelection = await validator.ValidateAsync(new Car());
+            var withOnlyTheGroup = await validator.ValidateAsync(new Car(), options);
+
+            // Assert
+            withoutASelection.ShouldReport("Vin", "Vin is required.");
+            withOnlyTheGroup.ShouldReport("RegistrationPlate", "RegistrationPlate is required.");
+        }
+
         /// <summary>
         /// The group covers the chain wherever it is written, exactly as a condition does.
         /// </summary>

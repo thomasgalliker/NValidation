@@ -117,25 +117,35 @@ namespace NValidation
         {
             ArgumentNullException.ThrowIfNull(validator);
 
+            var aware = validator as IValidationRunAware<TProperty>;
+
+            // What the nested validator declares is what a selection can reach it through; a validator
+            // written by hand declares nothing the library can see.
+            var composedGroups = aware?.DeclaredGroups;
+
             // A nested validator whose every rule judges keeps this chain synchronous.
-            if (validator is IValidationRunAware<TProperty> { IsSynchronous: true } synchronous)
+            if (aware is { IsSynchronous: true } synchronous)
             {
-                return builder.AddComposed(context =>
+                return builder.AddComposed(
+                    context =>
+                    {
+                        if (context.Value is { } value)
+                        {
+                            Merge(context, synchronous.Validate(value, context.Frame.Run.Below(context.PropertyName)));
+                        }
+                    },
+                    composedGroups);
+            }
+
+            return builder.AddComposed(
+                async (context, _) =>
                 {
                     if (context.Value is { } value)
                     {
-                        Merge(context, synchronous.Validate(value, context.Run));
+                        Merge(context, await NestedValidation.ValidateAsync(validator, value, context.Frame.Run.Below(context.PropertyName)));
                     }
-                });
-            }
-
-            return builder.AddComposed(async (context, _) =>
-            {
-                if (context.Value is { } value)
-                {
-                    Merge(context, await NestedValidation.ValidateAsync(validator, value, context.Run));
-                }
-            });
+                },
+                composedGroups);
         }
 
         private static void Merge<T, TProperty>(in RuleContext<T, TProperty> context, ValidationResult result)

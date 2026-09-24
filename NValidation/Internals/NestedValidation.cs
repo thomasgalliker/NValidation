@@ -9,9 +9,7 @@ namespace NValidation.Internals
                 return aware.ValidateAsync(instance, run);
             }
 
-            return run.Inherited.AsOptions() is { } options
-                ? validator.ValidateAsync(instance, options, run.CancellationToken)
-                : validator.ValidateAsync(instance, run.CancellationToken);
+            return validator.ValidateAsync(instance, run.Inherited.AsOptions(), run.CancellationToken);
         }
 
         /// <summary>

@@ -121,6 +121,76 @@ namespace NValidation.Tests
             result.ShouldReport("ServiceHistory[0].Workshop", "NotEmpty");
         }
 
+        [Fact]
+        public async Task ValidateAsync_TheComposersMessageProvider_ReachesEveryEntryOfACollection()
+        {
+            // Arrange
+            var recordValidator = new TestValidator<ServiceRecord>();
+            recordValidator.Property(r => r.Workshop).NotEmpty();
+
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
+            validator.Property(c => c.ServiceHistory).ForEach(recordValidator);
+
+            var car = Cars.Car();
+            car.ServiceHistory = [new ServiceRecord(), new ServiceRecord(), new ServiceRecord()];
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport([
+                new("ServiceHistory[0].Workshop", "NotEmpty"),
+                new("ServiceHistory[1].Workshop", "NotEmpty"),
+                new("ServiceHistory[2].Workshop", "NotEmpty")]);
+        }
+
+        /// <summary>
+        /// A nested validator keeps what it resolved while its composer keeps handing it the same settings; a
+        /// composer handing it others is answered through its own, not through what was kept for the first.
+        /// </summary>
+        [Fact]
+        public async Task ValidateAsync_ANestedValidatorKeptForOneComposer_AnswersAnotherThroughThatOnesProvider()
+        {
+            // Arrange
+            var nested = new TestValidator<Manufacturer>();
+            nested.Property(m => m.Name).NotEmpty();
+
+            var answeringInCodes = new ComposingValidator(nested) { ValidationMessageProvider = ErrorCodeProvider.Instance };
+            var answeringInEnglish = new ComposingValidator(nested);
+            var model = new CarModel { Manufacturer = new Manufacturer() };
+
+            await answeringInCodes.ValidateAsync(model);
+            await answeringInCodes.ValidateAsync(model);
+
+            // Act
+            var result = await answeringInEnglish.ValidateAsync(model);
+
+            // Assert
+            result.ShouldReport("Manufacturer.Name", "Name is required.");
+        }
+
+        [Fact]
+        public async Task ValidateAsync_ANestedValidatorGivenAProviderAfterItsPassWasKept_AnswersThroughTheNewOne()
+        {
+            // Arrange
+            var nested = new TestValidator<Manufacturer>();
+            nested.Property(m => m.Name).NotEmpty();
+
+            var validator = new ComposingValidator(nested);
+            var model = new CarModel { Manufacturer = new Manufacturer() };
+
+            await validator.ValidateAsync(model);
+            await validator.ValidateAsync(model);
+
+            nested.ValidationMessageProvider = ErrorCodeProvider.Instance;
+
+            // Act
+            var result = await validator.ValidateAsync(model);
+
+            // Assert
+            result.ShouldReport("Manufacturer.Name", "NotEmpty");
+        }
+
         private sealed class NestedMessageProvider : IValidationMessageProvider
         {
             public string GetMessage(string errorCode, IReadOnlyDictionary<string, object?> arguments)

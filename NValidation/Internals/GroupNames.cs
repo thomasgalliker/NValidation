@@ -52,6 +52,40 @@ namespace NValidation.Internals
             return union is null ? existing : [.. union];
         }
 
+        /// <summary>
+        /// Both sets of names, without a repetition, or null where neither names anything. Returns one of
+        /// the arrays it was given wherever the other adds nothing, so a freeze allocates only for a real
+        /// union.
+        /// </summary>
+        public static string[]? Merge(string[]? first, string[]? second)
+        {
+            if (second is null || second.Length == 0)
+            {
+                return first is { Length: > 0 } ? first : null;
+            }
+
+            if (first is null || first.Length == 0)
+            {
+                return second;
+            }
+
+            return Union(first, second, nameof(second));
+        }
+
+        /// <summary>
+        /// The names without <see cref="ValidationGroups.DefaultGroup"/>, which says where a chain runs
+        /// rather than naming a group of its own. Returns the array it was given where it is not there.
+        /// </summary>
+        public static string[] WithoutDefault(string[] groups)
+        {
+            if (!Contains(groups, ValidationGroups.DefaultGroup))
+            {
+                return groups;
+            }
+
+            return Array.FindAll(groups, static group => !string.Equals(group, ValidationGroups.DefaultGroup, StringComparison.Ordinal));
+        }
+
         public static bool Contains(string[] groups, string group)
         {
             for (var i = 0; i < groups.Length; i++)

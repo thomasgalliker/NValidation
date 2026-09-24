@@ -2,12 +2,13 @@ namespace NValidation.AspNetCore
 {
     /// <summary>
     /// Selects the rule groups <see cref="ValidationActionFilter"/> runs for a payload:
-    /// <c>[ValidationGroups("Create")]</c> on a parameter, an action or a controller, or
+    /// <c>[ValidationGroups("Create")]</c> on a parameter, an action or a controller,
+    /// <c>[ValidationGroups("Listing", Only = true)]</c> for those groups without the default group, or
     /// <c>[ValidationGroups(All = true)]</c> for every group a validator declares.
     /// </summary>
     /// <remarks>
     /// The nearest one decides: the parameter's own, then the action's, then the controller's. A payload
-    /// with none is validated as a plain call would be, so the chains in no group run and no other does.
+    /// with none is validated as a plain call would be, so the default group runs and no other does.
     /// Only a controller action's parameter carries an attribute of its own; anywhere else the action's
     /// and the controller's are what is read.
     /// </remarks>
@@ -50,18 +51,42 @@ namespace NValidation.AspNetCore
         public bool All { get; init; }
 
         /// <summary>
-        /// What this selects: <see cref="ValidationGroups.All"/>, the named groups, or
-        /// <see cref="ValidationGroups.None"/> where the attribute names nothing.
+        /// Runs the named groups without the default group, as <see cref="ValidationGroups.Only"/> does.
         /// </summary>
+        /// <remarks>
+        /// The validator of every payload the attribute reaches must declare one of the groups, or the
+        /// request fails rather than check nothing — which matters most on a controller with several
+        /// actions.
+        /// </remarks>
+        public bool Only { get; init; }
+
+        /// <summary>
+        /// What this selects: <see cref="ValidationGroups.All"/>, the named groups with or without the
+        /// default group, or <see cref="ValidationGroups.None"/> where the attribute names nothing.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// <see cref="Only"/> is set together with <see cref="All"/>, or without a group to run.
+        /// </exception>
         public ValidationGroups Groups
         {
             get
             {
-                // Read rather than stored, because All is an init property assigned after the constructor
-                // has run.
+                // Read rather than stored, because All and Only are init properties assigned after the
+                // constructor has run.
                 if (this.All)
                 {
-                    return ValidationGroups.All;
+                    return this.Only
+                        ? throw new InvalidOperationException(
+                            "[ValidationGroups] cannot run every group and only some of them: set All or Only, not both.")
+                        : ValidationGroups.All;
+                }
+
+                if (this.Only)
+                {
+                    return this.groups.Length == 0
+                        ? throw new InvalidOperationException(
+                            "[ValidationGroups(Only = true)] has to name the groups it runs.")
+                        : ValidationGroups.Only(this.groups);
                 }
 
                 return this.groups.Length == 0 ? ValidationGroups.None : new ValidationGroups(this.groups);

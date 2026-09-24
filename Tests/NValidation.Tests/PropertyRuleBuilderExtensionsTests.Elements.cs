@@ -819,6 +819,58 @@ namespace NValidation.Tests
         }
 
         /// <summary>
+        /// The chain declaring the ForEach settles what the entries await and which groups they declare
+        /// when it is declared, so a change made to the builder afterwards would go unseen.
+        /// </summary>
+        [Fact]
+        public void SetValidator_AfterTheForEachWasDeclared_Throws()
+        {
+            // Arrange
+            ElementRuleBuilder<ServiceRecord>? builder = null;
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory).ForEach(record => builder = record);
+
+            // Act
+            var act = () => builder!.SetValidator(new TestValidator<ServiceRecord>());
+
+            // Assert
+            act.Should().Throw<InvalidOperationException>().WithMessage("*already been declared*");
+        }
+
+        [Fact]
+        public void Where_AfterTheForEachWasDeclared_Throws()
+        {
+            // Arrange
+            ElementRuleBuilder<ServiceRecord>? builder = null;
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory).ForEach(record => builder = record);
+
+            // Act
+            var act = () => builder!.Where(record => record.Mileage > 0);
+
+            // Assert
+            act.Should().Throw<InvalidOperationException>().WithMessage("*already been declared*");
+        }
+
+        [Fact]
+        public void WithIndexer_AfterTheForEachWasDeclared_Throws()
+        {
+            // Arrange
+            ElementRuleBuilder<ServiceRecord>? builder = null;
+
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceHistory).ForEach(record => builder = record);
+
+            // Act
+            var act = () => builder!.WithIndexer((record, _) => record.Workshop ?? "unknown");
+
+            // Assert
+            act.Should().Throw<InvalidOperationException>().WithMessage("*already been declared*");
+        }
+
+        /// <summary>
         /// A string satisfies the sequence conversion that selects ForEach, so the mistake has to be
         /// caught when the rule is declared rather than becoming one failure per character.
         /// </summary>

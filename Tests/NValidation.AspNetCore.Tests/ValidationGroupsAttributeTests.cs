@@ -70,5 +70,42 @@ namespace NValidation.AspNetCore.Tests
             // Assert
             attribute.Groups.Should().BeSameAs(ValidationGroups.All);
         }
+
+        [Fact]
+        public void Only_SelectsTheNamedGroupsWithoutTheDefaultGroup()
+        {
+            // Act
+            var attribute = new ValidationGroupsAttribute("Listing") { Only = true };
+
+            // Assert
+            attribute.Groups.Names.Should().Equal("Listing");
+            attribute.Groups.IncludesDefault.Should().BeFalse();
+        }
+
+        [Fact]
+        public void Only_WithoutAName_Throws()
+        {
+            // Arrange
+            var attribute = new ValidationGroupsAttribute { Only = true };
+
+            // Act
+            var act = () => attribute.Groups;
+
+            // Assert
+            act.Should().Throw<InvalidOperationException>().WithMessage("*has to name the groups it runs*");
+        }
+
+        [Fact]
+        public void Only_TogetherWithAll_Throws()
+        {
+            // Arrange
+            var attribute = new ValidationGroupsAttribute("Listing") { All = true, Only = true };
+
+            // Act
+            var act = () => attribute.Groups;
+
+            // Assert
+            act.Should().Throw<InvalidOperationException>().WithMessage("*All or Only, not both*");
+        }
     }
 }
