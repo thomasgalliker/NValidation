@@ -1,0 +1,1149 @@
+namespace NValidation.Tests
+{
+    public partial class PropertyRuleBuilderExtensionsTests
+    {
+        [Theory]
+        [InlineData(CarCondition.New, true)]
+        [InlineData(CarCondition.Used, true)]
+        [InlineData(CarCondition.Unknown, false)]
+        public async Task OneOf_WithAnEnum_AcceptsOnlyTheNamedValues(CarCondition condition, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Condition).OneOf(CarCondition.New, CarCondition.Used);
+
+            var car = Cars.Car();
+            car.Condition = condition;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(null, true)] // absent is left to NotEmpty
+        [InlineData("CHF", true)]
+        [InlineData("chf", false)] // compared exactly by default
+        [InlineData("JPY", false)]
+        public async Task OneOf_WithText_ComparesExactlyByDefault(string? plate, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.RegistrationPlate).OneOf("CHF", "EUR");
+
+            var car = Cars.Car();
+            car.RegistrationPlate = plate;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Fact]
+        public async Task OneOf_WithText_ComparesTheWayItIsAskedTo()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.RegistrationPlate).OneOf(StringComparison.OrdinalIgnoreCase, "CHF", "EUR");
+
+            var car = Cars.Car();
+            car.RegistrationPlate = "chf";
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Errors.Should().BeEmpty();
+        }
+
+        [Theory]
+        [InlineData(null, true)] // absent is left to NotNull
+        [InlineData(CarCondition.New, true)]
+        [InlineData(CarCondition.Unknown, false)]
+        public async Task OneOf_WithANullableEnum_JudgesOnlyAValueThatIsThere(CarCondition? condition, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.IntakeCondition).OneOf(CarCondition.New, CarCondition.Used);
+
+            var car = Cars.Car();
+            car.IntakeCondition = condition;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        /// <summary>
+        /// An allowlist may name what it allows — unlike a blocklist, whose message names none of its
+        /// entries so the next value cannot be written around them.
+        /// </summary>
+        [Fact]
+        public async Task OneOf_ReportsTheRuleAndNamesTheAllowedValues()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.RegistrationPlate).OneOf("CHF", "EUR");
+
+            var car = Cars.Car();
+            car.RegistrationPlate = "JPY";
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReportErrorCode("RegistrationPlate", "OneOf");
+            result.Errors.Single().Message.Should().Be("RegistrationPlate must be one of: CHF, EUR.");
+        }
+
+        [Fact]
+        public void OneOf_WithNoValues_ThrowsWhereTheRuleIsDeclared()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+
+            // Act
+            var act = () => validator.Property(c => c.Condition).OneOf();
+
+            // Assert
+            act.Should().Throw<ArgumentException>();
+        }
+
+        /// <summary>
+        /// An enum is the one type a validation library is asked about constantly, and it satisfies
+        /// neither <c>IComparable&lt;TEnum&gt;</c> nor <c>IEquatable&lt;TEnum&gt;</c> — so before the
+        /// constraints were relaxed, comparing one meant <c>Must</c> with a hardcoded literal, which
+        /// drops out of localization.
+        /// </summary>
+        [Theory]
+        [InlineData(CarCondition.New, true)]
+        [InlineData(CarCondition.Used, false)]
+        public async Task EqualTo_WithAnEnum_Judges(CarCondition condition, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Condition).EqualTo(CarCondition.New);
+
+            var car = Cars.Car();
+            car.Condition = condition;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(CarCondition.Unknown, false)]
+        [InlineData(CarCondition.New, true)]
+        public async Task NotEqualTo_WithAnEnum_Judges(CarCondition condition, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Condition).NotEqualTo(CarCondition.Unknown);
+
+            var car = Cars.Car();
+            car.Condition = condition;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        /// <summary>
+        /// Enums order by their underlying value, which is what a declaration order is for.
+        /// </summary>
+        [Theory]
+        [InlineData(CarCondition.Unknown, false)]
+        [InlineData(CarCondition.New, false)]
+        [InlineData(CarCondition.Used, true)]
+        public async Task GreaterThan_WithAnEnum_OrdersByTheUnderlyingValue(CarCondition condition, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Condition).GreaterThan(CarCondition.New);
+
+            var car = Cars.Car();
+            car.Condition = condition;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(null, true)] // absent is left to NotNull
+        [InlineData(CarCondition.Unknown, false)]
+        [InlineData(CarCondition.New, true)]
+        public async Task NotEqualTo_WithANullableEnum_JudgesOnlyAValueThatIsThere(CarCondition? condition, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.IntakeCondition).NotEqualTo(CarCondition.Unknown);
+
+            var car = Cars.Car();
+            car.IntakeCondition = condition;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Fact]
+        public async Task EqualTo_WithAnEnum_ReportsTheRuleThatFailed()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Condition).EqualTo(CarCondition.New);
+
+            var car = Cars.Car();
+            car.Condition = CarCondition.Used;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReportErrorCode("Condition", "EqualTo");
+        }
+
+        /// <summary>
+        /// Comparing through <c>Comparer&lt;T&gt;.Default</c> means a value type nothing can order would
+        /// otherwise throw on every request. It is refused where the rule is written instead.
+        /// </summary>
+        [Fact]
+        public void GreaterThan_WithAValueTypeThatCannotBeOrdered_ThrowsWhereTheRuleIsDeclared()
+        {
+            // Arrange
+            var validator = new TestValidator<Unorderable>();
+
+            // Act
+            var act = () => validator.Property(u => u.Size).GreaterThan(new Unsortable(1));
+
+            // Assert
+            act.Should().Throw<ArgumentException>().WithMessage("*cannot be ordered*");
+        }
+
+        /// <summary>
+        /// Equality needs no order, so the same type is still comparable for equality.
+        /// </summary>
+        [Fact]
+        public async Task EqualTo_WithAValueTypeThatCannotBeOrdered_StillJudgesEquality()
+        {
+            // Arrange
+            var validator = new TestValidator<Unorderable>();
+            validator.Property(u => u.Size).EqualTo(new Unsortable(1));
+
+            // Act
+            var result = await validator.ValidateAsync(new Unorderable { Size = new Unsortable(2) });
+
+            // Assert
+            result.ShouldReportErrorCode("Size", "EqualTo");
+        }
+
+        /// <summary>
+        /// A value type with no ordering of its own: a record struct gets <c>IEquatable&lt;T&gt;</c> from
+        /// the compiler but never <c>IComparable&lt;T&gt;</c>.
+        /// </summary>
+        private readonly record struct Unsortable(int Value);
+
+        private sealed class Unorderable
+        {
+            public Unsortable Size { get; set; }
+        }
+
+        /// <summary>
+        /// Both sides non-nullable. The overload taking a non-nullable other property was removed, so
+        /// this now binds to the nullable one: the lambda's <c>int</c> body converts implicitly to
+        /// <c>int?</c>, and the <c>Convert</c> node the compiler inserts is stripped by
+        /// <c>PropertyPath.From</c>, so the reported property name is unchanged.
+        /// </summary>
+        [Theory]
+        [InlineData(4, 5, false)]
+        [InlineData(5, 5, true)]
+        [InlineData(6, 5, true)]
+        public async Task GreaterThanOrEqualTo_WithTwoNonNullableProperties_Binds(int mileage, int cap, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).GreaterThanOrEqualTo(c => c.WarrantyMileageLimit);
+
+            var car = Cars.Car();
+            car.Mileage = mileage;
+            car.WarrantyMileageLimit = cap;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        /// <summary>
+        /// The same call reports under the validated property, not the compared one, and names the rule.
+        /// </summary>
+        [Fact]
+        public async Task GreaterThanOrEqualTo_WithTwoNonNullableProperties_ReportsUnderTheValidatedProperty()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).GreaterThanOrEqualTo(c => c.WarrantyMileageLimit);
+
+            var car = Cars.Car();
+            car.Mileage = 1;
+            car.WarrantyMileageLimit = 100;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReportErrorCode("Mileage", "GreaterThanOrEqualToOtherProperty");
+        }
+
+        /// <summary>
+        /// Explicit type arguments still resolve after the collapse, which is the one call shape a
+        /// lambda's own type inference does not exercise.
+        /// </summary>
+        [Fact]
+        public async Task GreaterThan_WithExplicitTypeArguments_Binds()
+        {
+            // Arrange
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.SeatCount).GreaterThan<CarModel, int>(0);
+
+            var carModel = Cars.CarModel();
+            carModel.SeatCount = 0;
+
+            // Act
+            var result = await validator.ValidateAsync(carModel);
+
+            // Assert
+            result.ShouldReportErrorCode("SeatCount", "GreaterThan");
+        }
+
+        [Theory]
+        [InlineData(-1, false)]
+        [InlineData(0, false)] // the bound itself is excluded
+        [InlineData(1, true)]
+        public async Task GreaterThan_ExcludesTheBound(int mileage, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).GreaterThan(0);
+
+            var car = Cars.Car();
+            car.Mileage = mileage;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(-1, false)]
+        [InlineData(0, true)] // the bound itself is included
+        [InlineData(1, true)]
+        public async Task GreaterThanOrEqualTo_IncludesTheBound(int mileage, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).GreaterThanOrEqualTo(0);
+
+            var car = Cars.Car();
+            car.Mileage = mileage;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(99, true)]
+        [InlineData(100, false)] // the bound itself is excluded
+        [InlineData(101, false)]
+        public async Task LessThan_ExcludesTheBound(int mileage, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).LessThan(100);
+
+            var car = Cars.Car();
+            car.Mileage = mileage;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(99, true)]
+        [InlineData(100, true)] // the bound itself is included
+        [InlineData(101, false)]
+        public async Task LessThanOrEqualTo_IncludesTheBound(int mileage, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).LessThanOrEqualTo(100);
+
+            var car = Cars.Car();
+            car.Mileage = mileage;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(-5, false)]
+        [InlineData(-4, true)]
+        public async Task GreaterThan_WorksWithANegativeBound(int mileage, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).GreaterThan(-5);
+
+            var car = Cars.Car();
+            car.Mileage = mileage;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(0, false)]
+        [InlineData(0.01, true)]
+        public async Task GreaterThan_WithADecimal_ExcludesTheBound(double purchasePrice, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.PurchasePrice).GreaterThan(0m);
+
+            var car = Cars.Car();
+            car.PurchasePrice = (decimal)purchasePrice;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        /// <summary>
+        /// The comparison rules are written once over <see cref="IComparable{T}"/>, so a type the
+        /// library never mentions by name works just as well.
+        /// </summary>
+        [Theory]
+        [InlineData(1_000L, false)]
+        [InlineData(1_001L, true)]
+        public async Task GreaterThan_WorksWithALong(long unitsProduced, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.UnitsProduced).GreaterThan(1_000L);
+
+            var carModel = Cars.CarModel();
+            carModel.UnitsProduced = unitsProduced;
+
+            // Act
+            var result = await validator.ValidateAsync(carModel);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(24, true)]
+        [InlineData(25, false)]
+        public async Task LessThanOrEqualTo_WorksWithATimeSpan(int hours, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.ServiceInterval).LessThanOrEqualTo(TimeSpan.FromHours(24));
+
+            var car = Cars.Car();
+            car.ServiceInterval = TimeSpan.FromHours(hours);
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(2019, false)]
+        [InlineData(2020, true)] // the bound itself
+        [InlineData(2021, true)]
+        public async Task GreaterThanOrEqualTo_WorksWithADateTimeOffset(int year, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.RegisteredAt).GreaterThanOrEqualTo(new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero));
+
+            var car = Cars.Car();
+            car.RegisteredAt = new DateTimeOffset(year, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(null, true)] // absent is left to NotNull
+        [InlineData(0d, false)]
+        [InlineData(0.01d, true)]
+        public async Task GreaterThan_WithANullableProperty_JudgesOnlyAValueThatIsThere(double? tradeInValue, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.TradeInValue).GreaterThan(0m);
+
+            var car = Cars.Car();
+            car.TradeInValue = tradeInValue == null ? null : (decimal)tradeInValue.Value;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(null, true)] // absent is left to NotNull
+        [InlineData(199f, true)]
+        [InlineData(200f, false)]
+        public async Task LessThan_WithANullableProperty_JudgesOnlyAValueThatIsThere(float? topSpeed, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.TopSpeed).LessThan(200f);
+
+            var carModel = Cars.CarModel();
+            carModel.TopSpeed = topSpeed;
+
+            // Act
+            var result = await validator.ValidateAsync(carModel);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        // --- against another property ---------------------------------------------------------
+
+        [Theory]
+        [InlineData(-1, false)] // sold before it was registered
+        [InlineData(0, true)] // the same day
+        [InlineData(1, true)]
+        public async Task GreaterThanOrEqualTo_ComparesAgainstAnotherProperty(int daysAfterRegistration, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+
+            var car = Cars.Car();
+            car.SoldDate = car.FirstRegistration.AddDays(daysAfterRegistration);
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Fact]
+        public async Task GreaterThanOrEqualTo_AgainstAnotherProperty_SkipsAMissingValue()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+
+            var car = Cars.Car();
+            car.SoldDate = null;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().BeTrue("a missing date is left to NotEmpty");
+        }
+
+        /// <summary>
+        /// The other side of the comparison may be the nullable one, in which case there is nothing to
+        /// compare against and the rule has nothing to say.
+        /// </summary>
+        [Fact]
+        public async Task LessThanOrEqualTo_AgainstAMissingOtherProperty_Passes()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FirstRegistration).LessThanOrEqualTo(c => c.SoldDate);
+
+            var car = Cars.Car();
+            car.SoldDate = null;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task LessThanOrEqualTo_AgainstAnOtherProperty_ReportsTheBrokenComparison()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.FirstRegistration).LessThanOrEqualTo(c => c.SoldDate);
+
+            var car = Cars.Car();
+            car.SoldDate = car.FirstRegistration.AddDays(-1);
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport("FirstRegistration", "FirstRegistration must be less than or equal to SoldDate.");
+        }
+
+        [Fact]
+        public async Task GreaterThan_WithBothSidesNullable_PassesWhenEitherIsMissing()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.WarrantyEndsOn).GreaterThan(c => c.SoldDate);
+
+            var car = Cars.Car();
+            car.WarrantyEndsOn = null;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task GreaterThan_WithBothSidesNullable_ComparesWhenBothAreThere()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.WarrantyEndsOn).GreaterThan(c => c.SoldDate);
+
+            var car = Cars.Car();
+            car.WarrantyEndsOn = car.SoldDate!.Value.AddDays(-1);
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport("WarrantyEndsOn", "WarrantyEndsOn must be greater than SoldDate.");
+        }
+
+        [Theory]
+        [InlineData(99_999, true)]
+        [InlineData(100_000, true)] // exactly the limit
+        [InlineData(100_001, false)]
+        public async Task LessThanOrEqualTo_WithNeitherSideNullable_ComparesTheTwoProperties(int mileage, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).LessThanOrEqualTo(c => c.WarrantyMileageLimit);
+
+            var car = Cars.Car();
+            car.Mileage = mileage;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        /// <summary>
+        /// The message names the property it was compared against, so the reader knows which two fields
+        /// disagree.
+        /// </summary>
+        [Fact]
+        public async Task GreaterThanOrEqualTo_NamesTheOtherProperty_ByItsCode()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+
+            var car = Cars.Car();
+            car.SoldDate = car.FirstRegistration.AddDays(-1);
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport("SoldDate", "SoldDate must be greater than or equal to FirstRegistration.");
+        }
+
+        [Fact]
+        public async Task GreaterThanOrEqualTo_NamesTheOtherProperty_ByItsDisplayName()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+            validator.Property(c => c.FirstRegistration).WithDisplayName("the registration date");
+
+            var car = Cars.Car();
+            car.SoldDate = car.FirstRegistration.AddDays(-1);
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport("SoldDate", "SoldDate must be greater than or equal to the registration date.");
+        }
+
+        // --- ranges ------------------------------------------------------------------------------
+
+        [Theory]
+        [InlineData(0, false)]
+        [InlineData(1, true)] // the lower bound is included by default
+        [InlineData(5, true)]
+        [InlineData(9, true)] // and so is the upper one
+        [InlineData(10, false)]
+        public async Task Between_IncludesBothBoundsByDefault(int seatCount, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.SeatCount).Between(1, 9);
+
+            var carModel = Cars.CarModel();
+            carModel.SeatCount = seatCount;
+
+            // Act
+            var result = await validator.ValidateAsync(carModel);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(1, false)] // the lower bound is excluded
+        [InlineData(5, true)]
+        [InlineData(9, false)] // and so is the upper one
+        public async Task Between_ExcludesBothBounds_WhenAskedTo(int seatCount, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.SeatCount).Between(1, 9, inclusive: false);
+
+            var carModel = Cars.CarModel();
+            carModel.SeatCount = seatCount;
+
+            // Act
+            var result = await validator.ValidateAsync(carModel);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(1, true, true, true)] // the lower bound is allowed when included
+        [InlineData(1, false, true, false)] // and rejected when excluded
+        [InlineData(9, true, true, true)] // the upper bound is allowed when included
+        [InlineData(9, true, false, false)] // and rejected when excluded
+        [InlineData(0, true, true, false)] // below either way
+        [InlineData(10, true, true, false)] // above either way
+        [InlineData(5, false, false, true)] // strictly inside passes whatever the bounds do
+        public async Task Between_AppliesEachBoundOnItsOwn(int seatCount, bool inclusiveFrom, bool inclusiveTo, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.SeatCount).Between(1, 9, inclusiveFrom, inclusiveTo);
+
+            var carModel = Cars.CarModel();
+            carModel.SeatCount = seatCount;
+
+            // Act
+            var result = await validator.ValidateAsync(carModel);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        /// <summary>
+        /// A range which excludes a bound must not report the inclusive wording, which would name the two
+        /// values it just refused as the permitted ones.
+        /// </summary>
+        [Theory]
+        [InlineData(true, true, "Between")]
+        [InlineData(false, false, "BetweenExclusive")]
+        [InlineData(false, true, "BetweenExclusiveFrom")]
+        [InlineData(true, false, "BetweenExclusiveTo")]
+        public async Task Between_ReportsTheCodeMatchingTheBoundsItApplied(bool inclusiveFrom, bool inclusiveTo, string expectedCode)
+        {
+            // Arrange
+            var validator = new TestValidator<CarModel>(ErrorCodeProvider.Instance);
+            validator.Property(m => m.SeatCount).Between(1, 9, inclusiveFrom, inclusiveTo);
+
+            var carModel = Cars.CarModel();
+            carModel.SeatCount = 20;
+
+            // Act
+            var result = await validator.ValidateAsync(carModel);
+
+            // Assert
+            result.ShouldReport("SeatCount", expectedCode);
+        }
+
+        /// <summary>
+        /// The wording a caller actually reads when both bounds are excluded.
+        /// </summary>
+        [Fact]
+        public async Task Between_NamesTheBoundsItRefuses_WhenBothAreExcluded()
+        {
+            // Arrange
+            var validator = new TestValidator<CarModel>();
+            validator.Property(m => m.SeatCount).Between(1, 9, inclusive: false);
+
+            var carModel = Cars.CarModel();
+            carModel.SeatCount = 9;
+
+            // Act
+            var result = await validator.ValidateAsync(carModel);
+
+            // Assert
+            result.ShouldReport("SeatCount", "SeatCount must be greater than 1 and less than 9.");
+        }
+
+        [Theory]
+        [InlineData(null, true)] // absent is left to NotNull
+        [InlineData(0d, false)]
+        [InlineData(500d, true)]
+        public async Task Between_WithANullableProperty_JudgesOnlyAValueThatIsThere(double? tradeInValue, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.TradeInValue).Between(1m, 999m);
+
+            var car = Cars.Car();
+            car.TradeInValue = tradeInValue == null ? null : (decimal)tradeInValue.Value;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Fact]
+        public void Between_WithALowerBoundAboveTheUpperOne_Throws()
+        {
+            // Arrange
+            var validator = new TestValidator<CarModel>();
+
+            // Act
+            var act = () => validator.Property(m => m.SeatCount).Between(9, 1);
+
+            // Assert
+            act.Should().Throw<ArgumentOutOfRangeException>();
+        }
+
+        // --- equality ----------------------------------------------------------------------------
+
+        [Theory]
+        [InlineData(42, true)]
+        [InlineData(43, false)]
+        public async Task EqualTo_RequiresTheValue(int mileage, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).EqualTo(42);
+
+            var car = Cars.Car();
+            car.Mileage = mileage;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(42, false)]
+        [InlineData(43, true)]
+        public async Task NotEqualTo_RejectsTheValue(int mileage, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).NotEqualTo(42);
+
+            var car = Cars.Car();
+            car.Mileage = mileage;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(null, true)] // absent is left to NotNull
+        [InlineData(42d, true)]
+        [InlineData(43d, false)]
+        public async Task EqualTo_WithANullableProperty_JudgesOnlyAValueThatIsThere(double? tradeInValue, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.TradeInValue).EqualTo(42m);
+
+            var car = Cars.Car();
+            car.TradeInValue = tradeInValue == null ? null : (decimal)tradeInValue.Value;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData("abc", StringComparison.Ordinal, true)]
+        [InlineData("ABC", StringComparison.Ordinal, false)]
+        [InlineData("ABC", StringComparison.OrdinalIgnoreCase, true)]
+        public async Task EqualTo_WithText_HonoursTheComparison(string vin, StringComparison comparison, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Vin).EqualTo("abc", comparison);
+
+            var car = Cars.Car();
+            car.Vin = vin;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData(100_000, true)]
+        [InlineData(99_999, false)]
+        public async Task EqualTo_ComparesAgainstAnotherProperty(int mileage, bool expectedToSucceed)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.Mileage).EqualTo(c => c.WarrantyMileageLimit);
+
+            var car = Cars.Car();
+            car.Mileage = mileage;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Succeeded.Should().Be(expectedToSucceed);
+        }
+
+        [Theory]
+        [InlineData("ZH 1", null)] // nothing on the other side to compare against
+        [InlineData(null, "BE 2")] // absent is left to NotEmpty
+        [InlineData(null, null)]
+        public async Task EqualTo_WithAnotherTextProperty_PassesWhenEitherSideIsAbsent(string? plate, string? previousPlate)
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.RegistrationPlate).EqualTo(c => c.PreviousRegistrationPlate);
+
+            var car = Cars.Car();
+            car.RegistrationPlate = plate;
+            car.PreviousRegistrationPlate = previousPlate;
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.Errors.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task EqualTo_WithAnotherTextProperty_ReportsWhenTheyDiffer()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>();
+            validator.Property(c => c.RegistrationPlate).EqualTo(c => c.PreviousRegistrationPlate);
+
+            var car = Cars.Car();
+            car.RegistrationPlate = "ZH 1";
+            car.PreviousRegistrationPlate = "BE 2";
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport("RegistrationPlate", "RegistrationPlate must match PreviousRegistrationPlate.");
+        }
+
+        [Fact]
+        public async Task GreaterThan_ReportsGreaterThan()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
+            validator.Property(c => c.Mileage).GreaterThan(10);
+
+            // Act
+            var result = await validator.ValidateAsync(new Car { Mileage = 5 });
+
+            // Assert
+            result.ShouldReport("Mileage", "GreaterThan");
+        }
+
+        [Fact]
+        public async Task GreaterThanOrEqualTo_ReportsGreaterThanOrEqualTo()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
+            validator.Property(c => c.Mileage).GreaterThanOrEqualTo(10);
+
+            // Act
+            var result = await validator.ValidateAsync(new Car { Mileage = 5 });
+
+            // Assert
+            result.ShouldReport("Mileage", "GreaterThanOrEqualTo");
+        }
+
+        [Fact]
+        public async Task LessThan_ReportsLessThan()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
+            validator.Property(c => c.Mileage).LessThan(10);
+
+            // Act
+            var result = await validator.ValidateAsync(new Car { Mileage = 20 });
+
+            // Assert
+            result.ShouldReport("Mileage", "LessThan");
+        }
+
+        [Fact]
+        public async Task LessThanOrEqualTo_ReportsLessThanOrEqualTo()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
+            validator.Property(c => c.Mileage).LessThanOrEqualTo(10);
+
+            // Act
+            var result = await validator.ValidateAsync(new Car { Mileage = 20 });
+
+            // Assert
+            result.ShouldReport("Mileage", "LessThanOrEqualTo");
+        }
+
+        [Fact]
+        public async Task Between_ReportsBetween()
+        {
+            // Arrange
+            var validator = new TestValidator<CarModel>(ErrorCodeProvider.Instance);
+            validator.Property(m => m.SeatCount).Between(2, 5);
+
+            // Act
+            var result = await validator.ValidateAsync(new CarModel { SeatCount = 9 });
+
+            // Assert
+            result.ShouldReport("SeatCount", "Between");
+        }
+
+        [Fact]
+        public async Task EqualTo_ReportsEqualTo()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
+            validator.Property(c => c.Mileage).EqualTo(10);
+
+            // Act
+            var result = await validator.ValidateAsync(new Car { Mileage = 20 });
+
+            // Assert
+            result.ShouldReport("Mileage", "EqualTo");
+        }
+
+        [Fact]
+        public async Task NotEqualTo_ReportsNotEqualTo()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
+            validator.Property(c => c.Mileage).NotEqualTo(10);
+
+            // Act
+            var result = await validator.ValidateAsync(new Car { Mileage = 10 });
+
+            // Assert
+            result.ShouldReport("Mileage", "NotEqualTo");
+        }
+
+        [Fact]
+        public async Task GreaterThanOrEqualTo_AgainstAnotherProperty_ReportsGreaterThanOrEqualToOtherProperty()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
+            validator.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
+
+            var car = new Car
+            {
+                FirstRegistration = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+                SoldDate = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc),
+            };
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport("SoldDate", "GreaterThanOrEqualToOtherProperty");
+        }
+
+        [Fact]
+        public async Task LessThanOrEqualTo_AgainstAnotherProperty_ReportsLessThanOrEqualToOtherProperty()
+        {
+            // Arrange
+            var validator = new TestValidator<Car>(ErrorCodeProvider.Instance);
+            validator.Property(c => c.FirstRegistration).LessThanOrEqualTo(c => c.SoldDate);
+
+            var car = new Car
+            {
+                FirstRegistration = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+                SoldDate = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc),
+            };
+
+            // Act
+            var result = await validator.ValidateAsync(car);
+
+            // Assert
+            result.ShouldReport("FirstRegistration", "LessThanOrEqualToOtherProperty");
+        }
+
+    }
+}
