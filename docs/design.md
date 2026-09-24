@@ -53,9 +53,9 @@ localize exactly like a shipped one. `WithMessage` is a template substituted aga
 
 ## The settings ladder
 
-Three settings can be given at several levels: the message provider, the two behavior axes and the rule
-groups a run selects. All travel one ladder, resolved once per pass from the most specific level that
-names the setting:
+Several settings can be given at more than one level: the message provider, the two behavior axes, and
+what a call asks for — the rule groups it selects, the data it hands over and the properties it is
+limited to. All travel one ladder, resolved from the most specific level that names the setting:
 
 1. what the validator declared for itself (`ValidationMessageProvider`, `ValidationBehaviors`);
 2. what the pass inherits — the options passed to `ValidateAsync`, or, for a validator composed into
@@ -73,9 +73,24 @@ themselves. This is what makes one setting on the outermost validator, on the op
 nullable axes; `null` means "the level below answers". There is nothing to freeze: `Default` is a
 reference swapped atomically, and a run already holding the old options keeps them.
 
-The group selection is the one exception on rung 1: a validator cannot select groups for itself. The
-same validator serves every operation, so which of its rules apply is a fact about the call, and a
-validator that could overrule the caller on it would be a validator nobody could reuse.
+What a call asks for has no rung 1: a validator cannot select groups, data or properties for itself. The
+same validator serves every operation, so which of its rules apply and what they may read are facts about
+the call, and a validator that could overrule the caller on them would be a validator nobody could reuse.
+With no rung of the validator's own to consult, these are resolved once, where the call starts, and every
+pass below reads what that resolved — rather than every pass walking the ladder again. The most specific
+level that names data supplies all of it; levels are not merged, because a merge would let data the call
+never mentioned answer a rule's question.
+
+The call resolves the rest of the ladder too — everything below what the validator declared — so a pass
+lays its validator's own word over an answer that is already complete, and none reads
+`NValidationOptions.Default` again. What a call without options resolves to depends on nothing but
+`Default`, the registration and what the validator declared, which all but never change, so a validator
+keeps that answer and hands it to the next such call while all three are the ones it came from. Options
+handed over twice in a row — kept in a field, or cached by an endpoint's filter — are kept the same way;
+options built for one call are resolved for that call and never kept, so they allocate nothing for it.
+A validator composed into another keeps its answer the same way, keyed by what its composer hands it:
+every entry of a collection brings the same, so from the second on each reads what the first resolved,
+and a composer handing over something new each time never makes it allocate.
 
 The registration hands its settings only to the validators it constructs. It registers no message
 provider on the host's behalf, because a provider handed over would outrank the options of a call, and a
@@ -83,13 +98,41 @@ default captured at resolution would hide a `Default` assigned afterwards.
 
 ## Rule groups
 
-A chain carries zero or more names; a run carries a selection. A chain in no group runs in every
-validation, and a grouped chain runs where the selection names one of its groups or is
-`ValidationGroups.All`. A call that selects nothing therefore validates exactly as it did before any
-group was declared, which is what lets a group be added to one chain of a shipped validator without
-every existing caller having to say so. What it gives up is "everything except": there is no selection
-that means *all but Create*, because the case for it is a rule about the object, and `When` already
-answers that.
+A chain is in the default group unless it was put in named groups instead; naming
+`ValidationGroups.DefaultGroup` beside them keeps it in both. A run carries a selection, and a chain runs
+where the selection holds one of its groups. The additive selections — nothing, or names — always hold
+the default group, so a call that selects nothing validates exactly as it did before any group was
+declared, which is what lets a group be added to one chain of a shipped validator without every existing
+caller having to say so. Leaving the default group out is a request of its own, spelled `Only`, because a
+selection that silently drops every ungrouped rule is the easiest way there is to stop validating
+something. What the model gives up is "everything except": there is no selection that means *all but
+Create*, because the case for it is a rule about the object, and `When` already answers that.
+
+**`Only` reaching composed validators.** A composed validator is reusable and cannot be expected to know
+the group names of every validator that composes it. So a validator that declares one of the selected
+groups honours the selection, and one that declares none is validated with its additive form — as a plain
+call would validate it. A chain in the default group whose composed validator declares a selected group
+is *reached through*: only the checks that hand its value to such a validator run, never the chain's own
+rules, which are in the default group the selection left out. A chain put in named groups is reached by
+those names alone; its gate was written on purpose.
+
+What a validator takes part in is settled once and handed down: a validator that declares none of an
+exclusive selection's groups passes the additive form to what it composes. That changes no answer. Every
+validator it reaches is reached through one of its default chains — it has no other chain the selection
+could run — and a default chain reaches only validators whose groups are part of what it declares, so
+none of them declares a selected group either, and each would have fallen back itself. Handing the
+additive form down spares every one of them the question. A validator written by hand declares nothing
+the library can see, so it is always handed the additive form.
+
+The inline rules and the validator of one `ForEach` are one unit: where either declares a selected group,
+the other has nothing to contribute and is passed over; where neither does, the chain was selected by
+name and both run as a plain call would run them.
+
+**Only the call's own validator refuses.** An exclusive selection that selects nothing of the validator
+the call was made on is a mistake — a mistyped name, the wrong validator — and passing it would report a
+payload as valid without checking it, so it throws. Below that validator, declaring none of the groups is
+normal, and the fallback above is the answer. The additive forms never refuse: one options object serving
+several validators that do not all declare the same groups is ordinary.
 
 The gate is asked in the validator's rule loop, before the chain's condition and before the property is
 read. A chain the run did not select has therefore reported nothing and read nothing, so it cannot trip
@@ -101,16 +144,76 @@ declared and the selection is not known until a run asks. A validator whose only
 grouped runs through the awaiting loop even where that group was not selected. Deciding it per run would
 mean re-deciding it per run, which is the cost the flag exists to avoid.
 
-The groups of the rules are frozen into an array beside the rules, and that array is null where no chain
-is in a group. The loop is then chosen once per pass rather than branched per chain: a validator
-declaring no group is walked by the loop it was walked by before the feature existed. What it still
-costs is 8 bytes on the frame, which is what took the frame past a cache line — the one price the
-feature charges a validator that does not use it, and the reason the selection is not also copied into
-anything the rules touch per chain.
+Where each chain runs — its named groups, whether it is in the default group, what it reaches — is frozen
+into arrays beside the rules, null where every chain is in the default group alone and reaches nothing.
+They run parallel rather than as one array of records, so a chain its own groups select costs the gate the
+one reference it would cost with nothing else to know.
+The loop is then chosen once per pass rather than branched per chain: a validator declaring no group, a
+selection of `All`, and a validator whose every chain is in the default group under an additive
+selection are all walked by the loop with no gate at all. So is the commonest call of all on a validator
+that does declare groups — one that names none: the chains in the default group are frozen into an array
+of their own, and that call walks it, so a grouped chain it does not run costs it nothing.
+
+Everything settled at the freeze — the rules, the chains' groups, what the validator declares, whether it
+awaits — is published as one object, and a pass reads that object once. Two fields written one after the
+other could be seen in the other order by a thread on a weakly ordered processor during the first
+concurrent validations, which would run the rules of one freeze with none of the gates of its groups.
 
 Names are compared ordinally. A group name is a token the application chose and the caller repeats, like
 an error code, and a case-insensitive match would make `Create` and `create` the same group in the
 library while they stay two constants in the application.
+
+## Data travels with the call
+
+A rule that depends on something only the caller knows reads it from the data the call hands over,
+asked for by its type. A type is the key because it is what a rule already has in hand, it cannot be
+misspelt, and it hands the value over without a cast. Two values that would answer the same request are
+refused — two of one type when the data is built, and two that are both a base type or interface when a
+rule asks — because the answer would otherwise depend on the order the caller happened to write them in.
+
+A chain asking for data the call did not hand over is skipped, and a `Must<TData>` rule passes: the
+caller did not ask for what the data would decide. That is the rule every absent value follows. There is
+no `Unless<TData>` and no `Otherwise` for a data block, because without the data there is neither a yes
+nor a no to negate.
+
+`Must<TData>` is a member of the builder rather than an extension, the one departure from rules being
+extensions. C# cannot infer a type argument from an implicitly typed lambda, so an extension would make
+every call site spell all three types; a member needs only the one, and member lookup falls through to
+the `Must` extensions wherever the lambda's arity differs, so nothing is hidden.
+
+A chain's conditions stay one folded delegate over the object while none of them reads data, and become
+one folded delegate over the object and the data from the first one that does — the plain ones declared
+before it folded in, so the order they are asked in never changes. A flag is the one test a chain without
+a condition pays per pass.
+
+## Condition blocks
+
+`When(condition, () => ...)` adds its condition to every chain declared inside, where the chain is
+declared: after the chain's reachability guard and ahead of anything the chain adds itself. That is why
+every way of starting a chain adds its guard before the chain is declared. The condition is asked per
+chain rather than once per pass: remembering the answer would need somewhere per run to keep it, and a
+condition is a predicate over the object, cheap by design. Blocks nest by folding into the enclosing
+condition and are unwound in a `finally`, as `Group` blocks are, so a chain declared after a block — even
+one that threw — is not narrowed by it.
+
+## Validating some properties
+
+A selection of properties is matched against the name a chain reports under, split at its dots, because
+that is what a client holds. It is a small tree, and a chain's path is walked down it: at or below a
+selected name the chain runs, on the way to one it runs only its checks that hand the value on, and
+anywhere else it is skipped. What lies below the chain is what its composed validators, and the entries
+of its `ForEach`, are limited to. Each part of the tree carries the inputs of its last pairing with a
+call's groups and data, so a selection reused across calls, or handed to every entry of a collection,
+allocates nothing per pass.
+
+Names are compared ignoring case, because they usually come from a client that spells them the way its
+payload does, and a name that matches nothing is ignored rather than refused: the list is often built
+from a request, and a mistake in it must not become a server error. A name with a position is refused,
+because a name without one already applies to every entry.
+
+A pass limited to some properties walks a loop of its own, so the other loops pay nothing for the
+feature. A rule comparing two properties belongs to the property it is declared on, and runs where that
+property is selected, not where the one it compares against is.
 
 ## One object per pass
 
@@ -119,6 +222,12 @@ object allocated per validator pass. The frame holds the instance, the error lis
 something fails) and the `ValidationRun`: the inherited settings, the `ForEach` entry under judgement
 and the cancellation token. A pass that reports nothing allocates the frame and nothing else, whatever
 the validator's width. A failed result takes the list rather than copying it.
+
+What the call asked for rides in one reference among the inherited settings: the group selection itself
+where the call brought nothing else, or a small object holding the selection, the data and the properties
+where it did. So the data and the properties cost the frame nothing — a validation that does not use them
+is exactly the size it was — and a call without them allocates nothing to say so. The pairs are cached on
+the objects the caller holds, so options built once and reused allocate nothing per call either.
 
 The context is rebuilt per rule rather than mutated between rules, which is what confines `WithMessage`
 and `WithErrorCode` to the rule they follow. Composed rules hand the frame itself to the element
@@ -131,7 +240,10 @@ synchronous entry point could only work by deciding at run time whether the rule
 But almost every rule judges rather than awaits, so a chain, a validator and a `ForEach` whose every
 rule does are run through synchronous twins of the awaiting loops, with no async state machine anywhere.
 `SetValidator` and `ForEach` ask the composed validator once, when they are declared, and choose the
-twin accordingly. The twins are kept adjacent; a change to the cascade rule is made to both.
+twin accordingly — which freezes the composed validator, and is also when they learn which groups it
+declares. The element builder of a `ForEach` is frozen at the same moment, so a validator or a filter set
+on it afterwards cannot go unseen by a choice already made. The twins are kept adjacent; a change to the
+cascade rule is made to both.
 
 `IsSynchronous` is settled at declaration, so a deterministic synchronous entry point would be possible
 now; it is not offered because nothing has asked for it, and adding it later breaks nothing.

@@ -45,7 +45,10 @@ All three target .NET 8 and later.
 
 - [Basic usage of validators](#basic-usage-of-validators)
 - [Validation of objects](#validation-of-objects)
+    - [Conditions: When and Unless](#conditions-when-and-unless)
     - [Rule groups](#rule-groups)
+    - [Data a validation carries](#data-a-validation-carries)
+    - [Validating some properties](#validating-some-properties)
 - [Validation results](#validation-results)
 - [Built-in validators](#built-in-validators)
 - [Custom validators](#custom-validators)
@@ -299,10 +302,30 @@ this.Property(c => c.SoldDate).NotNull().When(c => c.Condition == CarCondition.U
 this.Property(c => c.SoldDate).GreaterThanOrEqualTo(c => c.FirstRegistration);
 ```
 
-A property whose `When` did not hold reported nothing, which matters for
+Where several chains share a condition, a block says it once, and `Otherwise` declares the chains for the
+opposite case:
+
+```csharp
+this.When(m => m.EngineType == EngineType.Electric, () =>
+{
+    this.Property(m => m.BatteryCapacityKwh).NotNull().GreaterThan(0m);
+})
+.Otherwise(() =>
+{
+    this.Property(m => m.FuelConsumption).GreaterThan(0d);
+});
+```
+
+The block's condition joins every chain declared inside it, ahead of each chain's own `When`, and is asked
+for each of them — so keep it cheap. Blocks nest, `Unless` is the negated block, and both combine with
+[`Group`](#rule-groups). The rules of the entries of a `ForEach` are declared on its own builder, which
+has the same blocks.
+
+A property whose condition did not hold reported nothing, which matters for
 [validation behavior](#validation-behavior): there is nothing for a stopping run to stop on, and the next
 property is still judged. A rule that depends on what the request is for rather than on what the object
-holds is a [rule group](#rule-groups) instead.
+holds is a [rule group](#rule-groups) instead, and one that depends on something only the caller knows
+reads the [data the validation carries](#data-a-validation-carries).
 
 ### Rule groups
 
@@ -323,16 +346,17 @@ var options = new NValidationOptions { ValidationGroups = "Create" };
 var result = await validator.ValidateAsync(car, options);
 ```
 
-**A chain in no group runs in every validation**, so putting one chain in a group never switches another
-off, and a call which asks for nothing is the validator it was before any group existed. What a
-selection adds is the grouped chains it names:
+**Every chain declared without a group is in the default group, and every validation runs the default
+group** unless it says otherwise. So putting one chain in a group never switches another off, and a call
+which asks for nothing is the validator it was before any group existed:
 
-| The call asks for      | What runs                                    |
-|------------------------|----------------------------------------------|
-| nothing                | the chains in no group                       |
-| `"Create"`             | those, and every chain in the `Create` group |
-| `["Create", "Update"]` | those, and every chain in either group       |
-| `ValidationGroups.All` | every chain the validator declares           |
+| The call asks for                     | What runs                                                |
+|---------------------------------------|----------------------------------------------------------|
+| nothing, or `ValidationGroups.None`   | the default group                                        |
+| `"Create"`                            | the default group, and every chain in the `Create` group |
+| `["Create", "Update"]`                | the default group, and every chain in either group       |
+| `ValidationGroups.Only("Listing")`    | every chain in the `Listing` group, and nothing else     |
+| `ValidationGroups.All`                | every chain the validator declares                       |
 
 Where a whole section of a validator belongs to one group, `Group` says it once instead of ending every
 chain with `WithGroup`:
@@ -361,6 +385,50 @@ A group covers **the whole chain** wherever it is written, exactly as `When` doe
 not select reports nothing — its condition is not asked and its property is not even read — so there is
 nothing for a [stopping run](#validation-behavior) to stop on, and the next property is still judged.
 
+#### In the default group and another
+
+`WithGroup` puts a chain in a group *instead of* the default group. Naming `ValidationGroups.DefaultGroup`
+beside the other keeps it in both: it runs in every validation, and a selection of the other group alone
+still finds it.
+
+```csharp
+// Checked in every validation, and by a listing check that asks for the Listing group alone.
+this.Property(c => c.PurchasePrice)
+    .GreaterThan(0m)
+    .WithGroup(ValidationGroups.DefaultGroup, "Listing");
+```
+
+#### One group alone: Only
+
+`ValidationGroups.Only(...)` runs the named groups without the default group — a listing check that asks
+what a listing needs, and nothing else about the car:
+
+```csharp
+var options = new NValidationOptions { ValidationGroups = ValidationGroups.Only("Listing") };
+
+var result = await validator.ValidateAsync(car, options);
+```
+
+What it reaches beyond the validator it was passed to:
+
+- A nested validator, or the entries of a `ForEach`, that **declares** one of the groups runs those chains
+  alone.
+- One that declares none of them is validated as a plain call would validate it: it cannot say which of its
+  rules belong to a group it has never heard of, so all of its default group is the answer.
+- A chain in the default group whose nested validator declares one of the groups is **reached through** —
+  the part of the chain that hands its value on runs, and the chain's own rules do not. So
+  `Only("Pricing")` finds the `Pricing` chains of a model validator behind
+  `this.Property(c => c.Model).NotNull().SetValidator(modelValidator)` without reporting a missing model.
+- The inline rules and the validator of one `ForEach` answer as one: where either declares a selected
+  group, the other is passed over.
+
+**A selection that would run nothing is refused.** `Only` on a validator that declares none of the named
+groups — a mistyped name, the wrong validator — throws `InvalidOperationException` naming the groups it
+does declare, rather than checking nothing and passing. The additive forms stay lenient, so one options
+object can serve validators that do not all declare the same groups. Mind where an exclusive selection is
+set, though: on `NValidationOptions.Default`, or on a controller whose actions take different payloads,
+every validator it is passed to has to declare one of its groups.
+
 The selection belongs to the run rather than to the validator, which is why there is no
 `ValidationGroups` to set on a validator: one validator serves every operation, and which of its rules
 apply is what the caller knows. It reaches a nested validator and the element chain of a `ForEach` like
@@ -372,6 +440,79 @@ the compiler keeps the rules and the callers in step.
 
 For a controller action, the group is named where the endpoint is declared rather than passed by hand —
 see [`[ValidationGroups]`](#selecting-rule-groups-for-an-endpoint).
+
+### Data a validation carries
+
+Some rules depend on something the object cannot answer and the call cannot name as a group: the market a
+car is listed in decides how far it may have been driven. The caller hands that over as data, and a rule
+asks for it by its type:
+
+```csharp
+public sealed record ListingPolicy(int MaximumMileage, bool RequiresServiceHistory);
+
+var options = new NValidationOptions
+{
+    ValidationData = [new ListingPolicy(MaximumMileage: 200_000, RequiresServiceHistory: true)],
+};
+```
+
+```csharp
+this.Property(c => c.Mileage)
+    .Must<ListingPolicy>((car, mileage, policy) => mileage <= policy.MaximumMileage)
+    .WithMessage("The mileage is above what this market lists.");
+
+this.Property(c => c.ServiceHistory)
+    .NotEmpty()
+    .When<ListingPolicy>((car, policy) => policy.RequiresServiceHistory);
+```
+
+| Read with                                  | What it does                                                                         |
+|--------------------------------------------|--------------------------------------------------------------------------------------|
+| `When<TData>((obj, data) => ...)`          | A condition over the data, covering the whole chain like `When`                      |
+| `this.When<TData>((obj, data) => ..., () => ...)` | The same as a block, for every chain declared inside                          |
+| `Must<TData>((obj, value, data) => ...)`   | A one-off rule over the data, reporting `Must` like [`Must`](#a-one-off-rule-must)   |
+| `context.TryGetData<TData>(out var data)`  | Inside `Add` or `AddAsync`, for a [rule of your own](#rulecontext)                   |
+
+**A call that hands over no `TData` skips a chain that asks for one**, and `Must<TData>` passes: the
+caller did not ask for what the data would decide. A value is found by its type, so declare a type of
+your own for what you hand over. Two values that would both answer one request are refused — two of the
+same type when the data is built, and two that are both a base type or interface when a rule asks for
+it — because the answer would depend on the order they happened to be written in.
+
+The data travels with the call: it reaches nested validators and the entries of a `ForEach`, and a
+validator written by hand finds it on the options it is handed. It sits on the same
+[ladder](#the-override-ladder) as the other settings, and the most specific level that names data
+supplies all of it — levels are not merged. Options built once and reused cost nothing per call.
+
+### Validating some properties
+
+A request that changed two fields does not need to hear about the rest. `ValidationProperties` limits a
+validation to the properties it names, spelled as failures are reported:
+
+```csharp
+var options = new NValidationOptions { ValidationProperties = ["PurchasePrice", "Model.Name"] };
+
+// Or with expressions, so a rename is followed by the compiler.
+var options = new NValidationOptions
+{
+    ValidationProperties = ValidationProperties.For<Car>(c => c.PurchasePrice, c => c.Model!.Name),
+};
+```
+
+| A chain whose property is | Runs                                                                                                |
+|---------------------------|-----------------------------------------------------------------------------------------------------|
+| named, or below a name    | in full — `Model` validates the whole model                                                         |
+| on the way to a name      | only the part that hands its value on — `Model.Name` runs the model validator's `Name` chain alone |
+| anything else             | not at all                                                                                          |
+
+A name without a position applies to every entry of a collection — `ServiceHistory.Workshop` — and a
+name with one is refused. Names are compared ignoring case, because they usually come from a client, and
+a name that matches nothing is passed by rather than refused, so a client's mistake does not become a
+failed request. The selection applies on top of [rule groups](#rule-groups): a chain runs only where both
+select it.
+
+A rule comparing two properties belongs to the property it is declared on, so a request limited to
+`PurchasePrice` does not re-check `TradeInValue`'s comparison against it. Name both where both matter.
 
 ### Collections and elements
 
@@ -397,7 +538,8 @@ this.Property(c => c.ServiceHistory)
         // A rule may consult the rest of the entry it is judging, but not the object the collection
         // hangs off; a rule about that belongs on the collection itself.
         record.Property(r => r.Mileage)
-            .Must((r, mileage) => r.Cost == 0m || mileage > 0, "A paid service records its mileage.");
+            .Must((r, mileage) => r.Cost == 0m || mileage > 0)
+            .WithMessage("A paid service records its mileage.");
     });
 ```
 
@@ -425,17 +567,21 @@ this.Property(c => c.ServiceHistory).ForEach(serviceRecordValidator);
 
 #### The element builder
 
-Inside `ForEach` you are handed an `ElementRuleBuilder<TElement>`, whose whole surface is these six
-members:
+Inside `ForEach` you are handed an `ElementRuleBuilder<TElement>`, whose whole surface is these members:
 
-| Member                    | What it does                                                               |
-|---------------------------|----------------------------------------------------------------------------|
-| `Property(expression)`    | A rule chain on one property of the entry, exactly as on a validator       |
-| `Element()`               | A rule chain on the entry itself, for a collection of scalars              |
-| `Where(predicate)`        | Restricts which entries are judged; repeated calls are and-ed              |
-| `SetValidator(validator)` | Hands each entry to a validator of its own                                 |
-| `WithIndexer(indexer)`    | Identifies an entry by something other than its position                   |
-| `ValidationBehaviors`     | What *one entry* reports — see [validation behavior](#validation-behavior) |
+| Member                                     | What it does                                                                                           |
+|--------------------------------------------|--------------------------------------------------------------------------------------------------------|
+| `Property(expression)`                     | A rule chain on one property of the entry, exactly as on a validator                                   |
+| `Element()`                                | A rule chain on the entry itself, for a collection of scalars                                          |
+| `Group(name, rules)`                       | Puts the entry's chains declared inside in a [rule group](#rule-groups)                                |
+| `When(predicate, rules)`, `Unless(...)`    | A [condition block](#conditions-when-and-unless) over the entry, with `Otherwise` for the other entries |
+| `Where(predicate)`                         | Restricts which entries are judged at all; repeated calls are and-ed                                   |
+| `SetValidator(validator)`                  | Hands each entry to a validator of its own                                                             |
+| `WithIndexer(indexer)`                     | Identifies an entry by something other than its position                                               |
+| `ValidationBehaviors`                      | What *one entry* reports — see [validation behavior](#validation-behavior)                             |
+
+Everything but `ValidationBehaviors` is settled when the `ForEach` is declared: calling `SetValidator`,
+`Where` or `WithIndexer` on the builder afterwards throws.
 
 For a collection of scalars there is no property to name, so the element itself is the subject:
 
@@ -681,7 +827,7 @@ go looking for one: *is it there*, *is it the right shape*, *is it in range*, *i
 | [Dates](#dates)                     | `InThePast`, `InTheFuture`                                                                                                                                     |
 | [Collections](#collections)         | `MinimumCount`, `MaximumCount`, `NoDuplicates`, `ForEach`                                                                                                      |
 | [Enums](#enums)                     | `IsInEnum`                                                                                                                                                     |
-| [Custom](#custom-validators)        | `Must`, `MustAsync`, `SetValidator`                                                                                                                            |
+| [Custom](#custom-validators)        | `Must`, `Must<TData>`, `MustAsync`, `SetValidator`                                                                                                             |
 
 Two things hold for every rule below, and are worth reading once rather than thirty-five times:
 
@@ -1328,6 +1474,15 @@ this.Property(c => c.Vin)
 A `Func<string>` overload is re-evaluated at validation time rather than at declaration time, which is
 what a message read off a resource needs.
 
+Where the verdict depends on something only the caller knows, `Must<TData>` hands the predicate the
+[data the validation carries](#data-a-validation-carries) as well, and passes where the call handed none:
+
+```csharp
+this.Property(c => c.Mileage)
+    .Must<ListingPolicy>((car, mileage, policy) => mileage <= policy.MaximumMileage)
+    .WithErrorCode("ListingMileage");
+```
+
 ### A reusable rule: an extension method
 
 A rule two validators share is an extension method on `PropertyRuleBuilder<T, TProperty>`, so it chains
@@ -1455,6 +1610,8 @@ What the body of a custom rule is handed:
 | `DisplayName`                                                | What a message calls it — the `WithDisplayName` name, or the property name       |
 | `HasFailed`                                                  | `true` once a rule in this chain has failed                                      |
 | `ValidationMessageProvider`                                  | The message provider, for a rule building a `ValidationError` itself             |
+| `TryGetData<TData>(out data)`                                | The [data the validation carries](#data-a-validation-carries), found by its type |
+| `CancellationToken`                                          | The token the validation was started with                                        |
 | `AddError(errorCode, params (string Name, object? Value)[])` | Reports a failure, resolving the message from the code and the arguments         |
 | `AddError(ValidationError)`                                  | Reports a failure the rule composed itself — used by rules reporting per element |
 | `GetDisplayName(propertyName)`                               | What a message should call *another* property, for a rule comparing two          |
@@ -1514,13 +1671,15 @@ Settings that exist at more than one level are resolved from the most specific o
 | `ValidationBehaviors.Class`    | `All`                        | the same ladder, ending at the validator and then `WithValidationBehavior` on a chain                                                                                                                                                                 |
 | `ValidationBehaviors.Property` | `StopAtFirstError`           | the same ladder                                                                                                                                                                                                                                       |
 | Validator lifetime             | `ServiceLifetime.Scoped`     | `o.ValidatorLifetime`, or per registration                                                                                                                                                                                                            |
-| Selected rule groups           | none: the chains in no group | `NValidationOptions.Default` → `AddNValidation` → what the pass inherits: the options passed to the call, or what the validator this one is composed into resolved. There is no validator rung — a selection belongs to the run, not to the validator |
+| Selected rule groups           | the default group            | `NValidationOptions.Default` → the options passed to the call, resolved once where the call starts and handed to every validator it reaches. There is no validator rung — a selection belongs to the call, not to the validator                         |
+| Data the rules read            | none                         | the same as the rule groups                                                                                                                                                                                                                           |
+| Properties validated           | every one                    | the same as the rule groups                                                                                                                                                                                                                           |
 | Element index                  | the zero-based position      | `WithIndexer`, per `ForEach`                                                                                                                                                                                                                          |
 | Missing-validator behavior     | `Ignore`                     | `AddValidationFilter`                                                                                                                                                                                                                                 |
 
-All three settings of `NValidationOptions` travel that ladder identically, and each rung is asked only
-about what it named: options that set a behavior and no provider change the behavior and leave the
-messages to the level below.
+Every setting of `NValidationOptions` travels that ladder, and each rung is asked only about what it
+named: options that set a behavior and no provider change the behavior and leave the messages to the
+level below.
 
 What a validator resolves for itself is what the validators it composes inherit: a nested validator, and
 the element chain of a `ForEach`, answer like their composer unless they declared otherwise. That is why
@@ -1530,9 +1689,10 @@ said something about itself keeps it wherever it is composed.
 
 ### Validation options
 
-`NValidationOptions` carries the three settings a validator can be given without a container: where its
-rules take their message texts from, how much it reports, and which [rule groups](#rule-groups) it runs.
-It is immutable — a variant is derived with `with` — and it serves two roles.
+`NValidationOptions` carries the settings a validator can be given without a container: where its rules
+take their message texts from, how much it reports, which [rule groups](#rule-groups) it runs, which
+[data](#data-a-validation-carries) its rules may read, and which [properties](#validating-some-properties)
+it is limited to. It is immutable — a variant is derived with `with` — and it serves two roles.
 
 **For the process**, build one and assign it to `NValidationOptions.Default`, once at startup:
 
@@ -1554,12 +1714,22 @@ var result = await validator.ValidateAsync(car, options);
 ```
 
 ```csharp
-// A group selection is written as a name or a list of them; ValidationGroups.All runs every group.
+// A group selection is written as a name or a list of them, on top of the default group;
+// ValidationGroups.Only(...) leaves the default group out, and ValidationGroups.All runs every group.
 var options = new NValidationOptions { ValidationGroups = ["Create", "Import"] };
+
+// What the rules need to know about the request, and what it is limited to.
+var options = new NValidationOptions
+{
+    ValidationGroups = ValidationGroups.Only("Listing"),
+    ValidationData = [new ListingPolicy(MaximumMileage: 200_000, RequiresServiceHistory: true)],
+    ValidationProperties = ["Mileage", "ServiceHistory"],
+};
 ```
 
-Both reach a nested validator and the element chain of a `ForEach`, and both sit below what a validator
-declared for itself — see [the override ladder](#the-override-ladder).
+All of them reach a nested validator and the element chain of a `ForEach`, and all of them sit below what a
+validator declared for itself — see [the override ladder](#the-override-ladder). Options built once and
+kept — in a static field, or captured by an endpoint — cost a call nothing to hand over.
 
 **Options name only what they name.** Every setting starts at `null`, meaning *leave it to the level
 below*, so the two above are the same rule applied twice:
@@ -2099,14 +2269,23 @@ validation code:
 [ValidationGroups("Create")]
 public ActionResult<string> Create(Car car)
 
+[HttpPost("listing-check")]
+[ValidationGroups("Listing", Only = true)]
+public IActionResult CheckListing(Car car)        // the Listing group, and nothing else
+
 [HttpPut("{carId:int}")]
-public IActionResult Update(int carId, Car car)   // the chains in no group, and nothing else
+public IActionResult Update(int carId, Car car)   // the default group, and nothing else
 ```
 
 The nearest one decides: the parameter's own attribute, then the action's, then the controller's. That
 is what lets a controller name the group its endpoints share and one action say otherwise. Name several
-groups — `[ValidationGroups("Create", "Import")]` — or ask for every one with
-`[ValidationGroups(All = true)]`. An endpoint with no attribute validates as a plain call does.
+groups — `[ValidationGroups("Create", "Import")]` — leave the default group out with `Only = true`, or ask
+for every one with `[ValidationGroups(All = true)]`. An endpoint with no attribute validates as a plain call
+does. `Only` on a payload whose validator declares none of the groups fails the request rather than
+accepting it unchecked, so a controller-level `Only` has to suit every payload below it.
+
+The filter hands no data over: an endpoint whose rules need some calls its validator itself, as a
+[minimal API](#minimal-apis) handler does.
 
 Which decision applies is worked out once per action parameter, not once per request.
 
@@ -2135,6 +2314,21 @@ app.MapPost("/cars/intake", async (Car car, IValidator<Car> validator, Cancellat
     return Results.Ok(new { car.Vin });
 });
 
+// Options built once are shared by every request: here, the Listing group alone, and the policy of the
+// market the rules read.
+var listingCheck = new NValidationOptions
+{
+    ValidationGroups = ValidationGroups.Only("Listing"),
+    ValidationData = [new ListingPolicy(MaximumMileage: 200_000, RequiresServiceHistory: true)],
+};
+
+app.MapPost("/cars/listing-check", async (Car car, IValidator<Car> validator, CancellationToken cancellationToken) =>
+{
+    await validator.ValidateAndThrowAsync(car, listingCheck, cancellationToken);
+
+    return Results.NoContent();
+});
+
 // The returning path, for an endpoint that would rather decide for itself what a failure means.
 app.MapPost("/cars/checked", async (Car car, IValidator<Car> validator, CancellationToken cancellationToken) =>
 {
@@ -2156,7 +2350,7 @@ app.MapPost("/cars/checked", async (Car car, IValidator<Car> validator, Cancella
 | `ValidationFilterOptions`    | What the filter is configured with: `MissingValidatorBehavior`                                                |
 | `MissingValidatorBehavior`   | `Ignore`, `Log` or `Throw` for a payload with no validator                                                    |
 | `SkipNValidationAttribute`   | `[SkipNValidation]` on a parameter, an action or a controller                                                 |
-| `ValidationGroupsAttribute`  | `[ValidationGroups("Create")]` on a parameter, an action or a controller: which rule groups the filter runs   |
+| `ValidationGroupsAttribute`  | `[ValidationGroups("Create")]` on a parameter, an action or a controller: which rule groups the filter runs, with `Only` or `All` |
 | `ToProblemDetails()`         | The problem details body for a `ValidationResult` or a `ValidationException`                                  |
 | `ValidationProblem(result)`  | The `ControllerBase` shortcut for returning one                                                               |
 
@@ -2265,6 +2459,19 @@ var validator = new TestValidator<Invoice>();
 validator.Group("Create", () => validator.Property(i => i.Reference).NotEmpty());
 
 var result = await validator.ValidateAsync(new Invoice(), new NValidationOptions { ValidationGroups = "Create" });
+```
+
+The [condition blocks](#conditions-when-and-unless) — `When`, `Unless` and `When<TData>` — are re-exposed
+too, and a rule that reads [data](#data-a-validation-carries) is handed it on the options of the run:
+
+```csharp
+var validator = new TestValidator<Car>();
+validator.Property(c => c.Mileage).Must<ListingPolicy>((_, mileage, policy) => mileage <= policy.MaximumMileage);
+
+var options = new NValidationOptions { ValidationData = [new ListingPolicy(200_000, false)] };
+var result = await validator.ValidateAsync(new Car { Mileage = 250_000 }, options);
+
+result.ShouldReportErrorCode("Mileage", "Must");
 ```
 
 Because every rule reports an `ErrorCode`, a test can assert *which* rule fired rather than its wording,
