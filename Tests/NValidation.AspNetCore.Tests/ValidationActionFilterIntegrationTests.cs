@@ -300,6 +300,79 @@ namespace NValidation.AspNetCore.Tests
             (await GetErrorsAsync(response)).Should().ContainKey("TradeInValue");
         }
 
+        /// <summary>
+        /// The listing check runs the Listing group alone: a car without a plate is refused there, and a
+        /// VIN the rest of the API would refuse does not concern it.
+        /// </summary>
+        [Fact]
+        public async Task CheckListing_WithoutARegistrationPlate_ReportsItAlone()
+        {
+            // Arrange
+            var httpClient = this.fixture.GetHttpClient();
+            var car = CreateValidCar();
+            car["vin"] = "TOO-SHORT";
+
+            // Act
+            var response = await httpClient.PostAsJsonAsync("api/cars/listing-check", car);
+
+            // Assert
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            (await GetErrorsAsync(response)).Keys.Should().Equal("RegistrationPlate");
+        }
+
+        [Fact]
+        public async Task CheckListing_WithARegistrationPlate_AcceptsACarTheRestWouldRefuse()
+        {
+            // Arrange
+            var httpClient = this.fixture.GetHttpClient();
+            var car = CreateValidCar();
+            car["vin"] = "TOO-SHORT";
+            car["registrationPlate"] = "ZH 100 200";
+
+            // Act
+            var response = await httpClient.PostAsJsonAsync("api/cars/listing-check", car);
+
+            // Assert
+            response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        }
+
+        /// <summary>
+        /// The minimal API listing check hands the validation the market's policy as well: a car driven
+        /// further than the market lists, and without the history it asks for, is told about both.
+        /// </summary>
+        [Fact]
+        public async Task MinimalApiListingCheck_WithACarBeyondThePolicy_ReportsWhatTheMarketAsksFor()
+        {
+            // Arrange
+            var httpClient = this.fixture.GetHttpClient();
+            var car = CreateValidCar();
+            car["registrationPlate"] = "ZH 100 200";
+            car["mileage"] = 250_000;
+
+            // Act
+            var response = await httpClient.PostAsJsonAsync("cars/listing-check", car);
+
+            // Assert
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            (await GetErrorsAsync(response)).Keys.Should().BeEquivalentTo("Mileage", "ServiceHistory");
+        }
+
+        [Fact]
+        public async Task MinimalApiListingCheck_WithACarThePolicyAccepts_Succeeds()
+        {
+            // Arrange
+            var httpClient = this.fixture.GetHttpClient();
+            var car = CreateValidCar();
+            car["registrationPlate"] = "ZH 100 200";
+            car["serviceHistory"] = new[] { new Dictionary<string, object?> { ["workshop"] = "Aurora", ["mileage"] = 10_000, ["cost"] = 120 } };
+
+            // Act
+            var response = await httpClient.PostAsJsonAsync("cars/listing-check", car);
+
+            // Assert
+            response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        }
+
         private const string ValidVin = "WVWZZZ1JZXW000001";
 
         private static Dictionary<string, object?> CreateValidCar()

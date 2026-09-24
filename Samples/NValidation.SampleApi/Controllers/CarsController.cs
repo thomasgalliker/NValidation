@@ -39,6 +39,18 @@ namespace NValidation.SampleApi.Controllers
         }
 
         /// <summary>
+        /// Answers whether a car can be offered for sale, and nothing else: the attribute runs the Listing
+        /// group without the default group, so a car whose VIN is wrong but which has everything a listing
+        /// needs is accepted here.
+        /// </summary>
+        [HttpPost("listing-check")]
+        [ValidationGroups(CarValidator.ListingGroup, Only = true)]
+        public IActionResult CheckListing(Car car)
+        {
+            return this.NoContent();
+        }
+
+        /// <summary>
         /// The car id is bound from the route, which is where the request was addressed rather than what
         /// it carried, so the filter validates only the body.
         /// </summary>

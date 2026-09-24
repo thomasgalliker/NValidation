@@ -21,6 +21,19 @@ Content-Type: application/json
   "firstRegistration": "2019-03-01T00:00:00"
 }
 
+### A listing check that also hands over the market's policy — a mileage limit, and a service history on
+### record. This car is beyond both, so the answer is a 400 naming Mileage and ServiceHistory.
+POST {{host}}/cars/listing-check
+Content-Type: application/json
+
+{
+  "vin": "TOO-SHORT",
+  "registrationPlate": "ZH 100 200",
+  "mileage": 250000,
+  "purchasePrice": 18500,
+  "firstRegistration": "2019-03-01T00:00:00"
+}
+
 ### The returning path, for a handler that would rather decide for itself what a failure means.
 POST {{host}}/cars/checked
 Content-Type: application/json
@@ -89,6 +102,29 @@ Content-Type: application/json
   },
   "mileage": -3,
   "purchasePrice": 18500,
+  "firstRegistration": "2019-03-01T00:00:00"
+}
+
+### A listing check runs the Listing group alone. This car's VIN is wrong and it has no model, but it
+### has everything a listing needs, so the answer is 204.
+POST {{host}}/api/cars/listing-check
+Content-Type: application/json
+
+{
+  "vin": "TOO-SHORT",
+  "registrationPlate": "ZH 100 200",
+  "mileage": 42000,
+  "purchasePrice": 18500,
+  "firstRegistration": "2019-03-01T00:00:00"
+}
+
+### The same check without a plate and without a price: a 400 naming those two, and nothing else.
+POST {{host}}/api/cars/listing-check
+Content-Type: application/json
+
+{
+  "vin": "TOO-SHORT",
+  "mileage": 42000,
   "firstRegistration": "2019-03-01T00:00:00"
 }
 

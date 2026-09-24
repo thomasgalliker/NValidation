@@ -33,17 +33,35 @@ decisions, and an application without controllers makes only the first one.
 `ValidationActionFilter` is an MVC filter, so a minimal API endpoint is untouched by it. `POST /cars` takes
 the throwing path and `POST /cars/checked` the returning one; both are three lines and both are explicit.
 
+`POST /cars/listing-check` also hands the rules something the car cannot answer for itself — the policy of
+the market it is offered in:
+
+```csharp
+var listingCheck = new NValidationOptions
+{
+    ValidationGroups = ValidationGroups.Only(CarValidator.ListingGroup),
+    ValidationData = [new ListingPolicy(MaximumMileage: 200_000, RequiresServiceHistory: true)],
+};
+```
+
+`CarValidator` reads it with `Must<ListingPolicy>` and `When<ListingPolicy>`. The options are built once
+and shared by every request.
+
 ## Controllers — validated before the action
 
 `CarsController.Create` contains no validation code:
 
 ```csharp
 [HttpPost("")]
+[ValidationGroups(CarValidator.CreateGroup)]
 public ActionResult<string> Create(Car car)
 {
     return this.Ok(car.Vin);
 }
 ```
+
+The attribute adds the Create group to the default group, so the chain `CarValidator` declares for a car
+being taken in runs here and on no other endpoint.
 
 The filter resolved `IValidator<Car>` and ran it, so an invalid payload never reached the action:
 
@@ -66,6 +84,23 @@ The filter resolved `IValidator<Car>` and ran it, so an invalid payload never re
 
 Everything wrong with the request is reported together, and a nested failure carries the path to the
 property it belongs to, so a form binds each message to the input it came from.
+
+### A check can run one group alone
+
+`POST /api/cars/listing-check` answers whether a car can be offered for sale, and nothing else:
+
+```csharp
+[HttpPost("listing-check")]
+[ValidationGroups(CarValidator.ListingGroup, Only = true)]
+public IActionResult CheckListing(Car car)
+{
+    return this.NoContent();
+}
+```
+
+`Only = true` leaves the default group out, so a car with a wrong VIN but a plate and a price passes here.
+The price chain is in the default group and in the Listing group, so it is checked by this endpoint and by
+every other.
 
 ### A route value is not a payload
 

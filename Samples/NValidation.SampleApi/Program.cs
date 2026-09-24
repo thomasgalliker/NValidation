@@ -50,6 +50,23 @@ app.MapPost("/cars", async (Car car, IValidator<Car> validator, CancellationToke
     return Results.Ok(new { car.Vin });
 });
 
+// A listing check: the Listing group alone, and the policy of the market the car is offered in, which the
+// car cannot answer for itself. The options are built once and shared by every request.
+var listingCheck = new NValidationOptions
+{
+    ValidationGroups = ValidationGroups.Only(CarValidator.ListingGroup),
+    ValidationData = [new ListingPolicy(MaximumMileage: 200_000, RequiresServiceHistory: true)],
+};
+
+app.MapPost("/cars/listing-check", async (Car car, IValidator<Car> validator, CancellationToken cancellationToken) =>
+{
+    var result = await validator.ValidateAsync(car, listingCheck, cancellationToken);
+
+    return result.Succeeded
+        ? Results.NoContent()
+        : Results.Problem(result.ToProblemDetails());
+});
+
 // The returning path, for an endpoint that would rather decide for itself what a failure means.
 app.MapPost("/cars/checked", async (Car car, IValidator<Car> validator, CancellationToken cancellationToken) =>
 {
