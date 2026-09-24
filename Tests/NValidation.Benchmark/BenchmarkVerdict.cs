@@ -15,16 +15,26 @@ namespace NValidation.Benchmark
         public static void RequireTheSame<T>(
             NValidation.IValidator<T> nValidator, FV.IValidator<T> fluentValidator, T payload)
         {
-            var reportedByNValidation = nValidator.ValidateAsync(payload).GetAwaiter().GetResult()
+            RequireTheSame(nValidator.ValidateAsync(payload), fluentValidator.Validate(payload), typeof(T).Name);
+        }
+
+        /// <summary>
+        /// The same for a comparison whose calls pass something of their own — a selection, data the
+        /// rules read — so the two sides are handed over as what they returned.
+        /// </summary>
+        public static void RequireTheSame(
+            ValueTask<ValidationResult> nValidationResult, FV.Results.ValidationResult fluentValidationResult, string scenario)
+        {
+            var reportedByNValidation = nValidationResult.GetAwaiter().GetResult()
                 .Errors.Select(error => error.PropertyName).Order().ToArray();
 
-            var reportedByFluentValidation = fluentValidator.Validate(payload)
+            var reportedByFluentValidation = fluentValidationResult
                 .Errors.Select(failure => failure.PropertyName).Order().ToArray();
 
             if (!reportedByNValidation.SequenceEqual(reportedByFluentValidation, StringComparer.Ordinal))
             {
                 throw new InvalidOperationException(
-                    $"The two validators of {typeof(T).Name} do not agree, so comparing them would be " +
+                    $"The two validators do not agree on {scenario}, so comparing them would be " +
                     $"meaningless. NValidation reported [{string.Join(", ", reportedByNValidation)}] and " +
                     $"FluentValidation reported [{string.Join(", ", reportedByFluentValidation)}].");
             }

@@ -49,12 +49,15 @@ namespace NValidation.Benchmark
 
     /// <summary>
     /// What a <c>When</c> costs. Conditions fold into one another as they are declared, so a chain with
-    /// three of them asks three nested delegates before it reads the property at all.
+    /// three of them asks three nested delegates before it reads the property at all. The same number of
+    /// conditions written as nested <c>When</c> blocks folds the same way, which the second row shows.
     /// </summary>
     [MemoryDiagnoser]
     public class ConditionBenchmark
     {
         private readonly Dictionary<int, NValidation.IValidator<Manufacturer>> byConditionCount = [];
+
+        private readonly Dictionary<int, NValidation.IValidator<Manufacturer>> byBlockCount = [];
 
         private Manufacturer manufacturer = null!;
 
@@ -69,6 +72,7 @@ namespace NValidation.Benchmark
             foreach (var count in new[] { 0, 1, 3 })
             {
                 this.byConditionCount[count] = new ConditionalValidator(count);
+                this.byBlockCount[count] = new BlockValidator(count);
             }
         }
 
@@ -76,6 +80,32 @@ namespace NValidation.Benchmark
         public ValueTask<ValidationResult> Validate()
         {
             return this.byConditionCount[this.Conditions].ValidateAsync(this.manufacturer);
+        }
+
+        [Benchmark]
+        public ValueTask<ValidationResult> ValidateInBlocks()
+        {
+            return this.byBlockCount[this.Conditions].ValidateAsync(this.manufacturer);
+        }
+
+        private sealed class BlockValidator : Validator<Manufacturer>
+        {
+            public BlockValidator(int blocks)
+            {
+                this.Declare(blocks);
+            }
+
+            private void Declare(int blocks)
+            {
+                if (blocks == 0)
+                {
+                    this.Property("Name", static m => m.Name).NotEmpty();
+
+                    return;
+                }
+
+                this.When(static m => m.Id >= 0, () => this.Declare(blocks - 1));
+            }
         }
 
         private sealed class ConditionalValidator : Validator<Manufacturer>
